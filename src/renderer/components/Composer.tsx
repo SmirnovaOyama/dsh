@@ -1,6 +1,6 @@
-import { ArrowDown, ArrowUp, ChevronDown, Shield, Square } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronDown, FileText, Shield, Square, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { CONTEXT_WINDOW, MODELS, type PermissionMode } from '../../shared/types'
+import { CONTEXT_WINDOW, MODELS, type FileRef, type PermissionMode } from '../../shared/types'
 import { formatTokens } from '../format'
 import { t, type MessageKey } from '../i18n'
 import { actions, useApp, type ChatState } from '../store'
@@ -9,6 +9,18 @@ import { Menu, MenuItem } from './Menu'
 import { PermissionPanel, permissionKey } from './PermissionPanel'
 
 const MODES: PermissionMode[] = ['ask', 'acceptEdits', 'auto']
+
+/** "session.ts 第 12–20 行": the file name, then the lines in a quieter tone. */
+export function RefLabel({ fileRef: ref }: { fileRef: FileRef }) {
+  const name = ref.path.slice(ref.path.lastIndexOf('/') + 1)
+  const lines = !ref.start ? null : ref.start === ref.end ? t('ref.line', { a: ref.start }) : t('ref.lines', { a: ref.start, b: ref.end ?? ref.start })
+  return (
+    <>
+      <bdi className="name">{name}</bdi>
+      {lines && <span className="lines">{lines}</span>}
+    </>
+  )
+}
 
 /** Unsent text per conversation, so switching away and back keeps it. */
 const drafts = new Map<string, string>()
@@ -25,6 +37,7 @@ const COMPACT = /^\/compact(?:\s+([\s\S]*))?$/
 
 export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
   const draft = useApp((s) => s.draft)
+  const refs = useApp((s) => s.refs)
   const focusTick = useApp((s) => s.focusTick)
   const key = chat?.session.id ?? 'new'
   const [text, setText] = useState(() => drafts.get(key) ?? '')
@@ -89,6 +102,27 @@ export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
         {permission && <PermissionPanel key={permission.id} request={permission} />}
 
         <div className="hx-field">
+          {refs.length > 0 && (
+            <ul className="hx-refs" aria-label={t('ref.label')}>
+              {refs.map((ref, i) => (
+                <li key={`${ref.path}:${ref.start ?? ''}-${ref.end ?? ''}`} className="hx-ref">
+                  <button type="button" className="open" title={ref.path} onClick={() => actions.viewFile(ref.path)}>
+                    <Icon icon={FileText} size={14} />
+                    <RefLabel fileRef={ref} />
+                  </button>
+                  <button
+                    type="button"
+                    className="remove"
+                    aria-label={t('ref.remove', { name: ref.path })}
+                    title={t('ref.remove', { name: ref.path })}
+                    onClick={() => actions.removeRef(i)}
+                  >
+                    <Icon icon={X} size={14} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
           <label htmlFor="hx-prompt" className="hx-sr">
             {t('composer.label')}
           </label>

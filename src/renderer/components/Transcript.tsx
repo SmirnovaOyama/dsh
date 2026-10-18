@@ -1,10 +1,11 @@
-import { ChevronRight, CircleAlert, LoaderCircle } from 'lucide-react'
+import { ChevronRight, CircleAlert, FileText, LoaderCircle } from 'lucide-react'
 import { memo, useContext, useMemo, useState } from 'react'
 import type { FileChange, SessionData, TranscriptItem } from '../../shared/types'
 import { clockTime } from '../format'
 import { t, type MessageKey } from '../i18n'
 import { HoldScroll } from '../scroll'
 import { actions, getState } from '../store'
+import { RefLabel } from './Composer'
 import { Icon } from './Icon'
 import { Markdown } from './Markdown'
 import { ToolRow, nameFor, type ToolItem } from './ToolRow'
@@ -61,7 +62,21 @@ function needsPending(items: TranscriptItem[], status: SessionData['status']): b
 const UserMessage = memo(function UserMessage({ item }: { item: Extract<TranscriptItem, { kind: 'user' }> }) {
   return (
     <div className="hx-user">
-      <p className="body">{item.text}</p>
+      <div className="body">
+        <p>{item.text}</p>
+        {item.refs && item.refs.length > 0 && (
+          <ul className="refs" aria-label={t('ref.label')}>
+            {item.refs.map((ref, i) => (
+              <li key={i}>
+                <button type="button" title={ref.path} onClick={() => actions.viewFile(ref.path)}>
+                  <Icon icon={FileText} size={14} />
+                  <RefLabel fileRef={ref} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
       <span className="time">{clockTime(item.at)}</span>
     </div>
   )

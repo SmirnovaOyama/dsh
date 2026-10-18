@@ -11,6 +11,8 @@ export const Channels = {
   settingsTest: 'dsh:settings:test',
   workspacePick: 'dsh:workspace:pick',
   workspaceOpen: 'dsh:workspace:open',
+  workspaceFiles: 'dsh:workspace:files',
+  workspaceRead: 'dsh:workspace:read',
   sessionsList: 'dsh:sessions:list',
   sessionsLoad: 'dsh:sessions:load',
   sessionsRemove: 'dsh:sessions:remove',

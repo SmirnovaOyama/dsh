@@ -80,8 +80,18 @@ export interface ToolInfo {
   truncated?: boolean
 }
 
+/** A file, or a range of its lines, that the person points the agent at. Lines count from 1. */
+export interface FileRef {
+  path: string
+  start?: number
+  end?: number
+}
+
+export type FileList = { files: string[]; truncated: boolean }
+export type FileRead = { ok: true; text: string } | { ok: false; error: string }
+
 export type TranscriptItem =
-  | { kind: 'user'; id: string; text: string; at: number }
+  | { kind: 'user'; id: string; text: string; at: number; refs?: FileRef[] }
   | { kind: 'reasoning'; id: string; text: string; startedAt: number; endedAt?: number }
   | { kind: 'text'; id: string; text: string; streaming: boolean }
   | {
@@ -205,6 +215,9 @@ export interface DshApi {
   workspace: {
     pick(): Promise<WorkspaceInfo | null>
     open(path: string): Promise<WorkspaceInfo | null>
+    /** Files in the open folder, leaving out what .gitignore leaves out. */
+    files(): Promise<FileList>
+    read(path: string): Promise<FileRead>
   }
   sessions: {
     list(workspace: string): Promise<SessionMeta[]>
@@ -213,8 +226,8 @@ export interface DshApi {
   }
   agent: {
     /** The renderer picks the id, so it can show the conversation before the first event arrives. */
-    start(workspace: string, text: string, opts: StartOptions): Promise<SessionMeta>
-    send(sessionId: string, text: string): Promise<void>
+    start(workspace: string, text: string, opts: StartOptions, refs?: FileRef[]): Promise<SessionMeta>
+    send(sessionId: string, text: string, refs?: FileRef[]): Promise<void>
     stop(sessionId: string): Promise<void>
     retry(sessionId: string): Promise<void>
     /** Replaces the conversation the model sees with a summary, keeping the transcript on screen. */

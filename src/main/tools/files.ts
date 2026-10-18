@@ -41,7 +41,7 @@ function isBinary(buffer: Buffer): boolean {
   return sample.includes(0)
 }
 
-async function readTextFile(target: ResolvedPath): Promise<string> {
+export async function readTextFile(target: ResolvedPath): Promise<string> {
   let info
   try {
     info = await stat(target.abs)

@@ -3,9 +3,12 @@
 import { BrowserWindow, app, dialog, ipcMain, nativeTheme, safeStorage, shell } from 'electron'
 import path from 'node:path'
 import { Channels, EVENT_CHANNEL } from '../shared/ipc'
-import type { AgentEvent, InitialState, PermissionDecision, PermissionMode, Settings, StartOptions } from '../shared/types'
+import type { AgentEvent, FileRead, InitialState, PermissionDecision, PermissionMode, Settings, StartOptions } from '../shared/types'
 import { Controller, readWorkspace } from './controller'
 import { DeepSeekError, checkConnection } from './deepseek'
+import { cleanRefs } from './refs'
+import { listWorkspaceFiles, readTextFile } from './tools/files'
+import { resolveInWorkspace } from './tools/paths'
 import { SessionStore, SettingsStore, type KeyCipher } from './store'
 
 const devServerUrl = process.env.DSH_DEV_SERVER_URL
@@ -154,12 +157,30 @@ function registerIpc() {
     }
   })
 
+  // Browsing is limited to the folder that is open now, whatever path the renderer asks for.
+  handle('workspaceFiles', async () => {
+    const dir = settingsStore.get().lastWorkspace
+    if (!dir) return { files: [], truncated: false }
+    return listWorkspaceFiles(dir, await resolveInWorkspace(dir, '.'))
+  })
+  handle('workspaceRead', async (file: string): Promise<FileRead> => {
+    const dir = settingsStore.get().lastWorkspace
+    if (!dir) return { ok: false, error: 'No folder is open.' }
+    try {
+      return { ok: true, text: await readTextFile(await resolveInWorkspace(dir, file)) }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
   handle('sessionsList', (workspace: string) => sessionStore.list(workspace))
   handle('sessionsLoad', (id: string) => controller.snapshot(id))
   handle('sessionsRemove', (id: string) => controller.remove(id))
 
-  handle('agentStart', (workspace: string, text: string, opts: StartOptions) => controller.start(workspace, text, opts))
-  handle('agentSend', (id: string, text: string) => controller.send(id, text))
+  handle('agentStart', (workspace: string, text: string, opts: StartOptions, refs?: unknown) =>
+    controller.start(workspace, text, opts, cleanRefs(refs)),
+  )
+  handle('agentSend', (id: string, text: string, refs?: unknown) => controller.send(id, text, cleanRefs(refs)))
   handle('agentStop', (id: string) => controller.stop(id))
   handle('agentRetry', (id: string) => controller.retry(id))
   handle('agentCompact', (id: string, focus?: string) => controller.compact(id, focus))

@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import type {
   AgentEvent,
   ErrorCode,
+  FileRef,
   PermissionDecision,
   SessionData,
   SessionStatus,
@@ -14,6 +15,7 @@ import type { ChangeTracker } from './changes'
 import { COMPACT_AT, compactedMessages, isContextOverflow, splitForCompact, summaryRequest } from './compact'
 import { DeepSeekError, streamChat, type ApiUsage, type ChatMessage, type ChatResult, type ToolCall } from './deepseek'
 import { needsApproval } from './permissions'
+import { withRefs } from './refs'
 import { TOOL_SPECS, ToolError, prepareToolCall, type PermissionNeed, type PreparedCall } from './tools'
 
 const MAX_TOOL_RESULT_CHARS = 60_000
@@ -106,13 +108,16 @@ export class Agent {
     return state.controller !== null
   }
 
-  async send(state: SessionState, text: string): Promise<void> {
+  async send(state: SessionState, text: string, refs: FileRef[] = []): Promise<void> {
     if (this.isRunning(state)) return
     const trimmed = text.trim()
     if (!trimmed) return
+    const content = await withRefs(state.data.workspace, trimmed, refs)
+    // Reading the files took a moment; another message may have started a run meanwhile.
+    if (this.isRunning(state)) return
     if (!state.data.items.some((item) => item.kind === 'user')) state.data.title = titleFrom(trimmed)
-    this.add(state, { kind: 'user', id: randomUUID(), text: trimmed, at: this.now() })
-    state.messages.push({ role: 'user', content: trimmed })
+    this.add(state, { kind: 'user', id: randomUUID(), text: trimmed, at: this.now(), ...(refs.length ? { refs } : {}) })
+    state.messages.push({ role: 'user', content })
     await this.run(state)
   }
 

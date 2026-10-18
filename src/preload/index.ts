@@ -21,6 +21,8 @@ const api: DshApi = {
   workspace: {
     pick: invoke(Channels.workspacePick) as DshApi['workspace']['pick'],
     open: invoke(Channels.workspaceOpen) as DshApi['workspace']['open'],
+    files: invoke(Channels.workspaceFiles) as DshApi['workspace']['files'],
+    read: invoke(Channels.workspaceRead) as DshApi['workspace']['read'],
   },
   sessions: {
     list: invoke(Channels.sessionsList) as DshApi['sessions']['list'],

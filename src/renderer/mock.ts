@@ -9,6 +9,7 @@ import {
   type DiffLine,
   type DshApi,
   type FileChange,
+  type FileRef,
   type PermissionDecision,
   type PermissionRequest,
   type SessionData,
@@ -100,6 +101,54 @@ const clockSource = [
   '  return { advance, restore: () => { current = realClock } }',
   '}',
 ]
+const sessionSource = [
+  "import { api } from '../api'",
+  "import { clock } from './clock'",
+  '',
+  'const REFRESH_MARGIN_MS = 60_000',
+  '',
+  'export interface Session {',
+  '  token: string',
+  '  expiresAt: number',
+  '}',
+  '',
+  'export function needsRefresh(session: Session, now = clock.now()) {',
+  '  return session.expiresAt - now < REFRESH_MARGIN_MS',
+  '}',
+  '',
+  'export async function refreshSession(session: Session): Promise<Session> {',
+  '  if (!needsRefresh(session)) {',
+  '    return session',
+  '  }',
+  "  const next = await api.post('/auth/refresh', { token: session.token })",
+  '  return { token: next.token, expiresAt: next.expiresAt }',
+  '}',
+]
+
+/** The demo folder: a few real files and the shape of a small web app around them. */
+const MOCK_FILES: Record<string, string> = {
+  'src/auth/clock.ts': clockSource.join('\n') + '\n',
+  'src/auth/session.ts': sessionSource.join('\n') + '\n',
+  'package.json': '{\n  "name": "dsh-demo",\n  "private": true,\n  "scripts": {\n    "test": "vitest run"\n  }\n}\n',
+  'README.md': '# dsh demo\n\n登入和工作階段的小範例。\n',
+}
+const MOCK_PATHS = [
+  ...Object.keys(MOCK_FILES),
+  'src/api.ts',
+  'src/main.ts',
+  'src/auth/login.ts',
+  'src/auth/logout.ts',
+  'src/components/Header.tsx',
+  'src/components/LoginForm.tsx',
+  'src/components/Avatar.tsx',
+  'src/styles/app.css',
+  'tests/auth/session.test.ts',
+  'tests/auth/login.test.ts',
+  'tsconfig.json',
+  'vite.config.ts',
+  '.gitignore',
+].sort()
+
 const clockDiff: DiffLine[] = [hunk('@@ -0,0 +1,21 @@'), ...clockSource.map((text, i) => add(i + 1, text))]
 
 const testDiff: DiffLine[] = [
@@ -310,13 +359,13 @@ async function stream(data: SessionData, item: Extract<TranscriptItem, { kind: '
   }
 }
 
-async function runAgent(sid: string, text: string) {
+async function runAgent(sid: string, text: string, refs: FileRef[] = []) {
   const entry = sessions.get(sid)!
   const data = entry.data
   const controller = new AbortController()
   const { signal } = controller
   running.set(sid, controller)
-  put(data, { kind: 'user', id: id(), text, at: Date.now() })
+  put(data, { kind: 'user', id: id(), text, at: Date.now(), ...(refs.length ? { refs } : {}) })
   setStatus(data, 'running')
   try {
     await sleep(700, signal)
@@ -433,6 +482,16 @@ export function createMockApi(): DshApi {
         emit({ type: 'workspace', workspace: info })
         return info
       },
+      files: async () => ({ files: MOCK_PATHS, truncated: false }),
+      read: async (file) =>
+        later(
+          MOCK_FILES[file] !== undefined
+            ? { ok: true as const, text: MOCK_FILES[file] }
+            : MOCK_PATHS.includes(file)
+              ? { ok: true as const, text: `// ${file}\n\nexport {}\n` }
+              : { ok: false as const, error: `${file} does not exist.` },
+          120,
+        ),
     },
     sessions: {
       list: async (path) => [...sessions.values()].filter((s) => s.data.workspace === path).map((s) => metaOf(s.data)),
@@ -443,7 +502,7 @@ export function createMockApi(): DshApi {
       },
     },
     agent: {
-      async start(path, text, opts) {
+      async start(path, text, opts, refs) {
         const data: SessionData = {
           id: opts.id,
           title: text.split('\n')[0].slice(0, 40),
@@ -457,11 +516,11 @@ export function createMockApi(): DshApi {
           usage: { ...EMPTY_USAGE },
         }
         addSession(data)
-        void runAgent(data.id, text)
+        void runAgent(data.id, text, refs)
         return metaOf(data)
       },
-      async send(sid, text) {
-        if (!running.has(sid)) void runAgent(sid, text)
+      async send(sid, text, refs) {
+        if (!running.has(sid)) void runAgent(sid, text, refs)
       },
       async stop(sid) {
         running.get(sid)?.abort()

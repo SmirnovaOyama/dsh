@@ -9,6 +9,7 @@ import {
   EMPTY_USAGE,
   type AgentEvent,
   type CommitResult,
+  type FileRef,
   type PermissionDecision,
   type PermissionMode,
   type PermissionRequest,
@@ -122,7 +123,7 @@ export class Controller {
     }
   }
 
-  async start(workspace: string, text: string, opts: StartOptions): Promise<SessionMeta> {
+  async start(workspace: string, text: string, opts: StartOptions, refs: FileRef[] = []): Promise<SessionMeta> {
     const now = this.now()
     const id = UUID.test(opts.id) && !this.states.has(opts.id) ? opts.id : randomUUID()
     const state: SessionState = {
@@ -145,13 +146,13 @@ export class Controller {
       controller: null,
     }
     this.states.set(state.data.id, state)
-    void this.agent.send(state, text)
+    void this.agent.send(state, text, refs)
     return metaOf(state.data)
   }
 
-  async send(id: string, text: string): Promise<void> {
+  async send(id: string, text: string, refs: FileRef[] = []): Promise<void> {
     const state = await this.open(id)
-    if (state) void this.agent.send(state, text)
+    if (state) void this.agent.send(state, text, refs)
   }
 
   async retry(id: string): Promise<void> {

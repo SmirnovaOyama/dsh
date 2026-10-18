@@ -7,6 +7,7 @@ import {
   type AgentEvent,
   type AppInfo,
   type FileChange,
+  type FileRef,
   type PermissionDecision,
   type PermissionMode,
   type PermissionRequest,
@@ -43,6 +44,12 @@ export interface AppState {
   settingsSection: SettingsSection | null
   showChanges: boolean
   selectedFile: string | null
+  /** Which view the right-hand panel shows. */
+  panelTab: 'changes' | 'files'
+  /** The file open in the files view, or null for the file list. */
+  viewedFile: string | null
+  /** Files and lines pointed at for the next message. */
+  refs: FileRef[]
   /** Model and permissions for the next new conversation. */
   draft: { model: string; permissionMode: PermissionMode }
   /** Bumped to ask the composer to take focus. */
@@ -81,6 +88,9 @@ let state: AppState = {
   settingsSection: null,
   showChanges: readPrefs().showChanges ?? false,
   selectedFile: null,
+  panelTab: 'changes',
+  viewedFile: null,
+  refs: [],
   draft: { model: DEFAULT_SETTINGS.model, permissionMode: DEFAULT_SETTINGS.permissionMode },
   focusTick: 0,
 }
@@ -178,7 +188,7 @@ function handleEvent(event: AgentEvent) {
       const changed = event.workspace?.path !== state.workspace?.path
       set({ workspace: event.workspace })
       if (changed) {
-        set({ chatId: null, chat: null, sessions: [], activeAt: {}, selectedFile: null })
+        set({ chatId: null, chat: null, sessions: [], activeAt: {}, selectedFile: null, viewedFile: null, refs: [] })
         void loadSessions()
       }
       break
@@ -245,7 +255,7 @@ export const actions = {
   async send(text: string) {
     const trimmed = text.trim()
     if (!trimmed) return
-    const { chat, chatId, workspace, draft } = state
+    const { chat, chatId, workspace, draft, refs } = state
     // A conversation is still loading; sending now would start a new one by mistake.
     if (!chat && chatId) return
     if (chat) {
@@ -258,7 +268,8 @@ export const actions = {
         sessions: placeMeta(s.sessions, metaOf(chat.session), true),
         activeAt: { ...s.activeAt, [chat.session.id]: Date.now() },
       }))
-      await api.agent.send(chat.session.id, trimmed)
+      set({ refs: [] })
+      await api.agent.send(chat.session.id, trimmed, refs)
       return
     }
     if (!workspace) return
@@ -282,7 +293,8 @@ export const actions = {
       sessions: placeMeta(s.sessions, metaOf(session), true),
       activeAt: { ...s.activeAt, [id]: now },
     }))
-    await api.agent.start(workspace.path, trimmed, { id, model: draft.model, permissionMode: draft.permissionMode })
+    set({ refs: [] })
+    await api.agent.start(workspace.path, trimmed, { id, model: draft.model, permissionMode: draft.permissionMode }, refs)
   },
 
   stop() {
@@ -354,7 +366,28 @@ export const actions = {
 
   selectFile(path: string) {
     writePrefs({ showChanges: true })
-    set({ selectedFile: path, showChanges: true })
+    set({ selectedFile: path, showChanges: true, panelTab: 'changes' })
+  },
+
+  setPanelTab(tab: AppState['panelTab']) {
+    set({ panelTab: tab })
+  },
+
+  viewFile(path: string | null) {
+    writePrefs({ showChanges: true })
+    set({ viewedFile: path, panelTab: 'files', showChanges: true })
+  },
+
+  /** Points at a file or some of its lines for the next message; the same range twice is kept once. */
+  addRef(ref: FileRef) {
+    set((s) => {
+      const same = (r: FileRef) => r.path === ref.path && r.start === ref.start && r.end === ref.end
+      return { refs: s.refs.some(same) ? s.refs : [...s.refs, ref], focusTick: s.focusTick + 1 }
+    })
+  },
+
+  removeRef(index: number) {
+    set((s) => ({ refs: s.refs.filter((_, i) => i !== index) }))
   },
 
   openSettings(section: SettingsSection | null = null) {

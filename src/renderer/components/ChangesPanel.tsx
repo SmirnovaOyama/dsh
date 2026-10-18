@@ -5,12 +5,14 @@ import { t } from '../i18n'
 import { actions, useApp, type ChatState } from '../store'
 import type { Motion } from '../App'
 import { DiffStatsText, DiffView } from './DiffView'
+import { FilesView } from './FilesView'
 import { Icon } from './Icon'
 import { Modal } from './Modal'
 
 /** Every changed file stacked in one scroll, each with its own header that stays on top while you read it. */
 export function ChangesPanel({ chat, motion }: { chat: ChatState | null; motion: Motion }) {
   const selected = useApp((s) => s.selectedFile)
+  const tab = useApp((s) => s.panelTab)
   const isGitRepo = useApp((s) => s.workspace?.isGitRepo ?? false)
   const changes = chat?.changes ?? []
   const running = chat ? chat.session.status !== 'idle' : false
@@ -57,8 +59,14 @@ export function ChangesPanel({ chat, motion }: { chat: ChatState | null; motion:
   return (
     <aside className="hx-changes" data-motion={motion} aria-label={t('changes.label')} inert={motion === 'out'}>
       <div className="hx-changes-head">
-        <h2>{t('changes.title')}</h2>
-        {changes.length > 0 && (
+        <div className="hx-tabs" role="tablist" aria-label={t('changes.label')}>
+          {(['changes', 'files'] as const).map((id) => (
+            <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => actions.setPanelTab(id)}>
+              {t(`panel.${id}`)}
+            </button>
+          ))}
+        </div>
+        {tab === 'changes' && changes.length > 0 && (
           <span className="sum">
             {t('changes.count', { n: changes.length })}
             <span className="stats">
@@ -67,43 +75,47 @@ export function ChangesPanel({ chat, motion }: { chat: ChatState | null; motion:
           </span>
         )}
         <span className="grow" />
-        <button
-          type="button"
-          className="btn-ghost hx-icon-btn"
-          disabled={!changes.length}
-          aria-label={t(allOpen ? 'changes.collapseAll' : 'changes.expandAll')}
-          title={t(allOpen ? 'changes.collapseAll' : 'changes.expandAll')}
-          onClick={() => {
-            if (listRef.current) listRef.current.scrollTop = 0
-            setOpen(
-              changes.map((c) => c.path),
-              !allOpen,
-            )
-          }}
-        >
-          <Icon icon={allOpen ? ChevronsDownUp : ChevronsUpDown} size={16} />
-        </button>
-        <button
-          type="button"
-          className="btn-ghost hx-revert"
-          disabled={!changes.length || running}
-          aria-label={t('changes.revert')}
-          title={running ? t('changes.busy') : t('changes.revert')}
-          onClick={() => setDialog('revert')}
-        >
-          <Icon icon={Undo2} size={16} />
-          <span className="label">{t('changes.revertShort')}</span>
-        </button>
-        <button
-          type="button"
-          className="btn-secondary hx-commit"
-          disabled={!changes.length || running || !isGitRepo}
-          title={isGitRepo ? undefined : t('changes.noGit')}
-          onClick={() => setDialog('commit')}
-        >
-          <Icon icon={GitCommitHorizontal} size={16} />
-          {t('changes.commit')}
-        </button>
+        {tab === 'changes' && (
+          <>
+            <button
+              type="button"
+              className="btn-ghost hx-icon-btn"
+              disabled={!changes.length}
+              aria-label={t(allOpen ? 'changes.collapseAll' : 'changes.expandAll')}
+              title={t(allOpen ? 'changes.collapseAll' : 'changes.expandAll')}
+              onClick={() => {
+                if (listRef.current) listRef.current.scrollTop = 0
+                setOpen(
+                  changes.map((c) => c.path),
+                  !allOpen,
+                )
+              }}
+            >
+              <Icon icon={allOpen ? ChevronsDownUp : ChevronsUpDown} size={16} />
+            </button>
+            <button
+              type="button"
+              className="btn-ghost hx-revert"
+              disabled={!changes.length || running}
+              aria-label={t('changes.revert')}
+              title={running ? t('changes.busy') : t('changes.revert')}
+              onClick={() => setDialog('revert')}
+            >
+              <Icon icon={Undo2} size={16} />
+              <span className="label">{t('changes.revertShort')}</span>
+            </button>
+            <button
+              type="button"
+              className="btn-secondary hx-commit"
+              disabled={!changes.length || running || !isGitRepo}
+              title={isGitRepo ? undefined : t('changes.noGit')}
+              onClick={() => setDialog('commit')}
+            >
+              <Icon icon={GitCommitHorizontal} size={16} />
+              {t('changes.commit')}
+            </button>
+          </>
+        )}
         <button
           type="button"
           className="btn-ghost hx-icon-btn"
@@ -115,7 +127,9 @@ export function ChangesPanel({ chat, motion }: { chat: ChatState | null; motion:
         </button>
       </div>
 
-      {changes.length === 0 ? (
+      {tab === 'files' ? (
+        <FilesView />
+      ) : changes.length === 0 ? (
         <div className="hx-changes-empty">{t('changes.empty')}</div>
       ) : (
         <div className="hx-changes-list" ref={listRef}>
