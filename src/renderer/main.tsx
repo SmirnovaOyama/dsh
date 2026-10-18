@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { installApi } from './api'
 import { App } from './App'
+import { restorePaneWidths } from './components/Resizer'
 import { actions } from './store'
 import './styles/tokens.css'
 import './styles/ods.css'
@@ -13,6 +14,7 @@ async function boot() {
     const { createMockApi } = await import('./mock')
     installApi(createMockApi())
   }
+  restorePaneWidths()
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <App />

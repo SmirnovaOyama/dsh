@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ChangesPanel } from './components/ChangesPanel'
+import { Resizer } from './components/Resizer'
 import { ChatView } from './components/ChatView'
 import { SettingsView } from './components/SettingsView'
 import { Sidebar } from './components/Sidebar'
@@ -82,7 +83,9 @@ export function App() {
   return (
     <div className="hx-app">
       <Sidebar searchTick={searchTick} />
+      <Resizer pane="sidebar" />
       <ChatView />
+      {panel && <Resizer pane="changes" />}
       {panel && <ChangesPanel chat={chat} />}
     </div>
   )

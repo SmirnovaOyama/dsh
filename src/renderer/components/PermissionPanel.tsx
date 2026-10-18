@@ -1,5 +1,4 @@
 import { FilePen, FilePlus, Terminal } from 'lucide-react'
-import { useState } from 'react'
 import type { PermissionRequest } from '../../shared/types'
 import { tildify } from '../format'
 import { t } from '../i18n'
@@ -9,12 +8,10 @@ import { Icon } from './Icon'
 
 export function PermissionPanel({ request }: { request: PermissionRequest }) {
   const home = useApp((s) => s.app.home)
-  const [always, setAlways] = useState(false)
   const titleId = `perm-${request.id}`
 
   if (request.kind === 'command') {
-    const allow = () =>
-      void actions.respond(always && request.prefix ? { type: 'allowAlways', prefix: request.prefix } : { type: 'allow' })
+    const prefix = request.prefix
     return (
       <section className="hx-perm" aria-labelledby={titleId}>
         <div className="q">
@@ -27,16 +24,6 @@ export function PermissionPanel({ request }: { request: PermissionRequest }) {
         <div className="hx-code">
           <pre className="is-plain is-wrap">{request.command}</pre>
         </div>
-        {request.prefix && (
-          <label className="hx-check">
-            <input type="checkbox" checked={always} onChange={(event) => setAlways(event.target.checked)} />
-            <span>
-              {t('perm.always', { prefix: '\u0000' })
-                .split('\u0000')
-                .flatMap((part, i) => (i === 0 ? [part] : [<span key={i} className="hx-mono">{request.prefix}</span>, part]))}
-            </span>
-          </label>
-        )}
         <div className="acts">
           <span className="hx-hint grow">
             <span>{t('perm.hintAllow')}</span>
@@ -45,7 +32,17 @@ export function PermissionPanel({ request }: { request: PermissionRequest }) {
           <button type="button" className="btn-secondary" onClick={() => void actions.respond({ type: 'deny' })}>
             {t('perm.deny')}
           </button>
-          <button type="button" className="btn-primary" data-perm-allow onClick={allow}>
+          {prefix && (
+            <button
+              type="button"
+              className="btn-tonal hx-perm-always"
+              title={t('perm.always', { prefix })}
+              onClick={() => void actions.respond({ type: 'allowAlways', prefix })}
+            >
+              <span>{t('perm.always', { prefix })}</span>
+            </button>
+          )}
+          <button type="button" className="btn-primary" data-perm-allow onClick={() => void actions.respond({ type: 'allow' })}>
             {t('perm.allow')}
           </button>
         </div>
