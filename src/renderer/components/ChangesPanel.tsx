@@ -47,7 +47,8 @@ export function ChangesPanel({ chat }: { chat: ChatState | null }) {
               >
                 <Icon icon={FILE_ICON[change.status]} size={16} />
                 <span className="p">
-                  <bdi>{change.path}</bdi>
+                  <bdi className="name">{fileName(change.path)}</bdi>
+                  {folder(change.path) && <bdi className="dir">{folder(change.path)}</bdi>}
                 </span>
                 <span className="n">
                   <DiffStatsText added={change.stats.added} removed={change.stats.removed} />
@@ -82,13 +83,16 @@ export function ChangesPanel({ chat }: { chat: ChatState | null }) {
   )
 }
 
+const fileName = (p: string) => p.slice(p.lastIndexOf('/') + 1)
+const folder = (p: string) => p.slice(0, Math.max(p.lastIndexOf('/'), 0))
+
 function FileDiff({ change }: { change: FileChange }) {
   const note = change.status === 'added' ? t('changes.added') : change.status === 'deleted' ? t('changes.deleted') : null
   return (
     <>
       <p className="hx-diff-file">
-        {change.path}
-        {note && `${t('perm.sep')}${note}`}
+        <span className="p">{change.path}</span>
+        {note && <span>{note}</span>}
       </p>
       <DiffView lines={change.lines} label={t('changes.diff', { path: change.path })} />
     </>
