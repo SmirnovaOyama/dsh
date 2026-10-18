@@ -159,6 +159,11 @@ export class Controller {
     if (state) void this.agent.resume(state)
   }
 
+  async compact(id: string, focus?: string): Promise<void> {
+    const state = await this.open(id)
+    if (state) void this.agent.compact(state, focus)
+  }
+
   stop(id: string): void {
     const state = this.states.get(id)
     if (state) this.agent.stop(state)

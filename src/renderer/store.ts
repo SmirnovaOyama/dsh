@@ -293,6 +293,10 @@ export const actions = {
     if (state.chat) void api.agent.retry(state.chat.session.id)
   },
 
+  compact(focus?: string) {
+    if (state.chat) void api.agent.compact(state.chat.session.id, focus)
+  },
+
   async respond(decision: PermissionDecision) {
     const chat = state.chat
     if (!chat?.permission) return

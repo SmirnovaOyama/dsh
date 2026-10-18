@@ -45,6 +45,7 @@ function needsPending(items: TranscriptItem[], status: SessionData['status']): b
   if (last.kind === 'text') return !last.streaming
   if (last.kind === 'reasoning') return last.endedAt !== undefined
   if (last.kind === 'tool') return last.status !== 'running' && last.status !== 'waiting'
+  if (last.kind === 'compact') return true
   return last.kind === 'user'
 }
 

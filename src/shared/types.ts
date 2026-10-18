@@ -104,6 +104,18 @@ export type TranscriptItem =
     }
   | { kind: 'error'; id: string; code: ErrorCode; detail?: string; retryable: boolean }
   | { kind: 'notice'; id: string; code: 'max-steps' | 'stopped' }
+  | {
+      kind: 'compact'
+      id: string
+      at: number
+      /** Started by the agent because the context was nearly full, rather than by /compact. */
+      auto: boolean
+      status: 'running' | 'done' | 'failed'
+      summary?: string
+      detail?: string
+      /** How full the context was before compacting. */
+      before: number
+    }
 
 export type ErrorCode = 'no-key' | 'auth' | 'balance' | 'rate' | 'network' | 'server' | 'bad-request' | 'unknown'
 
@@ -205,6 +217,8 @@ export interface DshApi {
     send(sessionId: string, text: string): Promise<void>
     stop(sessionId: string): Promise<void>
     retry(sessionId: string): Promise<void>
+    /** Replaces the conversation the model sees with a summary, keeping the transcript on screen. */
+    compact(sessionId: string, focus?: string): Promise<void>
     respond(sessionId: string, requestId: string, decision: PermissionDecision): Promise<void>
     configure(sessionId: string, opts: { model?: string; permissionMode?: PermissionMode }): Promise<SessionMeta | null>
   }

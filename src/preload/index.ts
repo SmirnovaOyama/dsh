@@ -32,6 +32,7 @@ const api: DshApi = {
     send: invoke(Channels.agentSend) as DshApi['agent']['send'],
     stop: invoke(Channels.agentStop) as DshApi['agent']['stop'],
     retry: invoke(Channels.agentRetry) as DshApi['agent']['retry'],
+    compact: invoke(Channels.agentCompact) as DshApi['agent']['compact'],
     respond: invoke(Channels.agentRespond) as DshApi['agent']['respond'],
     configure: invoke(Channels.agentConfigure) as DshApi['agent']['configure'],
   },

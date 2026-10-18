@@ -18,6 +18,7 @@ export const Channels = {
   agentSend: 'dsh:agent:send',
   agentStop: 'dsh:agent:stop',
   agentRetry: 'dsh:agent:retry',
+  agentCompact: 'dsh:agent:compact',
   agentRespond: 'dsh:agent:respond',
   agentConfigure: 'dsh:agent:configure',
   changesRevertAll: 'dsh:changes:revert-all',

@@ -21,6 +21,9 @@ interface ComposerProps {
   onSent(): void
 }
 
+/** `/compact` with an optional focus summarises the conversation instead of sending a message. */
+const COMPACT = /^\/compact(?:\s+([\s\S]*))?$/
+
 export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
   const draft = useApp((s) => s.draft)
   const focusTick = useApp((s) => s.focusTick)
@@ -69,7 +72,9 @@ export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
     setText('')
     drafts.delete(key)
     onSent()
-    void actions.send(value)
+    const compact = COMPACT.exec(value)
+    if (compact && chat && !permission) void actions.compact(compact[1])
+    else void actions.send(value)
   }
 
   const showStop = busy || (!!permission && !hasText)

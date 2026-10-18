@@ -11,7 +11,8 @@ import type {
   TranscriptItem,
 } from '../shared/types'
 import type { ChangeTracker } from './changes'
-import { DeepSeekError, streamChat, type ChatMessage, type ChatResult, type ToolCall } from './deepseek'
+import { COMPACT_AT, compactedMessages, isContextOverflow, splitForCompact, summaryRequest } from './compact'
+import { DeepSeekError, streamChat, type ApiUsage, type ChatMessage, type ChatResult, type ToolCall } from './deepseek'
 import { needsApproval } from './permissions'
 import { TOOL_SPECS, ToolError, prepareToolCall, type PermissionNeed, type PreparedCall } from './tools'
 
@@ -21,6 +22,10 @@ const STREAM_FLUSH_MS = 50
 export type ToolItem = Extract<TranscriptItem, { kind: 'tool' }>
 type ReasoningItem = Extract<TranscriptItem, { kind: 'reasoning' }>
 type TextItem = Extract<TranscriptItem, { kind: 'text' }>
+type CompactItem = Extract<TranscriptItem, { kind: 'compact' }>
+
+/** The request was too long for the model; compacting and asking again may help. */
+const OVERFLOW = Symbol('overflow')
 
 export interface SessionState {
   data: SessionData
@@ -129,26 +134,26 @@ export class Agent {
     state.controller?.abort()
   }
 
-  private async run(state: SessionState): Promise<void> {
+  /** Summarises the conversation now, as /compact does. */
+  async compact(state: SessionState, focus?: string): Promise<void> {
+    if (this.isRunning(state)) return
+    if (!state.messages.some((m) => m.role === 'assistant')) return
+    await this.work(state, async (signal) => {
+      if (!this.host.apiKey()) {
+        this.add(state, { kind: 'error', id: randomUUID(), code: 'no-key', retryable: false })
+        return
+      }
+      await this.summarize(state, signal, false, typeof focus === 'string' ? focus : undefined)
+      if (signal.aborted) this.add(state, { kind: 'notice', id: randomUUID(), code: 'stopped' })
+    })
+  }
+
+  private async work(state: SessionState, task: (signal: AbortSignal) => Promise<void>): Promise<void> {
     const controller = new AbortController()
     state.controller = controller
-    const { signal } = controller
     this.setStatus(state, 'running')
     try {
-      let steps = 0
-      for (;;) {
-        const settings = this.host.settings()
-        if (steps >= settings.maxSteps) {
-          this.add(state, { kind: 'notice', id: randomUUID(), code: 'max-steps' })
-          break
-        }
-        steps++
-        const result = await this.request(state, settings, signal)
-        if (!result) break
-        if (!result.toolCalls.length) break
-        const keepGoing = await this.runTools(state, result.toolCalls, signal)
-        if (!keepGoing) break
-      }
+      await task(controller.signal)
     } finally {
       state.controller = null
       this.setStatus(state, 'idle')
@@ -156,8 +161,97 @@ export class Agent {
     }
   }
 
+  private run(state: SessionState): Promise<void> {
+    return this.work(state, async (signal) => {
+      let steps = 0
+      let autoCompactFailed = false
+      let overflowRetried = false
+      for (;;) {
+        const settings = this.host.settings()
+        if (steps >= settings.maxSteps) {
+          this.add(state, { kind: 'notice', id: randomUUID(), code: 'max-steps' })
+          break
+        }
+        if (!autoCompactFailed && state.data.usage.contextTokens >= COMPACT_AT && this.host.apiKey()) {
+          // A failed compaction leaves the history as it was, and the request may still fit.
+          autoCompactFailed = !(await this.summarize(state, signal, true))
+          if (signal.aborted) {
+            this.add(state, { kind: 'notice', id: randomUUID(), code: 'stopped' })
+            break
+          }
+        }
+        steps++
+        const result = await this.request(state, settings, signal, !overflowRetried)
+        if (result === OVERFLOW) {
+          overflowRetried = true
+          steps--
+          if (await this.summarize(state, signal, true)) continue
+          if (signal.aborted) this.add(state, { kind: 'notice', id: randomUUID(), code: 'stopped' })
+          else this.add(state, { kind: 'error', id: randomUUID(), code: 'bad-request', detail: 'The conversation is longer than the model accepts.', retryable: true })
+          break
+        }
+        if (!result) break
+        if (!result.toolCalls.length) break
+        const keepGoing = await this.runTools(state, result.toolCalls, signal)
+        if (!keepGoing) break
+      }
+    })
+  }
+
+  /** Replaces the history the model sees with a summary. Returns whether it worked. */
+  private async summarize(state: SessionState, signal: AbortSignal, auto: boolean, focus?: string): Promise<boolean> {
+    const apiKey = this.host.apiKey()
+    const { history, held } = splitForCompact(state.messages)
+    if (!apiKey || !history.some((m) => m.role === 'assistant')) return false
+    const item = this.add<CompactItem>(state, {
+      kind: 'compact',
+      id: randomUUID(),
+      at: this.now(),
+      auto,
+      status: 'running',
+      before: state.data.usage.contextTokens,
+    })
+    try {
+      const settings = this.host.settings()
+      const model = state.data.model
+      const result = await this.chat({
+        baseUrl: settings.baseUrl,
+        apiKey,
+        model,
+        messages: summaryRequest(history, focus),
+        temperature: isReasoner(model) ? undefined : 0,
+        signal,
+      })
+      const summary = result.content.trim()
+      if (!summary) throw new Error('The model returned an empty summary.')
+      state.messages = compactedMessages(summary, history, held)
+      // Until the next request reports it, the summary is the best measure of the new context.
+      this.addUsage(state, result.usage, result.usage?.completion_tokens ?? 0)
+      item.status = 'done'
+      item.summary = summary
+      this.flush(state, item)
+      this.host.persist(state)
+      return true
+    } catch (error) {
+      item.status = 'failed'
+      if (!signal.aborted) item.detail = error instanceof Error ? error.message : String(error)
+      this.flush(state, item)
+      return false
+    }
+  }
+
+  private addUsage(state: SessionState, reported: ApiUsage | null, contextTokens: number): void {
+    if (!reported) return
+    const usage = state.data.usage
+    usage.promptTokens += reported.prompt_tokens
+    usage.completionTokens += reported.completion_tokens
+    usage.cacheHitTokens += reported.prompt_cache_hit_tokens ?? 0
+    usage.contextTokens = contextTokens
+    this.host.emit({ type: 'usage', sessionId: state.data.id, usage: { ...usage } })
+  }
+
   /** One request to DeepSeek. Returns null when the turn should end. */
-  private async request(state: SessionState, settings: Settings, signal: AbortSignal): Promise<ChatResult | null> {
+  private async request(state: SessionState, settings: Settings, signal: AbortSignal, overflowable: boolean): Promise<ChatResult | typeof OVERFLOW | null> {
     const apiKey = this.host.apiKey()
     if (!apiKey) {
       this.add(state, { kind: 'error', id: randomUUID(), code: 'no-key', retryable: true })
@@ -202,6 +296,7 @@ export class Agent {
         },
       )
     } catch (error) {
+      if (overflowable && !reasoning && !text && error instanceof DeepSeekError && isContextOverflow(error.status, error.message)) return OVERFLOW
       endReasoning()
       const partial = text as TextItem | null
       if (partial) {
@@ -226,14 +321,7 @@ export class Agent {
       finished.streaming = false
       this.flush(state, finished)
     }
-    if (result.usage) {
-      const usage = state.data.usage
-      usage.promptTokens += result.usage.prompt_tokens
-      usage.completionTokens += result.usage.completion_tokens
-      usage.cacheHitTokens += result.usage.prompt_cache_hit_tokens ?? 0
-      usage.contextTokens = result.usage.prompt_tokens + result.usage.completion_tokens
-      this.host.emit({ type: 'usage', sessionId: state.data.id, usage: { ...usage } })
-    }
+    if (result.usage) this.addUsage(state, result.usage, result.usage.prompt_tokens + result.usage.completion_tokens)
 
     const message: Extract<ChatMessage, { role: 'assistant' }> = { role: 'assistant', content: result.content }
     if (result.reasoning) message.reasoning_content = result.reasoning

@@ -467,6 +467,7 @@ export function createMockApi(): DshApi {
         running.get(sid)?.abort()
       },
       async retry() {},
+      async compact() {},
       async respond(sid, _requestId, decision) {
         const resolve = waiting.get(sid)
         if (resolve) resolve(decision)

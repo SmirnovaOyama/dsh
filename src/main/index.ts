@@ -162,6 +162,7 @@ function registerIpc() {
   handle('agentSend', (id: string, text: string) => controller.send(id, text))
   handle('agentStop', (id: string) => controller.stop(id))
   handle('agentRetry', (id: string) => controller.retry(id))
+  handle('agentCompact', (id: string, focus?: string) => controller.compact(id, focus))
   handle('agentRespond', (id: string, requestId: string, decision: PermissionDecision) => controller.respond(id, requestId, decision))
   handle('agentConfigure', (id: string, opts: { model?: string; permissionMode?: PermissionMode }) => controller.configure(id, opts))
 
