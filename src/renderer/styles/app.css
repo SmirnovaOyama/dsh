@@ -326,6 +326,9 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-changes-head .hx-commit { height: 28px; padding: 0 10px; margin-inline: 4px 2px; font-size: 13px; }
 .hx-changes-head .hx-icon-btn { width: 28px; height: 28px; color: var(--text-muted); }
 .hx-changes-head .hx-icon-btn:hover:not(:disabled) { color: var(--text); }
+.hx-changes-head .hx-revert { height: 28px; padding: 0 8px; gap: 6px; font-size: 13px; color: var(--text-muted); }
+.hx-changes-head .hx-revert:hover:not(:disabled) { color: var(--text); }
+@container (max-width: 420px) { .hx-changes-head .hx-revert .label { display: none; } }
 @container (max-width: 380px) { .hx-changes-head .sum { display: none; } }
 .hx-changes-list { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; padding-bottom: 24px; }
 .hx-cfile + .hx-cfile { border-top: 1px solid var(--border); }
@@ -335,6 +338,7 @@ button.hx-tool:hover { background: var(--surface-hover); }
   background: var(--bg); border-bottom: 1px solid var(--border); text-align: start; color: var(--text);
 }
 .hx-cfile-head[aria-expanded="false"] { border-bottom-color: transparent; }
+.hx-cfile-head:focus-visible { outline: none; box-shadow: inset 0 0 0 2px color-mix(in oklch, var(--text) 22%, transparent); }
 .hx-cfile-head:hover { background: color-mix(in oklch, var(--text) 3%, var(--bg)); }
 .hx-cfile-head .hx-chev { flex-shrink: 0; color: var(--text-muted); }
 .hx-cfile-head .p { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
@@ -345,7 +349,12 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-cfile-head .note { flex-shrink: 0; font-size: 12px; color: var(--text-muted); }
 .hx-cfile-head .n { flex-shrink: 0; display: inline-flex; gap: 6px; font-size: 12px; }
 .hx-cfile .hx-diff { padding-block: 6px; }
-.hx-cfile-body { overflow-x: auto; }
+.hx-cfile-body { min-width: 0; }
+/* The panel is narrow, so long lines wrap under their own text instead of scrolling sideways. */
+.hx-cfile .hx-diff { min-width: 0; }
+.hx-cfile .hx-diff .l { grid-template-columns: 36px 36px 18px minmax(0, 1fr); }
+.hx-cfile .hx-diff.is-whole .l { grid-template-columns: 44px minmax(0, 1fr); }
+.hx-cfile .hx-diff .l > :last-child { white-space: pre-wrap; overflow-wrap: anywhere; }
 .hx-diff { font-family: var(--font-mono); font-size: 12.5px; line-height: 20px; min-width: max-content; }
 .hx-diff .l { display: grid; grid-template-columns: 40px 40px 20px 1fr; padding-inline-end: 16px; white-space: pre; color: var(--text); }
 .hx-diff .l .a, .hx-diff .l .b { padding-inline-end: 8px; text-align: end; font-size: 12px; color: var(--text-disabled); user-select: none; font-variant-numeric: tabular-nums; }
