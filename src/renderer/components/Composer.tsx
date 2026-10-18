@@ -7,7 +7,6 @@ import { actions, useApp, type ChatState } from '../store'
 import { Icon } from './Icon'
 import { Menu, MenuItem } from './Menu'
 import { PermissionPanel, permissionKey } from './PermissionPanel'
-import { Reserve } from './Reserve'
 
 const MODES: PermissionMode[] = ['ask', 'acceptEdits', 'auto']
 
@@ -140,29 +139,15 @@ export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
               <Icon icon={ChevronDown} size={16} />
             </button>
             <span className="grow" />
-            <span className="hx-hint">
-              <span>{t('composer.hintSend')}</span>
-              <span>{t('composer.hintLine')}</span>
-            </span>
             <button
               type="button"
               className={`hx-send ${showStop && permission ? 'btn-secondary' : 'btn-primary'}`}
               disabled={!showStop && !hasText}
+              aria-label={t(showStop ? 'composer.stop' : 'composer.send')}
+              title={t(showStop ? 'composer.stop' : 'composer.send')}
               onClick={showStop ? () => actions.stop() : submit}
             >
-              <Reserve
-                shown={showStop ? 1 : 0}
-                forms={[
-                  <>
-                    <Icon icon={ArrowUp} size={16} />
-                    {t('composer.send')}
-                  </>,
-                  <>
-                    <Icon icon={Square} size={16} className="hx-fill" />
-                    {t('composer.stop')}
-                  </>,
-                ]}
-              />
+              {showStop ? <Icon icon={Square} size={14} className="hx-fill" /> : <Icon icon={ArrowUp} size={18} />}
             </button>
           </div>
         </div>
