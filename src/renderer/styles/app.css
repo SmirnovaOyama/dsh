@@ -432,21 +432,20 @@ button.hx-tool:hover { background: var(--surface-hover); }
 /* ── motion ──────────────────────────────────────────────────── */
 /* Small and quick, only where something arrives, leaves or changes state. */
 @keyframes hx-fade-in { from { opacity: 0; } }
-@keyframes hx-rise-in { from { opacity: 0; transform: translateY(6px); } }
 @keyframes hx-pane-in { from { flex-basis: 0; opacity: 0; } }
 @keyframes hx-pane-out { to { flex-basis: 0; opacity: 0; } }
 .hx-main, .hx-page { animation: hx-fade-in var(--duration-base) var(--ease-standard); }
-.hx-user, .hx-turn { animation: hx-rise-in var(--duration-slow) var(--ease-out) both; }
+.hx-user, .hx-turn { animation: hx-fade-in var(--duration-base) var(--ease-standard) both; }
 .hx-turn > * { animation: hx-fade-in var(--duration-base) var(--ease-standard) both; }
 .hx-session { animation: hx-fade-in var(--duration-base) var(--ease-standard) both; }
-.hx-empty { animation: hx-rise-in var(--duration-slow) var(--ease-out) both; }
+.hx-empty { animation: hx-fade-in var(--duration-base) var(--ease-standard) both; }
 /* The panel opens to its width with its contents already laid out, so nothing inside it reflows. */
 .hx-changes { overflow: hidden; }
 .hx-changes[data-motion="in"] { animation: hx-pane-in var(--duration-slow) var(--ease-out); }
 .hx-changes[data-motion="out"] { animation: hx-pane-out var(--duration-base) var(--ease-standard) forwards; }
 .hx-changes:is([data-motion="in"], [data-motion="out"]) > * { min-width: min(var(--changes-width), calc(100vw - var(--sidebar-width) - 420px)); }
 .hx-test-result { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; transition: opacity var(--duration-quick) var(--ease-standard); }
-.hx-test-result .st { animation: hx-rise-in var(--duration-base) var(--ease-out) both; }
+.hx-test-result .st { animation: hx-fade-in var(--duration-base) var(--ease-standard) both; }
 .hx-test-result .st + .st { animation-delay: 60ms; }
 .hx-test-result.is-stale { opacity: 0.4; }
 .hx-count { display: inline-block; text-align: end; }
