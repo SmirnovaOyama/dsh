@@ -37,7 +37,7 @@ function iconFor(item: ToolItem): LucideIcon {
   return ICONS[item.name] ?? Wrench
 }
 
-function nameFor(item: ToolItem): string {
+export function nameFor(item: ToolItem): string {
   if (item.name === 'write_file') return t(item.created ? 'tool.write_file.create' : 'tool.write_file')
   const key = `tool.${item.name}` as MessageKey
   return ICONS[item.name] ? t(key) : t('tool.unknown')

@@ -79,7 +79,7 @@ let state: AppState = {
   chat: null,
   view: 'chat',
   settingsSection: null,
-  showChanges: readPrefs().showChanges ?? window.innerWidth >= 1200,
+  showChanges: readPrefs().showChanges ?? false,
   selectedFile: null,
   draft: { model: DEFAULT_SETTINGS.model, permissionMode: DEFAULT_SETTINGS.permissionMode },
   focusTick: 0,

@@ -118,8 +118,13 @@ input, textarea, select { font: inherit; color: inherit; }
   width: 100%; max-width: var(--column-width); margin-inline: auto; flex: 1 0 auto;
   padding: 32px var(--column-pad) 32px; display: flex; flex-direction: column; gap: 28px;
 }
+.hx-column { font-size: 15px; line-height: 24px; }
 .hx-user { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-.hx-user .body { max-width: 30rem; font-weight: 500; color: var(--text); text-align: start; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Corners stay at 12px so a one-line message never turns into a pill. */
+.hx-user .body {
+  max-width: 85%; padding: 10px 14px; border-radius: var(--radius-md); background: var(--surface-hover);
+  color: var(--text); text-align: start; white-space: pre-wrap; overflow-wrap: anywhere;
+}
 .hx-user .time { font-size: 12px; line-height: 16px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .hx-turn { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 
@@ -133,7 +138,7 @@ input, textarea, select { font: inherit; color: inherit; }
 .hx-prose :is(h3, h4) { font-size: 15px; line-height: 22px; }
 .hx-prose > * + :is(h1, h2, h3, h4) { margin-top: 20px; }
 .hx-prose :is(ul, ol) { padding-inline-start: 24px; }
-.hx-prose li + li { margin-top: 4px; }
+.hx-prose li + li { margin-top: 6px; }
 .hx-prose li > :is(ul, ol) { margin-top: 4px; }
 .hx-prose li > p + p { margin-top: 8px; }
 .hx-prose blockquote { padding-inline-start: 12px; border-inline-start: 3px solid var(--border); color: var(--text-muted); }
@@ -162,8 +167,12 @@ input, textarea, select { font: inherit; color: inherit; }
 .hx-disc { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--duration-base) var(--ease-out); }
 .hx-disc.is-open { grid-template-rows: 1fr; }
 .hx-disc > div { overflow: hidden; min-height: 0; }
-.hx-reason { padding: 4px 0 4px 24px; font-size: 14px; line-height: 22px; color: var(--text-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
 
+.hx-steps { display: flex; flex-direction: column; min-width: 0; }
+.hx-steps .hx-disclose { max-width: calc(100% + 8px); }
+.hx-steps .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hx-steps-body { display: flex; flex-direction: column; gap: 8px; padding: 4px 0 4px 24px; }
+.hx-step-thought { font-size: 14px; line-height: 22px; color: var(--text-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
 .hx-tools { display: flex; flex-direction: column; }
 .hx-tool {
   display: flex; align-items: center; gap: 8px; width: calc(100% + 24px); min-height: 36px;
@@ -224,7 +233,7 @@ button.hx-tool:hover { background: var(--surface-hover); }
   transition: border-color var(--duration-quick) var(--ease-standard), box-shadow var(--duration-quick) var(--ease-standard);
 }
 .hx-field:hover { border-color: var(--text-muted); }
-.hx-field:focus-within { border-color: var(--accent-ink); box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 22%, transparent); }
+.hx-field:focus-within { border-color: var(--text-muted); box-shadow: var(--shadow-sm); }
 .hx-field textarea {
   display: block; width: 100%; min-height: 48px; max-height: 232px; padding: 12px 16px 4px;
   field-sizing: content; border: 0; outline: none; resize: none; background: transparent;
