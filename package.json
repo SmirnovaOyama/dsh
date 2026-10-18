@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "description": "用 DeepSeek API 驅動的寫程式 Agent 桌面應用程式",
   "private": true,
+  "type": "module",
   "main": "dist/main/index.cjs",
   "engines": {
     "node": ">=20"

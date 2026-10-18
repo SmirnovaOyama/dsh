@@ -27,7 +27,7 @@ npm install
 npm run dev
 ```
 
-`npm run dev` 會開啟 Vite 開發伺服器和 Electron 視窗，改程式碼會自動重新載入。
+`npm run dev` 會開啟 Vite 開發伺服器和 Electron 視窗，改程式碼會自動重新載入。第一次執行時會先下載 Electron，終端機會顯示「Downloading Electron binary...」，下載完視窗就會打開。
 
 第一次打開時：
 
