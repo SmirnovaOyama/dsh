@@ -1,0 +1,117 @@
+/* DeepSeek Harness tokens, light first and dark under data-theme="dark".
+   The component styles in ods.css read these names; the values are the harness's own,
+   tuned to sit next to the Claude desktop app: warm neutrals, hairline borders, one accent. */
+
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang TC", "PingFang SC", "Hiragino Sans", "Microsoft JhengHei", "Apple SD Gothic Neo", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Warm paper neutrals: the window, the sidebar a shade darker, white for things you type into. */
+  --bg: oklch(98.4% 0.004 95);
+  --bg-subtle: oklch(96.4% 0.006 95);
+  --surface: oklch(100% 0 0);
+  --surface-muted: oklch(95.6% 0.006 95);
+  --surface-hover: oklch(22% 0.01 90 / 0.05);
+  --surface-pressed: oklch(22% 0.01 90 / 0.085);
+  --surface-glass: oklch(98.4% 0.004 95 / 0.82);
+  --bubble: oklch(94.2% 0.008 92);
+  --control-thumb: oklch(100% 0 0);
+  --field: oklch(100% 0 0);
+  --text: oklch(22% 0.006 90);
+  --text-muted: oklch(52% 0.01 85);
+  --text-disabled: oklch(72% 0.008 88);
+  --border: oklch(22% 0.01 90 / 0.1);
+  --border-strong: oklch(22% 0.01 90 / 0.2);
+  --accent: oklch(58% 0.13 40);
+  --accent-hover: oklch(52% 0.125 39);
+  --on-accent: oklch(100% 0 0);
+  --accent-ink: oklch(52% 0.125 39);
+  --accent-subtle: oklch(96% 0.018 50);
+  --accent-subtle-hover: oklch(93% 0.032 48);
+  --on-accent-subtle: oklch(46% 0.11 39);
+  --focus-ring: oklch(58% 0.13 40);
+  --brand: oklch(65.8% 0.1131 39.15);
+  --scrim: rgba(24, 23, 20, 0.28);
+  --status-positive: oklch(52% 0.11 155);
+  --status-info: oklch(52% 0.15 255);
+  --warning: oklch(55% 0.13 60);
+  --danger: oklch(54% 0.18 27);
+  --danger-fill: oklch(55% 0.19 27);
+  --danger-fill-hover: oklch(49% 0.17 27);
+  --on-danger: oklch(100% 0 0);
+  --illustration-line: var(--text-muted);
+  --illustration-wash: var(--surface-muted);
+
+  --shadow-xs: 0 1px 2px rgba(24, 23, 20, 0.05);
+  --shadow-sm: 0 1px 2px rgba(24, 23, 20, 0.04), 0 2px 6px rgba(24, 23, 20, 0.04);
+  --shadow-md: 0 1px 3px rgba(24, 23, 20, 0.05), 0 8px 24px rgba(24, 23, 20, 0.08);
+  --shadow-lg: 0 2px 6px rgba(24, 23, 20, 0.05), 0 20px 48px rgba(24, 23, 20, 0.14);
+
+  /* Small, even corners. Nothing here is round enough to read as a pill. */
+  --radius-xs: 5px;
+  --radius-sm: 7px;
+  --radius-md: 9px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-full: 9999px;
+  --blur-glass: 16px;
+  --blur-scrim: 4px;
+
+  --diff-add: color-mix(in oklch, var(--status-positive) 10%, transparent);
+  --diff-del: color-mix(in oklch, var(--danger) 8%, transparent);
+
+  /* Layout sizes the harness reuses in several places. */
+  --sidebar-width: 16rem;
+  --column-width: 46rem;
+  --column-pad: 32px;
+  --changes-width: clamp(320px, 30vw, 460px);
+  --titlebar-height: 0px;
+
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: oklch(26.5% 0.004 95);
+  --bg-subtle: oklch(22.8% 0.004 95);
+  --surface: oklch(30.5% 0.005 95);
+  --surface-muted: oklch(22.5% 0.004 95);
+  --surface-hover: oklch(100% 0 0 / 0.06);
+  --surface-pressed: oklch(100% 0 0 / 0.1);
+  --surface-glass: oklch(26.5% 0.004 95 / 0.82);
+  --bubble: oklch(33.5% 0.005 95);
+  --control-thumb: oklch(38% 0.005 95);
+  --field: oklch(30.5% 0.005 95);
+  --text: oklch(95.5% 0.005 95);
+  --text-muted: oklch(71% 0.008 90);
+  --text-disabled: oklch(52% 0.008 90);
+  --border: oklch(100% 0 0 / 0.1);
+  --border-strong: oklch(100% 0 0 / 0.2);
+  --accent: oklch(66% 0.13 40);
+  --accent-hover: oklch(72% 0.12 41);
+  --on-accent: oklch(18% 0.005 90);
+  --accent-ink: oklch(76% 0.1 42);
+  --accent-subtle: oklch(32% 0.04 40);
+  --accent-subtle-hover: oklch(37% 0.055 40);
+  --on-accent-subtle: oklch(88% 0.05 45);
+  --focus-ring: oklch(72% 0.12 41);
+  --brand: oklch(72.5% 0.105 39);
+  --scrim: rgba(0, 0, 0, 0.55);
+  --status-positive: oklch(78% 0.12 155);
+  --status-info: oklch(76% 0.1 250);
+  --warning: oklch(80% 0.12 75);
+  --danger: oklch(72% 0.14 24);
+  --illustration-line: var(--text-muted);
+  --illustration-wash: var(--surface);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.4), 0 20px 48px rgba(0, 0, 0, 0.5);
+  --diff-add: color-mix(in oklch, var(--status-positive) 9%, transparent);
+  --diff-del: color-mix(in oklch, var(--danger) 10%, transparent);
+  color-scheme: dark;
+}
+
+/* macOS draws the window buttons inside the content, so the top of the sidebar stays clear for them. */
+:root[data-platform="darwin"] {
+  --titlebar-height: 40px;
+}

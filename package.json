@@ -1,0 +1,41 @@
+{
+  "name": "deepseek-harness",
+  "productName": "DeepSeek Harness",
+  "version": "0.1.0",
+  "description": "用 DeepSeek API 驅動的寫程式 Agent 桌面應用程式",
+  "private": true,
+  "type": "module",
+  "main": "dist/main/index.cjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "vite --config vite.config.ts",
+    "build": "vite build --config vite.config.ts && node scripts/build-main.mjs",
+    "start": "electron .",
+    "dist": "npm run build && electron-builder",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "diff": "8.0.4",
+    "lucide-react": "1.49.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.0",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "electron": "43.7.7",
+    "electron-builder": "26.17.0",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3",
+    "vite": "8.3.1",
+    "vitest": "5.0.3"
+  }
+}
