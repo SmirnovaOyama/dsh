@@ -27,6 +27,8 @@ export interface AppInfo {
   version: string
   /** Whether the API key can be encrypted with the system keychain on this machine. */
   keyEncryption: boolean
+  /** The home folder, so paths can be shown as ~/... */
+  home: string
 }
 
 export interface WorkspaceInfo {
@@ -148,6 +150,7 @@ export type PermissionDecision =
 
 export type AgentEvent =
   | { type: 'item'; sessionId: string; item: TranscriptItem }
+  | { type: 'remove'; sessionId: string; itemId: string }
   | { type: 'meta'; meta: SessionMeta }
   | { type: 'permission'; sessionId: string; request: PermissionRequest | null }
   | { type: 'changes'; sessionId: string; changes: FileChange[] }
@@ -172,6 +175,12 @@ export interface SessionSnapshot {
   permission: PermissionRequest | null
 }
 
+export interface StartOptions {
+  id: string
+  model: string
+  permissionMode: PermissionMode
+}
+
 export interface DshApi {
   getInitialState(): Promise<InitialState>
   settings: {
@@ -191,7 +200,8 @@ export interface DshApi {
     remove(id: string): Promise<void>
   }
   agent: {
-    start(workspace: string, text: string, opts: { model: string; permissionMode: PermissionMode }): Promise<SessionMeta>
+    /** The renderer picks the id, so it can show the conversation before the first event arrives. */
+    start(workspace: string, text: string, opts: StartOptions): Promise<SessionMeta>
     send(sessionId: string, text: string): Promise<void>
     stop(sessionId: string): Promise<void>
     retry(sessionId: string): Promise<void>

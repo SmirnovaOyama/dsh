@@ -1,0 +1,111 @@
+/* Oyama Design System tokens, light first and dark under data-theme="dark".
+   Values come from the ODS tokens.json; the diff colours are the harness's own. */
+
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang TC", "PingFang SC", "Hiragino Sans", "Microsoft JhengHei", "Apple SD Gothic Neo", "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+
+  --bg: oklch(100% 0 0);
+  --bg-subtle: oklch(98.7% 0.002 89);
+  --surface: oklch(100% 0 0);
+  --surface-muted: oklch(97.3% 0.004 90);
+  --surface-hover: oklch(94.5% 0.004 88);
+  --surface-pressed: oklch(91% 0.007 89);
+  --surface-glass: rgba(255, 255, 255, 0.72);
+  --control-thumb: oklch(100% 0 0);
+  --field: oklch(100% 0 0);
+  --text: oklch(20.5% 0.006 90);
+  --text-muted: oklch(51.7% 0.013 90);
+  --text-disabled: oklch(72% 0.01 88);
+  --border: oklch(91% 0.007 89);
+  --border-strong: oklch(60% 0.012 89);
+  --accent: oklch(55.5% 0.118 38);
+  --accent-hover: oklch(49% 0.105 37);
+  --on-accent: oklch(100% 0 0);
+  --accent-ink: oklch(55.5% 0.118 38);
+  --accent-subtle: oklch(97.5% 0.012 45);
+  --accent-subtle-hover: oklch(94.5% 0.028 44);
+  --on-accent-subtle: oklch(49% 0.105 37);
+  --focus-ring: oklch(55.5% 0.118 38);
+  --brand: oklch(65.8% 0.1131 39.15);
+  --scrim: rgba(24, 23, 20, 0.32);
+  --status-positive: oklch(52% 0.11 162);
+  --status-info: oklch(52% 0.17 255);
+  --warning: oklch(53% 0.13 55);
+  --danger: oklch(53% 0.19 27);
+  --danger-fill: oklch(55% 0.2 27);
+  --danger-fill-hover: oklch(49% 0.18 27);
+  --on-danger: oklch(100% 0 0);
+  --illustration-line: var(--brand);
+  --illustration-wash: oklch(97.5% 0.012 45);
+
+  --shadow-xs: 0 1px 2px rgba(24, 23, 20, 0.06);
+  --shadow-sm: 0 1px 2px rgba(24, 23, 20, 0.04), 0 2px 8px rgba(24, 23, 20, 0.06);
+  --shadow-md: 0 2px 4px rgba(24, 23, 20, 0.04), 0 8px 24px rgba(24, 23, 20, 0.08);
+  --shadow-lg: 0 4px 8px rgba(24, 23, 20, 0.04), 0 24px 56px rgba(24, 23, 20, 0.14);
+
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+  --blur-glass: 20px;
+  --blur-scrim: 6px;
+
+  --diff-add: color-mix(in oklch, var(--status-positive) 11%, transparent);
+  --diff-del: color-mix(in oklch, var(--danger) 9%, transparent);
+
+  /* Layout sizes the harness reuses in several places. */
+  --sidebar-width: 16.25rem;
+  --column-width: 42rem;
+  --column-pad: 28px;
+  --changes-width: clamp(300px, 28vw, 420px);
+  --titlebar-height: 0px;
+
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: oklch(20.5% 0.006 90);
+  --bg-subtle: oklch(16.5% 0.005 90);
+  --surface: oklch(25% 0.007 88);
+  --surface-muted: oklch(28.5% 0.008 87);
+  --surface-hover: oklch(28.5% 0.008 87);
+  --surface-pressed: oklch(33% 0.009 88);
+  --surface-glass: rgba(35, 33, 30, 0.72);
+  --control-thumb: oklch(33% 0.009 88);
+  --field: oklch(25% 0.007 88);
+  --text: oklch(98.7% 0.002 89);
+  --text-muted: oklch(72% 0.01 88);
+  --text-disabled: oklch(51.7% 0.013 90);
+  --border: oklch(33% 0.009 88);
+  --border-strong: oklch(60% 0.012 89);
+  --accent: oklch(72.5% 0.105 39);
+  --accent-hover: oklch(80.5% 0.085 40);
+  --on-accent: oklch(16.5% 0.005 90);
+  --accent-ink: oklch(80.5% 0.085 40);
+  --accent-subtle: oklch(24.5% 0.04 40);
+  --accent-subtle-hover: oklch(32% 0.062 38);
+  --on-accent-subtle: oklch(88.5% 0.055 42);
+  --focus-ring: oklch(80.5% 0.085 40);
+  --brand: oklch(72.5% 0.105 39);
+  --scrim: rgba(0, 0, 0, 0.6);
+  --status-positive: oklch(80% 0.13 162);
+  --status-info: oklch(78% 0.11 250);
+  --warning: oklch(82% 0.13 75);
+  --danger: oklch(74% 0.15 22);
+  --illustration-wash: oklch(24.5% 0.04 40);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.45), 0 24px 56px rgba(0, 0, 0, 0.6);
+  --diff-add: color-mix(in oklch, var(--status-positive) 14%, transparent);
+  --diff-del: color-mix(in oklch, var(--danger) 14%, transparent);
+  color-scheme: dark;
+}
+
+/* macOS draws the window buttons inside the content, so the top of the sidebar stays clear for them. */
+:root[data-platform="darwin"] {
+  --titlebar-height: 40px;
+}

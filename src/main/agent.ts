@@ -114,10 +114,13 @@ export class Agent {
   /** Runs the loop again from where it stopped: after an error, or after the step limit. */
   async resume(state: SessionState): Promise<void> {
     if (this.isRunning(state)) return
-    const last = state.data.items[state.data.items.length - 1]
-    if (last && (last.kind === 'error' || last.kind === 'notice')) state.data.items.pop()
     const lastMessage = state.messages[state.messages.length - 1]
     if (!lastMessage || lastMessage.role === 'assistant') return
+    const last = state.data.items[state.data.items.length - 1]
+    if (last && (last.kind === 'error' || last.kind === 'notice')) {
+      state.data.items.pop()
+      this.host.emit({ type: 'remove', sessionId: state.data.id, itemId: last.id })
+    }
     this.host.persist(state)
     await this.run(state)
   }

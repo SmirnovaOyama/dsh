@@ -23,6 +23,7 @@ function startElectron() {
     env: { ...process.env, DSH_DEV_SERVER_URL: url },
   })
   electron.on('exit', () => {
+    builder.kill()
     server.close()
     process.exit(0)
   })

@@ -1,0 +1,110 @@
+import { FilePen, FilePlus, Terminal } from 'lucide-react'
+import { useState } from 'react'
+import type { PermissionRequest } from '../../shared/types'
+import { tildify } from '../format'
+import { t } from '../i18n'
+import { actions, useApp } from '../store'
+import { DiffStatsText, DiffView } from './DiffView'
+import { Icon } from './Icon'
+
+export function PermissionPanel({ request }: { request: PermissionRequest }) {
+  const home = useApp((s) => s.app.home)
+  const [always, setAlways] = useState(false)
+  const titleId = `perm-${request.id}`
+
+  if (request.kind === 'command') {
+    const allow = () =>
+      void actions.respond(always && request.prefix ? { type: 'allowAlways', prefix: request.prefix } : { type: 'allow' })
+    return (
+      <section className="hx-perm" aria-labelledby={titleId}>
+        <div className="q">
+          <Icon icon={Terminal} />
+          <div className="text">
+            <h3 id={titleId}>{t('perm.commandTitle')}</h3>
+            <p className="why">{t('perm.cwd', { cwd: tildify(request.cwd ?? '', home) })}</p>
+          </div>
+        </div>
+        <div className="hx-code">
+          <pre className="is-plain is-wrap">{request.command}</pre>
+        </div>
+        {request.prefix && (
+          <label className="hx-check">
+            <input type="checkbox" checked={always} onChange={(event) => setAlways(event.target.checked)} />
+            <span>
+              {t('perm.always', { prefix: '\u0000' })
+                .split('\u0000')
+                .flatMap((part, i) => (i === 0 ? [part] : [<span key={i} className="hx-mono">{request.prefix}</span>, part]))}
+            </span>
+          </label>
+        )}
+        <div className="acts">
+          <span className="hx-hint grow">{t('perm.hint')}</span>
+          <button type="button" className="btn-secondary" onClick={() => void actions.respond({ type: 'deny' })}>
+            {t('perm.deny')}
+          </button>
+          <button type="button" className="btn-primary" data-perm-allow onClick={allow}>
+            {t('perm.allow')}
+          </button>
+        </div>
+      </section>
+    )
+  }
+
+  const stats = request.stats ?? { added: 0, removed: 0 }
+  return (
+    <section className="hx-perm" aria-labelledby={titleId}>
+      <div className="q">
+        <Icon icon={request.created ? FilePlus : FilePen} />
+        <div className="text">
+          <h3 id={titleId}>{t(request.created ? 'perm.createTitle' : 'perm.editTitle')}</h3>
+          <p className="why">
+            <span className="hx-mono">{request.path}</span>
+            {t('perm.sep')}
+            <span style={{ display: 'inline-flex', gap: 4 }}>
+              <DiffStatsText added={stats.added} removed={stats.removed} />
+            </span>{' '}
+            {t('perm.lines')}
+          </p>
+        </div>
+      </div>
+      {request.lines && request.lines.length > 0 && (
+        <div className="box">
+          <DiffView lines={request.lines} label={t('changes.diff', { path: request.path ?? '' })} />
+        </div>
+      )}
+      <div className="acts">
+        <span className="hx-hint grow">{t('perm.hint')}</span>
+        <button type="button" className="btn-secondary" onClick={() => void actions.respond({ type: 'deny' })}>
+          {t('perm.deny')}
+        </button>
+        <button type="button" className="btn-tonal" onClick={() => void actions.respond({ type: 'allowSession' })}>
+          {t('perm.allowSession')}
+        </button>
+        <button type="button" className="btn-primary" data-perm-allow onClick={() => void actions.respond({ type: 'allow' })}>
+          {t('perm.allow')}
+        </button>
+      </div>
+    </section>
+  )
+}
+
+/** Enter allows and Esc declines, unless focus is somewhere that uses those keys itself. */
+export function permissionKey(event: KeyboardEvent, composerHasText: boolean): boolean {
+  if (event.isComposing || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return false
+  const target = event.target as HTMLElement | null
+  const inComposer = target?.closest('.hx-field') !== null && target?.tagName === 'TEXTAREA'
+  const inControl = !inComposer && !!target?.closest('button, input, textarea, select, a, [role="menu"]')
+  if (event.key === 'Enter') {
+    if (inControl || (inComposer && composerHasText)) return false
+    const allowButton = document.querySelector<HTMLButtonElement>('[data-perm-allow]')
+    if (allowButton) allowButton.click()
+    else void actions.respond({ type: 'allow' })
+    return true
+  }
+  if (event.key === 'Escape') {
+    if (inControl) return false
+    void actions.respond({ type: 'deny' })
+    return true
+  }
+  return false
+}

@@ -14,6 +14,7 @@ import {
   type PermissionRequest,
   type SessionMeta,
   type SessionSnapshot,
+  type StartOptions,
   type WorkspaceInfo,
 } from '../shared/types'
 import { Agent, type AgentHost, type SessionState } from './agent'
@@ -24,6 +25,7 @@ import { metaOf, type SessionStore, type SettingsStore } from './store'
 import { shellFor } from './tools/shell'
 
 const run = promisify(execFile)
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function readWorkspace(dir: string): Promise<WorkspaceInfo> {
   const info: WorkspaceInfo = { path: dir, name: path.basename(dir) || dir, branch: null, isGitRepo: false }
@@ -111,18 +113,21 @@ export class Controller {
   async snapshot(id: string): Promise<SessionSnapshot | null> {
     const state = await this.open(id)
     if (!state) return null
+    // Copy the conversation after the last await, so no event can land between the copy and the reply.
+    const changes = await state.tracker.list()
     return {
       session: { ...state.data, items: [...state.data.items], usage: { ...state.data.usage } },
-      changes: await state.tracker.list(),
+      changes,
       permission: this.pending.get(id)?.request ?? null,
     }
   }
 
-  async start(workspace: string, text: string, opts: { model: string; permissionMode: PermissionMode }): Promise<SessionMeta> {
+  async start(workspace: string, text: string, opts: StartOptions): Promise<SessionMeta> {
     const now = this.now()
+    const id = UUID.test(opts.id) && !this.states.has(opts.id) ? opts.id : randomUUID()
     const state: SessionState = {
       data: {
-        id: randomUUID(),
+        id,
         title: '',
         workspace,
         createdAt: now,

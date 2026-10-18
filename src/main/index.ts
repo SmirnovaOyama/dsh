@@ -3,7 +3,7 @@
 import { BrowserWindow, app, dialog, ipcMain, nativeTheme, safeStorage, shell } from 'electron'
 import path from 'node:path'
 import { Channels, EVENT_CHANNEL } from '../shared/ipc'
-import type { AgentEvent, InitialState, PermissionDecision, PermissionMode, Settings } from '../shared/types'
+import type { AgentEvent, InitialState, PermissionDecision, PermissionMode, Settings, StartOptions } from '../shared/types'
 import { Controller, readWorkspace } from './controller'
 import { DeepSeekError, checkConnection } from './deepseek'
 import { SessionStore, SettingsStore, type KeyCipher } from './store'
@@ -103,7 +103,12 @@ function registerIpc() {
     return {
       settings,
       hasApiKey: settingsStore.hasApiKey(),
-      app: { platform: process.platform, version: app.getVersion(), keyEncryption: safeStorage.isEncryptionAvailable() },
+      app: {
+        platform: process.platform,
+        version: app.getVersion(),
+        keyEncryption: safeStorage.isEncryptionAvailable(),
+        home: app.getPath('home'),
+      },
       workspace,
     }
   })
@@ -153,9 +158,7 @@ function registerIpc() {
   handle('sessionsLoad', (id: string) => controller.snapshot(id))
   handle('sessionsRemove', (id: string) => controller.remove(id))
 
-  handle('agentStart', (workspace: string, text: string, opts: { model: string; permissionMode: PermissionMode }) =>
-    controller.start(workspace, text, opts),
-  )
+  handle('agentStart', (workspace: string, text: string, opts: StartOptions) => controller.start(workspace, text, opts))
   handle('agentSend', (id: string, text: string) => controller.send(id, text))
   handle('agentStop', (id: string) => controller.stop(id))
   handle('agentRetry', (id: string) => controller.retry(id))

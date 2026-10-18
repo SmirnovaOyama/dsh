@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -56,6 +57,8 @@ async function setup(steps: Step[], seen: ChatRequest[] = [], withKey = true) {
   return { controller, settings, sessions }
 }
 
+const opts = (permissionMode: 'ask' | 'acceptEdits') => ({ id: randomUUID(), model: 'deepseek-chat', permissionMode })
+
 const editCall = {
   id: 'call_1',
   type: 'function' as const,
@@ -86,7 +89,7 @@ describe('agent loop', () => {
   it('asks before an edit, applies it when allowed, then answers', async () => {
     const seen: ChatRequest[] = []
     const { controller } = await setup([{ content: '我來改', toolCalls: [editCall] }, { content: '改好了' }], seen)
-    const meta = await controller.start(ws, '把 old 改成 new', { model: 'deepseek-chat', permissionMode: 'ask' })
+    const meta = await controller.start(ws, '把 old 改成 new', opts('ask'))
 
     const request = await until(permissionRequest)
     expect(request).toMatchObject({ kind: 'edit', path: 'a.txt', stats: { added: 1, removed: 1 } })
@@ -106,7 +109,7 @@ describe('agent loop', () => {
 
   it('ends the turn when an edit is declined without a reason', async () => {
     const { controller } = await setup([{ toolCalls: [editCall] }])
-    const meta = await controller.start(ws, 'edit it', { model: 'deepseek-chat', permissionMode: 'ask' })
+    const meta = await controller.start(ws, 'edit it', opts('ask'))
     const request = await until(permissionRequest)
     controller.respond(meta.id, request.id, { type: 'deny' })
     const snap = await idle(controller, meta.id)
@@ -116,7 +119,7 @@ describe('agent loop', () => {
 
   it('runs edits without asking in acceptEdits mode', async () => {
     const { controller } = await setup([{ toolCalls: [editCall] }, { content: 'done' }])
-    const meta = await controller.start(ws, 'edit it', { model: 'deepseek-chat', permissionMode: 'acceptEdits' })
+    const meta = await controller.start(ws, 'edit it', opts('acceptEdits'))
     await idle(controller, meta.id)
     expect(permissionRequest()).toBeUndefined()
     expect(await readFile(path.join(ws, 'a.txt'), 'utf8')).toBe('new\n')
@@ -124,7 +127,7 @@ describe('agent loop', () => {
 
   it('stops while waiting for permission', async () => {
     const { controller } = await setup([{ toolCalls: [editCall] }])
-    const meta = await controller.start(ws, 'edit it', { model: 'deepseek-chat', permissionMode: 'ask' })
+    const meta = await controller.start(ws, 'edit it', opts('ask'))
     await until(permissionRequest)
     controller.stop(meta.id)
     const snap = await idle(controller, meta.id)
@@ -137,16 +140,39 @@ describe('agent loop', () => {
 
   it('shows an error when there is no API key', async () => {
     const { controller } = await setup([], [], false)
-    const meta = await controller.start(ws, 'hi', { model: 'deepseek-chat', permissionMode: 'ask' })
+    const meta = await controller.start(ws, 'hi', opts('ask'))
     const snap = await idle(controller, meta.id)
     expect(snap.session.items.at(-1)).toMatchObject({ kind: 'error', code: 'no-key' })
+  })
+
+  it('uses the id the renderer picked', async () => {
+    const { controller } = await setup([{ content: 'hi' }])
+    const options = opts('ask')
+    const meta = await controller.start(ws, 'hello', options)
+    expect(meta.id).toBe(options.id)
+    await idle(controller, meta.id)
+  })
+
+  it('removes the error when retrying', async () => {
+    const { controller, settings } = await setup([{ content: 'back' }], [], false)
+    const meta = await controller.start(ws, 'hi', opts('ask'))
+    const failed = await idle(controller, meta.id)
+    const error = failed.session.items.at(-1)!
+    expect(error.kind).toBe('error')
+
+    await settings.setApiKey('sk-test')
+    events = []
+    await controller.retry(meta.id)
+    const snap = await idle(controller, meta.id)
+    expect(events).toContainEqual({ type: 'remove', sessionId: meta.id, itemId: error.id })
+    expect(snap.session.items.map((i) => i.kind)).toEqual(['user', 'text'])
   })
 
   it('reports a tool error back to the model and keeps going', async () => {
     const seen: ChatRequest[] = []
     const bad = { id: 'c2', type: 'function' as const, function: { name: 'read_file', arguments: JSON.stringify({ path: 'missing.txt' }) } }
     const { controller } = await setup([{ toolCalls: [bad] }, { content: 'ok' }], seen)
-    const meta = await controller.start(ws, 'read', { model: 'deepseek-chat', permissionMode: 'ask' })
+    const meta = await controller.start(ws, 'read', opts('ask'))
     const snap = await idle(controller, meta.id)
     expect(snap.session.items[1]).toMatchObject({ kind: 'tool', status: 'error' })
     const toolMessage = seen[1].messages.at(-1) as Extract<ChatMessage, { role: 'tool' }>
