@@ -4,7 +4,7 @@
 
 :root {
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang TC", "PingFang SC", "Hiragino Sans", "Microsoft JhengHei", "Apple SD Gothic Neo", "Segoe UI", system-ui, sans-serif;
-  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /* Warm paper neutrals: the window, the sidebar a shade darker, white for things you type into. */
   --bg: oklch(98.4% 0.004 95);
