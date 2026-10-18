@@ -174,6 +174,17 @@ function registerIpc() {
   })
 }
 
+// One window writes the conversation files; a second launch focuses it instead.
+if (!app.requestSingleInstanceLock()) app.quit()
+app.on('second-instance', () => {
+  if (!window || window.isDestroyed()) return
+  if (window.isMinimized()) window.restore()
+  window.focus()
+})
+
+// The dev script and the terminal stop the app with a signal; quit normally so conversations are saved.
+for (const signal of ['SIGTERM', 'SIGINT'] as const) process.on(signal, () => app.quit())
+
 app.whenReady().then(async () => {
   await Promise.all([settingsStore.load(), sessionStore.load()])
   registerIpc()

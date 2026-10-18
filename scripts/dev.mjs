@@ -14,10 +14,16 @@ let electron = null
 let restartTimer = null
 
 function startElectron() {
-  if (electron) {
-    electron.removeAllListeners('exit')
-    electron.kill()
-  }
+  if (!electron) return spawnElectron()
+  // Wait for the old window to save and exit, so two never write the same conversations.
+  const old = electron
+  old.removeAllListeners('exit')
+  old.once('exit', spawnElectron)
+  old.kill('SIGTERM')
+  setTimeout(() => old.exitCode === null && old.signalCode === null && old.kill('SIGKILL'), 5000).unref()
+}
+
+function spawnElectron() {
   electron = spawn(electronPath, ['.'], {
     stdio: 'inherit',
     env: { ...process.env, DSH_DEV_SERVER_URL: url },
