@@ -1,4 +1,4 @@
-import { ChevronLeft, Cpu, KeyRound, Shield, Sun, X, type LucideIcon } from 'lucide-react'
+import { ChevronLeft, Cpu, KeyRound, LoaderCircle, Shield, Sun, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { MAX_STEPS_OPTIONS, MODELS, type ConnectionResult, type Locale, type PermissionMode, type ReplyStyle, type ThemePref } from '../../shared/types'
 import { api } from '../api'
@@ -112,12 +112,11 @@ function Group({ id, title, children }: { id: SettingsSection; title: string; ch
   )
 }
 
-function Row({ title, desc, children }: { title: string; desc?: string; children?: ReactNode }) {
+function Row({ title, children }: { title: string; children?: ReactNode }) {
   return (
     <div className="oy-row">
       <div className="text">
         <p className="title">{title}</p>
-        {desc && <p className="desc">{desc}</p>}
       </div>
       {children}
     </div>
@@ -136,6 +135,7 @@ function Connection({ focusKey }: { focusKey: boolean }) {
   const [baseUrl, setBaseUrl] = useState(settings.baseUrl)
   const [testing, setTesting] = useState(false)
   const [result, setResult] = useState<ConnectionResult | null>(null)
+  const [round, setRound] = useState(0)
 
   useEffect(() => {
     if (focusKey) keyRef.current?.focus({ preventScroll: true })
@@ -175,7 +175,6 @@ function Connection({ focusKey }: { focusKey: boolean }) {
   }
   const test = async () => {
     setTesting(true)
-    setResult(null)
     const started = performance.now()
     const outcome = await api.settings.testConnection()
     // Keep "testing" visible long enough to read, so the line does not flicker.
@@ -183,6 +182,7 @@ function Connection({ focusKey }: { focusKey: boolean }) {
     if (wait > 0) await new Promise((r) => setTimeout(r, wait))
     setTesting(false)
     setResult(outcome)
+    setRound((n) => n + 1)
   }
 
   return (
@@ -215,7 +215,8 @@ function Connection({ focusKey }: { focusKey: boolean }) {
             </button>
           </div>
           <div className="hx-field-hint-row">
-            <p className="oy-field-hint">{t(encrypted ? 'settings.keyEncrypted' : 'settings.keyPlain')}</p>
+            {/* Only said when the key is not encrypted, since that is worth knowing. */}
+            {!encrypted && <p className="oy-field-hint">{t('settings.keyPlain')}</p>}
             {hasApiKey && (
               <button
                 type="button"
@@ -249,25 +250,36 @@ function Connection({ focusKey }: { focusKey: boolean }) {
               if (event.key === 'Enter') commitBaseUrl()
             }}
           />
-          <p className="oy-field-hint">{t('settings.baseUrlHint')}</p>
         </div>
         <div className="hx-test-line" aria-live="polite">
           <button type="button" className="btn-secondary" disabled={testing || !hasApiKey} onClick={() => void test()}>
-            <Reserve shown={testing ? 1 : 0} forms={[t('settings.test'), t('settings.testing')]} />
+            <Reserve
+              shown={testing ? 1 : 0}
+              forms={[
+                t('settings.test'),
+                <>
+                  <Icon icon={LoaderCircle} size={14} className="hx-spin" />
+                  {t('settings.testing')}
+                </>,
+              ]}
+            />
           </button>
           {result && (
-            <span className="st">
-              <span className="hx-muted">{t('settings.status')}</span>
-              <span className={result.ok ? 'hx-positive' : 'hx-danger'}>
-                {result.ok ? t('settings.ok') : t(`error.${result.error ?? 'unknown'}.title` as MessageKey)}
+            <span key={round} className={`hx-test-result ${testing ? 'is-stale' : ''}`}>
+              <span className="st">
+                <span className="hx-muted">{t('settings.status')}</span>
+                <span className={result.ok ? 'hx-positive' : 'hx-danger'}>
+                  {result.ok ? t('settings.ok') : t(`error.${result.error ?? 'unknown'}.title` as MessageKey)}
+                </span>
               </span>
-            </span>
-          )}
-          {result?.ok && result.latencyMs !== undefined && (
-            <span className="st">
-              <span className="hx-muted">{t('settings.latency')}</span>
-              <span className="hx-tabular">{result.latencyMs}</span>
-              <span className="hx-muted">ms</span>
+              {result.ok && result.latencyMs !== undefined && (
+                <span className="st">
+                  <span className="hx-muted">{t('settings.latency')}</span>
+                  <span className="hx-tabular">
+                    <CountUp value={result.latencyMs} /> ms
+                  </span>
+                </span>
+              )}
             </span>
           )}
         </div>
@@ -276,12 +288,35 @@ function Connection({ focusKey }: { focusKey: boolean }) {
   )
 }
 
+/** Counts up to a number once, the way a reading settles; the width is held from the start. */
+function CountUp({ value }: { value: number }) {
+  const [shown, setShown] = useState(0)
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setShown(value)
+      return
+    }
+    const start = performance.now()
+    let frame = requestAnimationFrame(function tick(now) {
+      const p = Math.min(1, (now - start) / 480)
+      setShown(Math.round(value * (1 - (1 - p) ** 3)))
+      if (p < 1) frame = requestAnimationFrame(tick)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [value])
+  return (
+    <span className="hx-count" style={{ minWidth: `${String(value).length}ch` }}>
+      {shown}
+    </span>
+  )
+}
+
 function ModelGroup() {
   const settings = useApp((s) => s.settings)
   return (
     <Group id="model" title={t('settings.model')}>
       <div className="oy-section is-plain">
-        <Row title={t('settings.defaultModel')} desc={t('settings.defaultModelDesc')}>
+        <Row title={t('settings.defaultModel')}>
           <Select
             className="hx-row-control"
             label={t('settings.defaultModel')}
@@ -290,7 +325,7 @@ function ModelGroup() {
             onChange={(model) => update({ model })}
           />
         </Row>
-        <Row title={t('settings.style')} desc={t('settings.styleDesc')}>
+        <Row title={t('settings.style')}>
           <Segmented<ReplyStyle>
             label={t('settings.style')}
             value={settings.replyStyle}
@@ -298,7 +333,7 @@ function ModelGroup() {
             onChange={(replyStyle) => update({ replyStyle })}
           />
         </Row>
-        <Row title={t('settings.maxSteps')} desc={t('settings.maxStepsDesc')}>
+        <Row title={t('settings.maxSteps')}>
           <Select
             className="hx-row-control"
             label={t('settings.maxSteps')}
@@ -324,7 +359,7 @@ function Permissions() {
   return (
     <Group id="permissions" title={t('settings.permissions')}>
       <div className="oy-section is-plain">
-        <Row title={t('settings.defaultMode')} desc={t('settings.defaultModeDesc')}>
+        <Row title={t('settings.defaultMode')}>
           <Select<PermissionMode>
             className="hx-row-control"
             label={t('settings.defaultMode')}
@@ -333,7 +368,7 @@ function Permissions() {
             onChange={(permissionMode) => update({ permissionMode })}
           />
         </Row>
-        <Row title={t('settings.allowed')} desc={t('settings.allowedDesc')} />
+        <Row title={t('settings.allowed')} />
       </div>
       <div className="hx-allowed">
         <div className="hx-allowed-list">

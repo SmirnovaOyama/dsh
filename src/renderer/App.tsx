@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChangesPanel } from './components/ChangesPanel'
 import { Resizer } from './components/Resizer'
 import { ChatView } from './components/ChatView'
@@ -49,6 +49,31 @@ function useShortcuts(onSearch: () => void) {
   }, [onSearch])
 }
 
+export type Motion = 'still' | 'in' | 'out'
+
+/**
+ * Keeps a pane mounted while it animates closed. A pane that is already open at launch stays still;
+ * one opened later slides in.
+ */
+function usePresence(shown: boolean, ms: number): Motion | null {
+  const first = useRef(true)
+  const [motion, setMotion] = useState<Motion | null>(shown ? 'still' : null)
+  useEffect(() => {
+    if (first.current) {
+      first.current = false
+      return
+    }
+    if (shown) {
+      setMotion('in')
+      return
+    }
+    setMotion((m) => (m === null ? null : 'out'))
+    const timer = setTimeout(() => setMotion(null), ms)
+    return () => clearTimeout(timer)
+  }, [shown, ms])
+  return motion
+}
+
 export function App() {
   const ready = useApp((s) => s.ready)
   const view = useApp((s) => s.view)
@@ -57,6 +82,7 @@ export function App() {
   const title = useApp((s) => s.chat?.session.title)
   const panel = useApp((s) => s.showChanges && (s.chatId !== null || (s.hasApiKey && s.workspace !== null)))
   const chat = useApp((s) => s.chat)
+  const panelMotion = usePresence(panel, 220)
   const [searchTick, setSearchTick] = useState(0)
 
   setLocale(locale)
@@ -85,8 +111,8 @@ export function App() {
       <Sidebar searchTick={searchTick} />
       <Resizer pane="sidebar" />
       <ChatView />
-      {panel && <Resizer pane="changes" />}
-      {panel && <ChangesPanel chat={chat} />}
+      {panelMotion && panelMotion !== 'out' && <Resizer pane="changes" />}
+      {panelMotion && <ChangesPanel chat={chat} motion={panelMotion} />}
     </div>
   )
 }

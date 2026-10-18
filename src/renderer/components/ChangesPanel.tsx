@@ -3,12 +3,13 @@ import { memo, useEffect, useRef, useState } from 'react'
 import type { FileChange } from '../../shared/types'
 import { t } from '../i18n'
 import { actions, useApp, type ChatState } from '../store'
+import type { Motion } from '../App'
 import { DiffStatsText, DiffView } from './DiffView'
 import { Icon } from './Icon'
 import { Modal } from './Modal'
 
 /** Every changed file stacked in one scroll, each with its own header that stays on top while you read it. */
-export function ChangesPanel({ chat }: { chat: ChatState | null }) {
+export function ChangesPanel({ chat, motion }: { chat: ChatState | null; motion: Motion }) {
   const selected = useApp((s) => s.selectedFile)
   const isGitRepo = useApp((s) => s.workspace?.isGitRepo ?? false)
   const changes = chat?.changes ?? []
@@ -26,7 +27,7 @@ export function ChangesPanel({ chat }: { chat: ChatState | null }) {
   }, [selected])
 
   return (
-    <aside className="hx-changes" aria-label={t('changes.label')}>
+    <aside className="hx-changes" data-motion={motion} aria-label={t('changes.label')} inert={motion === 'out'}>
       <div className="hx-changes-head">
         <h2>{t('changes.title')}</h2>
         {changes.length > 0 && (
@@ -105,11 +106,13 @@ const FileSection = memo(function FileSection({ change }: { change: FileChange }
           <DiffStatsText added={change.stats.added} removed={change.stats.removed} />
         </span>
       </button>
-      {open && (
-        <div className="hx-cfile-body">
-          <DiffView lines={change.lines} label={t('changes.diff', { path: change.path })} />
+      <div className={`hx-disc ${open ? 'is-open' : ''}`}>
+        <div>
+          <div className="hx-cfile-body">
+            <DiffView lines={change.lines} label={t('changes.diff', { path: change.path })} />
+          </div>
         </div>
-      )}
+      </div>
     </section>
   )
 })
