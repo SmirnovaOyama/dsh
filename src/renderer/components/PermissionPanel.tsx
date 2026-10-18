@@ -38,7 +38,10 @@ export function PermissionPanel({ request }: { request: PermissionRequest }) {
           </label>
         )}
         <div className="acts">
-          <span className="hx-hint grow">{t('perm.hint')}</span>
+          <span className="hx-hint grow">
+            <span>{t('perm.hintAllow')}</span>
+            <span>{t('perm.hintDeny')}</span>
+          </span>
           <button type="button" className="btn-secondary" onClick={() => void actions.respond({ type: 'deny' })}>
             {t('perm.deny')}
           </button>
@@ -73,7 +76,10 @@ export function PermissionPanel({ request }: { request: PermissionRequest }) {
         </div>
       )}
       <div className="acts">
-        <span className="hx-hint grow">{t('perm.hint')}</span>
+        <span className="hx-hint grow">
+          <span>{t('perm.hintAllow')}</span>
+          <span>{t('perm.hintDeny')}</span>
+        </span>
         <button type="button" className="btn-secondary" onClick={() => void actions.respond({ type: 'deny' })}>
           {t('perm.deny')}
         </button>

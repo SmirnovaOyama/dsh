@@ -236,7 +236,8 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-field .bar .grow { flex: 1; }
 .hx-field .bar .btn-ghost { padding: 0 8px; }
 .hx-field .bar .btn-ghost .label { max-width: 12rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hx-hint { font-size: 12px; line-height: 16px; color: var(--text-muted); white-space: nowrap; }
+/* Phrases sit apart with space, never a separator character. */
+.hx-hint { display: inline-flex; gap: 12px; font-size: 12px; line-height: 16px; color: var(--text-muted); white-space: nowrap; }
 .hx-field .hx-hint { margin-inline-end: 8px; }
 @container (max-width: 520px) { .hx-field .hx-hint { display: none; } }
 .hx-send { height: 36px; padding: 0 16px; flex-shrink: 0; }

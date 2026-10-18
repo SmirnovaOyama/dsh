@@ -135,7 +135,10 @@ export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
               <Icon icon={ChevronDown} size={16} />
             </button>
             <span className="grow" />
-            <span className="hx-hint">{t('composer.hint')}</span>
+            <span className="hx-hint">
+              <span>{t('composer.hintSend')}</span>
+              <span>{t('composer.hintLine')}</span>
+            </span>
             <button
               type="button"
               className={`hx-send ${showStop && permission ? 'btn-secondary' : 'btn-primary'}`}
