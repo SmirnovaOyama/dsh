@@ -1,4 +1,4 @@
-import { AtSign, ChevronLeft, ChevronRight, FileText, RefreshCw, Search, X } from 'lucide-react'
+import { AtSign, ChevronLeft, ChevronRight, FileText, RotateCw, Search, X } from 'lucide-react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import type { FileList, FileRef } from '../../shared/types'
 import { api } from '../api'
@@ -120,7 +120,7 @@ function FileTree() {
           )}
         </label>
         <button type="button" className="btn-ghost hx-icon-btn" aria-label={t('files.reload')} title={t('files.reload')} onClick={load}>
-          <Icon icon={RefreshCw} size={14} />
+          <Icon icon={RotateCw} size={14} />
         </button>
       </div>
 

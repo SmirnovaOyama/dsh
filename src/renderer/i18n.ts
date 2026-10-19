@@ -120,7 +120,7 @@ const zh = {
   'composer.context': '上下文',
   'composer.total': '這次對話',
   'composer.tokens': 'tokens',
-  'model.desc': '{version}，上下文 {window}',
+  'model.desc': '{version}\u3000上下文 {window}',
   'effort.label': '思考',
   'effort.none': '關閉',
   'effort.low': '低',
