@@ -136,3 +136,12 @@ export function MenuItem({ onSelect, checked, icon, desc, sub, danger, disabled,
 export function MenuSeparator() {
   return <div className="oy-menu-sep" role="separator" />
 }
+
+/** A quiet heading over a group of items. */
+export function MenuLabel({ children }: { children: ReactNode }) {
+  return (
+    <div className="hx-menu-label" role="presentation">
+      {children}
+    </div>
+  )
+}
