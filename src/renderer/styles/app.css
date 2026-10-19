@@ -342,11 +342,12 @@ button.hx-tool:hover { background: var(--surface-hover); }
 /* Both tabs keep the same weight, so switching never changes their width. */
 .hx-tabs { display: flex; gap: 2px; margin-inline: -8px 6px; }
 .hx-tabs button {
-  flex-shrink: 0; white-space: nowrap; height: 28px; padding: 0 8px; border-radius: var(--radius-sm); font-size: 14px; line-height: 20px; font-weight: 600;
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; height: 28px; padding: 0 8px; border-radius: var(--radius-sm); font-size: 14px; line-height: 20px; font-weight: 600;
   color: var(--text-muted); transition: background-color var(--duration-quick) var(--ease-standard), color var(--duration-quick) var(--ease-standard);
 }
 .hx-tabs button:hover { color: var(--text); background: var(--surface-hover); }
 .hx-tabs button[aria-selected="true"] { color: var(--text); }
+.hx-tabs .hx-sketch { flex-shrink: 0; }
 
 /* ── files ───────────────────────────────────────────────────── */
 .hx-files-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }

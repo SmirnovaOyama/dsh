@@ -7,6 +7,7 @@ import type { Motion } from '../App'
 import { DiffStatsText, DiffView } from './DiffView'
 import { FilesView } from './FilesView'
 import { Icon } from './Icon'
+import { Sketch } from './Sketch'
 import { Modal } from './Modal'
 
 /** Every changed file stacked in one scroll, each with its own header that stays on top while you read it. */
@@ -62,6 +63,7 @@ export function ChangesPanel({ chat, motion }: { chat: ChatState | null; motion:
         <div className="hx-tabs" role="tablist" aria-label={t('changes.label')}>
           {(['changes', 'files'] as const).map((id) => (
             <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => actions.setPanelTab(id)}>
+              <Sketch name={id} />
               {t(`panel.${id}`)}
             </button>
           ))}
