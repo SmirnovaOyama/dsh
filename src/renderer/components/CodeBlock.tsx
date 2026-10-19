@@ -21,7 +21,7 @@ export const CodeBlock = memo(function CodeBlock({ code, lang }: { code: string;
   )
 })
 
-export function CopyButton({ text }: { text: string }) {
+export function CopyButton({ text, label = t('copy.label') }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false)
   const timer = useRef<number>(undefined)
   useEffect(() => () => window.clearTimeout(timer.current), [])
@@ -29,8 +29,8 @@ export function CopyButton({ text }: { text: string }) {
     <button
       type="button"
       className="btn-ghost hx-icon-btn hx-copy"
-      aria-label={copied ? t('copy.done') : t('copy.label')}
-      title={copied ? t('copy.done') : t('copy.label')}
+      aria-label={copied ? t('copy.done') : label}
+      title={copied ? t('copy.done') : label}
       onClick={() => {
         void navigator.clipboard.writeText(text).then(() => {
           setCopied(true)

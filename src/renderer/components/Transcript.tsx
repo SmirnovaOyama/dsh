@@ -1,10 +1,11 @@
 import { ChevronRight, CircleAlert, FileText, LoaderCircle } from 'lucide-react'
+import { artifactIcon, isArtifact, typeLabel, type ArtifactItem } from '../artifacts'
 import { memo, useContext, useMemo, useState } from 'react'
 import type { FileChange, SessionData, TranscriptItem } from '../../shared/types'
 import { clockTime } from '../format'
 import { t, type MessageKey } from '../i18n'
 import { HoldScroll } from '../scroll'
-import { actions, getState } from '../store'
+import { actions, getState, useApp } from '../store'
 import { RefLabel } from './Composer'
 import { Icon } from './Icon'
 import { Markdown } from './Markdown'
@@ -33,7 +34,8 @@ function group(items: TranscriptItem[]): Block[] {
       blocks.push(turn)
     }
     const last = turn.parts[turn.parts.length - 1]
-    if (item.kind === 'tool' || item.kind === 'reasoning') {
+    // A finished or live artifact stands on its own as a card; one that failed folds in with the steps.
+    if (item.kind === 'reasoning' || (item.kind === 'tool' && (!item.artifact || item.status === 'error'))) {
       if (last?.type === 'steps') last.items.push(item)
       else turn.parts.push({ type: 'steps', id: item.id, items: [item] })
     } else {
@@ -79,6 +81,38 @@ const UserMessage = memo(function UserMessage({ item }: { item: Extract<Transcri
       </div>
       <span className="time">{clockTime(item.at)}</span>
     </div>
+  )
+})
+
+/** An artifact the agent made, as Claude shows it: a card that opens it beside the chat. */
+const ArtifactCard = memo(function ArtifactCard({ item }: { item: ArtifactItem }) {
+  const open = useApp((s) => s.showChanges && s.panelTab === 'artifacts' && s.viewedArtifact === item.id)
+  const { artifact } = item
+  const title = artifact.title || t('artifact.untitled')
+  return (
+    <button type="button" className="hx-artifact-card" aria-pressed={open} aria-label={t('artifact.open', { title })} onClick={() => actions.viewArtifact(item.id)}>
+      <span className="glyph">
+        <Icon icon={artifactIcon(artifact.type)} size={18} />
+      </span>
+      <span className="text">
+        <span className="title">{title}</span>
+        <span className="sub">
+          {item.status === 'running' ? (
+            <>
+              <Icon icon={LoaderCircle} size={14} className="hx-spin" />
+              <span>{t('artifact.writing')}</span>
+            </>
+          ) : item.status === 'stopped' ? (
+            <span>{t('artifact.stopped')}</span>
+          ) : (
+            <>
+              <span>{typeLabel(artifact)}</span>
+              {artifact.version > 1 && <span>{t('artifact.version', { n: artifact.version })}</span>}
+            </>
+          )}
+        </span>
+      </span>
+    </button>
   )
 })
 
@@ -221,6 +255,8 @@ function ItemView({ item, isLast, session }: { item: TranscriptItem; isLast: boo
       return <ErrorBlock item={item} active={isLast && idle} />
     case 'notice':
       return <Notice item={item} active={isLast && idle} />
+    case 'tool':
+      return isArtifact(item) ? <ArtifactCard item={item} /> : null
     default:
       return null
   }

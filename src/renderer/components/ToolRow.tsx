@@ -1,4 +1,5 @@
 import {
+  AppWindow,
   ChevronRight,
   FilePen,
   FilePlus,
@@ -30,6 +31,7 @@ const ICONS: Record<string, LucideIcon> = {
   search_files: Search,
   edit_file: FilePen,
   run_command: Terminal,
+  artifact: AppWindow,
 }
 
 function iconFor(item: ToolItem): LucideIcon {

@@ -80,6 +80,20 @@ export interface ToolInfo {
   truncated?: boolean
 }
 
+export type ArtifactType = 'html' | 'react' | 'svg' | 'markdown' | 'code'
+
+/** One version of a piece of standalone content the agent made for the person, shown beside the chat. */
+export interface ArtifactVersion {
+  id: string
+  title: string
+  type: ArtifactType
+  /** The programming language, for code artifacts. */
+  language?: string
+  content: string
+  /** Counts from 1 for each artifact. */
+  version: number
+}
+
 /** A file, or a range of its lines, that the person points the agent at. Lines count from 1. */
 export interface FileRef {
   path: string
@@ -111,6 +125,8 @@ export type TranscriptItem =
       path?: string
       created?: boolean
       stats?: DiffStats
+      /** The artifact tool carries the version it made, so the conversation holds every version. */
+      artifact?: ArtifactVersion
     }
   | { kind: 'error'; id: string; code: ErrorCode; detail?: string; retryable: boolean }
   | { kind: 'notice'; id: string; code: 'max-steps' | 'stopped' }
@@ -234,6 +250,10 @@ export interface DshApi {
     compact(sessionId: string, focus?: string): Promise<void>
     respond(sessionId: string, requestId: string, decision: PermissionDecision): Promise<void>
     configure(sessionId: string, opts: { model?: string; permissionMode?: PermissionMode }): Promise<SessionMeta | null>
+  }
+  artifacts: {
+    /** Asks where to save the artifact and writes it there. Resolves false when the person cancels. */
+    save(name: string, content: string): Promise<boolean>
   }
   changes: {
     revertAll(sessionId: string): Promise<void>

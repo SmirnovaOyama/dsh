@@ -23,6 +23,7 @@ export const Channels = {
   agentCompact: 'dsh:agent:compact',
   agentRespond: 'dsh:agent:respond',
   agentConfigure: 'dsh:agent:configure',
+  artifactsSave: 'dsh:artifacts:save',
   changesRevertAll: 'dsh:changes:revert-all',
   changesCommit: 'dsh:changes:commit',
   openExternal: 'dsh:open-external',

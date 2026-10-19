@@ -556,3 +556,49 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .oy-icon.hx-fill { fill: currentColor; stroke: none; }
 .hx-version { margin-top: 32px; font-size: 13px; line-height: 18px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .hx-search input::-webkit-search-cancel-button { display: none; }
+
+/* ── artifacts ───────────────────────────────────────────────── */
+/* The card in the conversation: a tile with the kind of thing, its title, and what it is. */
+.hx-artifact-card {
+  display: flex; align-items: center; gap: 12px; width: min(100%, 26rem); min-height: 64px; padding: 8px 14px 8px 8px;
+  border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--surface); text-align: start; color: var(--text);
+  transition: background-color var(--duration-quick) var(--ease-standard), border-color var(--duration-quick) var(--ease-standard);
+}
+.hx-artifact-card:hover { background: var(--surface-hover); }
+.hx-artifact-card[aria-pressed="true"] { border-color: var(--border-strong); }
+.hx-artifact-card .glyph, .hx-artifact-row .glyph {
+  flex-shrink: 0; display: grid; place-items: center; width: 48px; height: 48px;
+  border-radius: var(--radius-md); background: var(--surface-muted); color: var(--text-muted);
+}
+.hx-artifact-card .text, .hx-artifact-row .text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.hx-artifact-card .title, .hx-artifact-row .title { font-size: 14px; line-height: 20px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Phrases sit apart with space, never a separator character. */
+.hx-artifact-card .sub, .hx-artifact-row .sub { display: flex; align-items: center; gap: 10px; font-size: 12px; line-height: 16px; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.hx-artifact-card .sub .hx-spin { margin-inline-end: -4px; }
+
+/* The list in the panel. */
+.hx-artifact-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; padding: 8px 8px 24px; }
+.hx-artifact-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 6px 8px 6px 6px; border-radius: var(--radius-md); text-align: start; color: var(--text); }
+.hx-artifact-row:hover { background: var(--surface-hover); }
+.hx-artifact-row .glyph { width: 36px; height: 36px; border-radius: var(--radius-sm); }
+
+/* The viewer bar keeps every control at 28px so switching views or versions never moves it. */
+.hx-artifact-bar { gap: 4px; }
+.hx-artifact-bar .p { margin-inline-start: 2px; }
+.hx-artifact-bar .oy-segmented { flex-shrink: 0; margin-inline: 6px 2px; padding: 2px; }
+.hx-artifact-bar .oy-segmented .seg { height: 24px; padding: 0 10px; font-size: 12px; }
+.hx-artifact-bar .hx-copy { width: 28px; height: 28px; color: var(--text-muted); }
+.hx-versions { flex-shrink: 0; display: inline-flex; align-items: center; gap: 0; font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.hx-versions .hx-icon-btn { width: 24px !important; height: 24px !important; }
+.hx-versions .hx-icon-btn:disabled { opacity: 0.35; }
+.hx-versions .n { min-width: 3.5em; text-align: center; white-space: nowrap; }
+.hx-code-lines .num.is-static { cursor: default; }
+.hx-code-lines .num.is-static:hover { color: var(--text-disabled); }
+.hx-artifact-writing { display: flex; align-items: center; gap: 6px; padding: 8px 0 0 52px; font-size: 12px; color: var(--text-muted); }
+
+/* Pages render on white, as they would in a browser; the frame fades in once it has loaded. */
+.hx-artifact-frame { flex: 1; min-height: 0; display: flex; background: #fff; }
+.hx-artifact-frame iframe { flex: 1; width: 100%; border: 0; background: #fff; opacity: 0; transition: opacity var(--duration-base) var(--ease-standard); }
+.hx-artifact-frame iframe[data-shown="true"] { opacity: 1; }
+.hx-artifact-doc { padding: 20px 28px 40px; }
+.hx-artifact-doc .hx-prose { font-size: 15px; line-height: 24px; }

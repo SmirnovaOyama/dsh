@@ -1,6 +1,7 @@
 // Electron entry point: the window, the IPC handlers and app lifecycle.
 
 import { BrowserWindow, app, dialog, ipcMain, nativeTheme, safeStorage, shell } from 'electron'
+import { writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { Channels, EVENT_CHANNEL } from '../shared/ipc'
 import type { AgentEvent, FileRead, InitialState, PermissionDecision, PermissionMode, Settings, StartOptions } from '../shared/types'
@@ -189,6 +190,14 @@ function registerIpc() {
 
   handle('changesRevertAll', (id: string) => controller.revertAll(id))
   handle('changesCommit', (id: string, message: string) => controller.commit(id, message))
+
+  handle('artifactsSave', async (name: string, content: string) => {
+    const options: Electron.SaveDialogOptions = { defaultPath: path.basename(String(name)) }
+    const result = window ? await dialog.showSaveDialog(window, options) : await dialog.showSaveDialog(options)
+    if (result.canceled || !result.filePath) return false
+    await writeFile(result.filePath, String(content), 'utf8')
+    return true
+  })
 
   handle('openExternal', async (url: string) => {
     if (/^https?:\/\//.test(url)) await shell.openExternal(url)

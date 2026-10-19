@@ -18,6 +18,7 @@ import {
   type TranscriptItem,
   type WorkspaceInfo,
 } from '../shared/types'
+import { pomodoroV1, pomodoroV2 } from './mockArtifacts'
 
 const params = new URLSearchParams(location.search)
 const HOME = '/Users/anya'
@@ -296,6 +297,45 @@ function shortSession(sid: string, title: string, updatedAt: number, status: Ses
   }
 }
 
+function artifactSession(): SessionData {
+  const t0 = now - 12 * MIN
+  const writing = params.has('writing')
+  const card = (version: number, content: string, status: 'done' | 'running', callId: string): TranscriptItem => ({
+    kind: 'tool',
+    id: id(),
+    callId,
+    name: 'artifact',
+    target: '番茄鐘',
+    status,
+    artifact: { id: 'pomodoro-timer', title: '番茄鐘', type: 'html', content, version },
+  })
+  const items: TranscriptItem[] = [
+    { kind: 'user', id: id(), text: '做一個番茄鐘小網頁，我想放在桌面旁邊用', at: t0 },
+    { kind: 'reasoning', id: id(), text: '單一頁面就夠了，倒數、暫停、重來，再記一下今天完成幾個', startedAt: t0 + 1000, endedAt: t0 + 5000 },
+    { kind: 'text', id: id(), text: '好，我做成一個單頁的小網頁，打開就能用', streaming: false },
+    card(1, pomodoroV1, 'done', 'a1'),
+    { kind: 'text', id: id(), text: '做好了，右邊可以直接試\n\n- 按開始會倒數 25 分鐘，可以暫停和重來\n- 每完成一輪，下面的數字會加一', streaming: false },
+    { kind: 'user', id: id(), text: '按鈕不要那麼圓，再加一個休息 5 分鐘的模式', at: t0 + 6 * MIN },
+    { kind: 'text', id: id(), text: '好，我把按鈕改成小圓角，上面加一個切換專心和休息的開關', streaming: false },
+    card(2, writing ? pomodoroV2.slice(0, 1900) : pomodoroV2, writing ? 'running' : 'done', 'a2'),
+  ]
+  if (!writing) {
+    items.push({ kind: 'text', id: id(), text: '改好了，這是第 2 版\n\n- 按鈕的圓角改小了\n- 上面可以切換「專心 25 分」和「休息 5 分」', streaming: false })
+  }
+  return {
+    id: 'demo-artifact',
+    title: '做一個番茄鐘小網頁',
+    workspace: DSH,
+    createdAt: t0,
+    updatedAt: now - MIN,
+    model: 'deepseek-chat',
+    permissionMode: 'ask',
+    status: writing ? 'running' : 'idle',
+    items,
+    usage: { promptTokens: 22_400, completionTokens: 4_900, cacheHitTokens: 12_800, contextTokens: 9_870 },
+  }
+}
+
 const day = 24 * 60 * MIN
 const sessions = new Map<string, { data: SessionData; changes: FileChange[]; permission: PermissionRequest | null }>()
 function addSession(data: SessionData, changes: FileChange[] = [], permission: PermissionRequest | null = null) {
@@ -310,6 +350,7 @@ const mainPermission: PermissionRequest | null =
       ? { id: 'p2', sessionId: 'demo-main', toolItemId: main.items[main.items.length - 1].id, kind: 'command', command: 'npm install zod', cwd: DSH, prefix: 'npm install' }
       : null
 addSession(main, params.get('perm') === 'edit' ? [] : mainChanges, mainPermission)
+addSession(artifactSession())
 addSession(shortSession('s2', '把設定頁拆成小元件', now - 40 * MIN, 'idle'))
 addSession(shortSession('s3', '更新 README 的安裝步驟', now - 90 * MIN))
 addSession(shortSession('s4', '加上深色模式', now - day - 3 * 60 * MIN))
@@ -548,6 +589,16 @@ export function createMockApi(): DshApi {
         Object.assign(entry.data, opts)
         emit({ type: 'meta', meta: metaOf(entry.data) })
         return metaOf(entry.data)
+      },
+    },
+    artifacts: {
+      async save(name, content) {
+        const link = document.createElement('a')
+        link.href = URL.createObjectURL(new Blob([content], { type: 'text/plain' }))
+        link.download = name
+        link.click()
+        URL.revokeObjectURL(link.href)
+        return true
       },
     },
     changes: {

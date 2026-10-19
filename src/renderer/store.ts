@@ -45,7 +45,9 @@ export interface AppState {
   showChanges: boolean
   selectedFile: string | null
   /** Which view the right-hand panel shows. */
-  panelTab: 'changes' | 'files'
+  panelTab: 'changes' | 'files' | 'artifacts'
+  /** The transcript item holding the artifact version open in the panel, or null for the list. */
+  viewedArtifact: string | null
   /** The file open in the files view, or null for the file list. */
   viewedFile: string | null
   /** Files and lines pointed at for the next message. */
@@ -89,6 +91,7 @@ let state: AppState = {
   showChanges: readPrefs().showChanges ?? false,
   selectedFile: null,
   panelTab: 'changes',
+  viewedArtifact: null,
   viewedFile: null,
   refs: [],
   draft: { model: DEFAULT_SETTINGS.model, permissionMode: DEFAULT_SETTINGS.permissionMode },
@@ -151,9 +154,14 @@ function updateChat(sessionId: string, fn: (chat: ChatState) => Partial<ChatStat
 
 function handleEvent(event: AgentEvent) {
   switch (event.type) {
-    case 'item':
-      updateChat(event.sessionId, (chat) => ({ session: { ...chat.session, items: upsertItem(chat.session.items, event.item) } }))
+    case 'item': {
+      const item = event.item
+      const isNew = state.chat?.session.id === event.sessionId && !state.chat.session.items.some((i) => i.id === item.id)
+      updateChat(event.sessionId, (chat) => ({ session: { ...chat.session, items: upsertItem(chat.session.items, item) } }))
+      // A new artifact opens beside the chat as the agent starts writing it, as it does in Claude.
+      if (isNew && item.kind === 'tool' && item.artifact && item.status === 'running') actions.viewArtifact(item.id)
       break
+    }
     case 'remove':
       updateChat(event.sessionId, (chat) => ({
         session: { ...chat.session, items: chat.session.items.filter((item) => item.id !== event.itemId) },
@@ -188,7 +196,7 @@ function handleEvent(event: AgentEvent) {
       const changed = event.workspace?.path !== state.workspace?.path
       set({ workspace: event.workspace })
       if (changed) {
-        set({ chatId: null, chat: null, sessions: [], activeAt: {}, selectedFile: null, viewedFile: null, refs: [] })
+        set({ chatId: null, chat: null, sessions: [], activeAt: {}, selectedFile: null, viewedFile: null, viewedArtifact: null, refs: [] })
         void loadSessions()
       }
       break
@@ -230,6 +238,8 @@ export const actions = {
       chatId: null,
       chat: null,
       selectedFile: null,
+      viewedArtifact: null,
+      panelTab: s.panelTab === 'artifacts' ? 'changes' : s.panelTab,
       draft: { model: s.settings.model, permissionMode: s.settings.permissionMode },
       focusTick: s.focusTick + 1,
     }))
@@ -238,7 +248,7 @@ export const actions = {
   async openSession(id: string) {
     if (state.chatId === id && state.view === 'chat') return
     // Events for this conversation are ignored until the snapshot arrives; the snapshot already contains them.
-    set({ view: 'chat', chatId: id, chat: null, selectedFile: null })
+    set((s) => ({ view: 'chat', chatId: id, chat: null, selectedFile: null, viewedArtifact: null, panelTab: s.panelTab === 'artifacts' ? 'changes' : s.panelTab }))
     const snapshot = await api.sessions.load(id)
     if (state.chatId !== id) return
     if (!snapshot) {
@@ -371,6 +381,12 @@ export const actions = {
 
   setPanelTab(tab: AppState['panelTab']) {
     set({ panelTab: tab })
+  },
+
+  /** Opens one artifact version in the panel by its transcript item, or the list with null. */
+  viewArtifact(itemId: string | null) {
+    writePrefs({ showChanges: true })
+    set({ viewedArtifact: itemId, panelTab: 'artifacts', showChanges: true })
   },
 
   viewFile(path: string | null) {

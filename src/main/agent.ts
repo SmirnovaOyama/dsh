@@ -3,6 +3,7 @@
 import { randomUUID } from 'node:crypto'
 import type {
   AgentEvent,
+  ArtifactVersion,
   ErrorCode,
   FileRef,
   PermissionDecision,
@@ -17,6 +18,7 @@ import { DeepSeekError, streamChat, type ApiUsage, type ChatMessage, type ChatRe
 import { needsApproval } from './permissions'
 import { withRefs } from './refs'
 import { TOOL_SPECS, ToolError, prepareToolCall, type PermissionNeed, type PreparedCall } from './tools'
+import { draftArtifact } from './tools/artifact'
 
 const MAX_TOOL_RESULT_CHARS = 60_000
 const STREAM_FLUSH_MS = 50
@@ -86,6 +88,17 @@ export function titleFrom(text: string): string {
 function errorCode(error: unknown): ErrorCode {
   if (error instanceof DeepSeekError && error.code !== 'aborted') return error.code
   return 'unknown'
+}
+
+/** The latest finished version of each artifact in the conversation. */
+export function latestArtifacts(items: TranscriptItem[]): (id: string) => ArtifactVersion | undefined {
+  return (id) => {
+    for (let i = items.length - 1; i >= 0; i--) {
+      const item = items[i]
+      if (item.kind === 'tool' && item.status === 'done' && item.artifact?.id === id) return item.artifact
+    }
+    return undefined
+  }
 }
 
 function clip(text: string): string {
@@ -186,7 +199,8 @@ export class Agent {
           }
         }
         steps++
-        const result = await this.request(state, settings, signal, !overflowRetried)
+        const drafts = new Map<string, ToolItem>()
+        const result = await this.request(state, settings, signal, !overflowRetried, drafts)
         if (result === OVERFLOW) {
           overflowRetried = true
           steps--
@@ -197,7 +211,7 @@ export class Agent {
         }
         if (!result) break
         if (!result.toolCalls.length) break
-        const keepGoing = await this.runTools(state, result.toolCalls, signal)
+        const keepGoing = await this.runTools(state, result.toolCalls, signal, drafts)
         if (!keepGoing) break
       }
     })
@@ -256,7 +270,13 @@ export class Agent {
   }
 
   /** One request to DeepSeek. Returns null when the turn should end. */
-  private async request(state: SessionState, settings: Settings, signal: AbortSignal, overflowable: boolean): Promise<ChatResult | typeof OVERFLOW | null> {
+  private async request(
+    state: SessionState,
+    settings: Settings,
+    signal: AbortSignal,
+    overflowable: boolean,
+    drafts: Map<string, ToolItem>,
+  ): Promise<ChatResult | typeof OVERFLOW | null> {
     const apiKey = this.host.apiKey()
     if (!apiKey) {
       this.add(state, { kind: 'error', id: randomUUID(), code: 'no-key', retryable: true })
@@ -265,6 +285,16 @@ export class Agent {
     const model = state.data.model
     let reasoning: ReasoningItem | null = null
     let text: TextItem | null = null
+    // Artifacts show up while the model is still writing them, keyed by the call's place in the reply.
+    const streaming = new Map<number, ToolItem>()
+    const latest = latestArtifacts(state.data.items)
+    const endDrafts = (status: ToolItem['status']) => {
+      for (const item of streaming.values()) {
+        item.status = status
+        item.endedAt = this.now()
+        this.flush(state, item)
+      }
+    }
     const endReasoning = () => {
       if (reasoning && reasoning.endedAt === undefined) {
         reasoning.endedAt = this.now()
@@ -297,12 +327,25 @@ export class Agent {
             text.text += delta
             this.schedule(state, text)
           },
-          onToolCall: () => endReasoning(),
+          onToolCall: (index, name) => {
+            endReasoning()
+            if (name !== 'artifact') return
+            const artifact = draftArtifact('', latest)
+            streaming.set(index, this.add<ToolItem>(state, { kind: 'tool', id: randomUUID(), callId: '', name, target: '', status: 'running', startedAt: this.now(), artifact }))
+          },
+          onToolArguments: (index, args) => {
+            const item = streaming.get(index)
+            if (!item) return
+            item.artifact = draftArtifact(args, latest)
+            item.target = item.artifact.title
+            this.schedule(state, item)
+          },
         },
       )
     } catch (error) {
-      if (overflowable && !reasoning && !text && error instanceof DeepSeekError && isContextOverflow(error.status, error.message)) return OVERFLOW
+      if (overflowable && !reasoning && !text && !streaming.size && error instanceof DeepSeekError && isContextOverflow(error.status, error.message)) return OVERFLOW
       endReasoning()
+      endDrafts(signal.aborted ? 'stopped' : 'error')
       const partial = text as TextItem | null
       if (partial) {
         partial.streaming = false
@@ -331,20 +374,33 @@ export class Agent {
     const message: Extract<ChatMessage, { role: 'assistant' }> = { role: 'assistant', content: result.content }
     if (result.reasoning) message.reasoning_content = result.reasoning
     if (result.toolCalls.length) message.tool_calls = result.toolCalls
+    result.toolCalls.forEach((call, index) => {
+      const item = streaming.get(index)
+      if (!item) return
+      item.callId = call.id
+      drafts.set(call.id, item)
+      streaming.delete(index)
+    })
+    endDrafts('error')
     state.messages.push(message)
     this.host.persist(state)
     return result
   }
 
   /** Runs each tool call in order. Returns false when the turn should end here. */
-  private async runTools(state: SessionState, calls: ToolCall[], signal: AbortSignal): Promise<boolean> {
+  private async runTools(state: SessionState, calls: ToolCall[], signal: AbortSignal, drafts: Map<string, ToolItem>): Promise<boolean> {
     let keepGoing = true
     for (const call of calls) {
       if (signal.aborted || !keepGoing) {
+        const draft = drafts.get(call.id)
+        if (draft) {
+          draft.status = 'stopped'
+          this.flush(state, draft)
+        }
         state.messages.push({ role: 'tool', tool_call_id: call.id, content: 'Not run: the turn ended before this call.' })
         continue
       }
-      keepGoing = await this.runTool(state, call, signal)
+      keepGoing = await this.runTool(state, call, signal, drafts.get(call.id))
     }
     if (signal.aborted) {
       this.add(state, { kind: 'notice', id: randomUUID(), code: 'stopped' })
@@ -353,8 +409,8 @@ export class Agent {
     return keepGoing
   }
 
-  private async runTool(state: SessionState, call: ToolCall, signal: AbortSignal): Promise<boolean> {
-    const item = this.add<ToolItem>(state, {
+  private async runTool(state: SessionState, call: ToolCall, signal: AbortSignal, draft?: ToolItem): Promise<boolean> {
+    const item = draft ?? this.add<ToolItem>(state, {
       kind: 'tool',
       id: randomUUID(),
       callId: call.id,
@@ -374,7 +430,7 @@ export class Agent {
 
     let prepared: PreparedCall
     try {
-      prepared = await prepareToolCall(call.function.name, call.function.arguments, state.data.workspace)
+      prepared = await prepareToolCall(call.function.name, call.function.arguments, state.data.workspace, latestArtifacts(state.data.items))
     } catch (error) {
       fail(error instanceof ToolError ? error.message : `Could not run ${call.function.name}: ${(error as Error).message}`)
       return true
@@ -383,6 +439,7 @@ export class Agent {
     item.path = prepared.path
     item.created = prepared.created
     item.stats = prepared.stats
+    if (prepared.artifact) item.artifact = prepared.artifact
     this.flush(state, item)
 
     if (prepared.approval) {

@@ -42,6 +42,8 @@ export interface StreamHandlers {
   onReasoning?(delta: string): void
   onContent?(delta: string): void
   onToolCall?(index: number, name: string): void
+  /** The arguments of a tool call so far, as they stream in. */
+  onToolArguments?(index: number, args: string): void
 }
 
 export interface ChatResult {
@@ -194,7 +196,10 @@ export async function streamChat(request: ChatRequest, handlers: StreamHandlers 
         slot.name += call.function.name
         if (isNew) handlers.onToolCall?.(call.index, slot.name)
       }
-      if (call.function?.arguments) slot.arguments += call.function.arguments
+      if (call.function?.arguments) {
+        slot.arguments += call.function.arguments
+        handlers.onToolArguments?.(call.index, slot.arguments)
+      }
     }
     if (choice.finish_reason) result.finishReason = choice.finish_reason
   })
