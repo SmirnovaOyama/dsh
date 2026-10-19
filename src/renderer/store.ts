@@ -371,7 +371,14 @@ export const actions = {
   toggleChanges(show?: boolean) {
     const next = show ?? !state.showChanges
     writePrefs({ showChanges: next })
-    set({ showChanges: next })
+    // The panel button always brings back changes and files; artifacts open from their own places.
+    set((s) => ({ showChanges: next, panelTab: s.panelTab === 'artifacts' && next ? 'changes' : s.panelTab }))
+  },
+
+  /** Closes an artifact, or the list of them, along with the panel. */
+  closeArtifacts() {
+    writePrefs({ showChanges: false })
+    set({ showChanges: false, panelTab: 'changes', viewedArtifact: null })
   },
 
   selectFile(path: string) {

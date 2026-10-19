@@ -5,7 +5,6 @@ import { t } from '../i18n'
 import { actions, useApp, type ChatState } from '../store'
 import type { Motion } from '../App'
 import { DiffStatsText, DiffView } from './DiffView'
-import { isArtifact } from '../artifacts'
 import { ArtifactsView } from './ArtifactsView'
 import { FilesView } from './FilesView'
 import { Icon } from './Icon'
@@ -17,8 +16,7 @@ export function ChangesPanel({ chat, motion }: { chat: ChatState | null; motion:
   const tab = useApp((s) => s.panelTab)
   const isGitRepo = useApp((s) => s.workspace?.isGitRepo ?? false)
   const changes = chat?.changes ?? []
-  const hasArtifacts = useApp((s) => s.chat?.session.items.some(isArtifact) ?? false)
-  const tabs = hasArtifacts ? (['changes', 'files', 'artifacts'] as const) : (['changes', 'files'] as const)
+
   const running = chat ? chat.session.status !== 'idle' : false
   const added = changes.reduce((n, c) => n + c.stats.added, 0)
   const removed = changes.reduce((n, c) => n + c.stats.removed, 0)
@@ -60,11 +58,20 @@ export function ChangesPanel({ chat, motion }: { chat: ChatState | null; motion:
     section?.scrollIntoView({ block: 'start' })
   }, [selected, setOpen])
 
+  // An artifact takes the whole panel, with its own title bar, as it does in Claude.
+  if (tab === 'artifacts') {
+    return (
+      <aside className="hx-changes" data-motion={motion} aria-label={t('artifact.label')} inert={motion === 'out'}>
+        <ArtifactsView />
+      </aside>
+    )
+  }
+
   return (
     <aside className="hx-changes" data-motion={motion} aria-label={t('changes.label')} inert={motion === 'out'}>
       <div className="hx-changes-head">
         <div className="hx-tabs" role="tablist" aria-label={t('changes.label')}>
-          {tabs.map((id) => (
+          {(['changes', 'files'] as const).map((id) => (
             <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => actions.setPanelTab(id)}>
               {t(`panel.${id}`)}
             </button>
@@ -133,8 +140,7 @@ export function ChangesPanel({ chat, motion }: { chat: ChatState | null; motion:
 
       {tab === 'files' ? (
         <FilesView />
-      ) : tab === 'artifacts' ? (
-        <ArtifactsView />
+
       ) : changes.length === 0 ? (
         <div className="hx-changes-empty">{t('changes.empty')}</div>
       ) : (

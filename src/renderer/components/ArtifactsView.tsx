@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Download, LoaderCircle } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Code2, Download, Eye, LoaderCircle, X } from 'lucide-react'
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
 import {
@@ -20,7 +20,6 @@ import { CopyButton } from './CodeBlock'
 import { tokenLines } from './FilesView'
 import { Icon } from './Icon'
 import { Markdown } from './Markdown'
-import { Segmented } from './Segmented'
 
 export function ArtifactsView() {
   const items = useApp((s) => s.chat?.session.items)
@@ -30,10 +29,31 @@ export function ArtifactsView() {
   return <ArtifactList />
 }
 
+function CloseButton() {
+  return (
+    <button type="button" className="btn-ghost hx-icon-btn" aria-label={t('artifact.close')} title={t('artifact.close')} onClick={() => actions.closeArtifacts()}>
+      <Icon icon={X} size={16} />
+    </button>
+  )
+}
+
 function ArtifactList() {
   const items = useApp((s) => s.chat?.session.items)
   const list = useMemo(() => latestArtifacts(items ?? []), [items])
-  if (!list.length) return <div className="hx-changes-empty">{t('artifact.empty')}</div>
+  return (
+    <>
+      <div className="hx-changes-head">
+        <h2>{t('panel.artifacts')}</h2>
+        {list.length > 0 && <span className="sum">{t('artifact.count', { n: list.length })}</span>}
+        <span className="grow" />
+        <CloseButton />
+      </div>
+      {list.length ? <ListRows list={list} /> : <div className="hx-changes-empty">{t('artifact.empty')}</div>}
+    </>
+  )
+}
+
+function ListRows({ list }: { list: ArtifactItem[] }) {
   return (
     <div className="hx-artifact-list">
       {list.map((item) => (
@@ -69,15 +89,41 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
   const prev = versions[index - 1]
   const next = versions[index + 1]
 
+  const many = useApp((s) => (s.chat ? latestArtifacts(s.chat.session.items).length > 1 : false))
+  const modes: { value: Mode; label: string; icon: typeof Eye }[] = [
+    { value: 'preview', label: t('artifact.preview'), icon: Eye },
+    { value: 'code', label: t('artifact.code'), icon: Code2 },
+  ]
+
   return (
     <div className="hx-files-view">
-      <div className="hx-viewer-bar hx-artifact-bar">
-        <button type="button" className="btn-ghost hx-icon-btn" aria-label={t('artifact.back')} title={t('artifact.back')} onClick={() => actions.viewArtifact(null)}>
-          <Icon icon={ChevronLeft} size={16} />
-        </button>
-        <span className="p" title={artifact.title}>
-          <span className="name">{artifact.title || t('artifact.untitled')}</span>
+      <div className="hx-changes-head hx-artifact-head">
+        {many && (
+          <button type="button" className="btn-ghost hx-icon-btn" aria-label={t('artifact.back')} title={t('artifact.back')} onClick={() => actions.viewArtifact(null)}>
+            <Icon icon={ChevronLeft} size={16} />
+          </button>
+        )}
+        {previewable && (
+          <span className="hx-iconseg" role="group" aria-label={t('artifact.view')}>
+            {modes.map((m) => (
+              <button
+                key={m.value}
+                type="button"
+                aria-pressed={shownMode === m.value}
+                aria-label={m.label}
+                title={m.label}
+                disabled={writing && m.value === 'preview'}
+                onClick={() => setMode(m.value)}
+              >
+                <Icon icon={m.icon} size={16} />
+              </button>
+            ))}
+          </span>
+        )}
+        <span className="title" title={artifact.title}>
+          {artifact.title || t('artifact.untitled')}
         </span>
+        <span className="grow" />
         {versions.length > 1 && (
           <span className="hx-versions">
             <button type="button" className="btn-ghost hx-icon-btn" disabled={!prev} aria-label={t('artifact.prev')} title={t('artifact.prev')} onClick={() => prev && actions.viewArtifact(prev.id)}>
@@ -88,17 +134,6 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
               <Icon icon={ChevronRight} size={14} />
             </button>
           </span>
-        )}
-        {previewable && (
-          <Segmented
-            label={t('artifact.view')}
-            value={shownMode}
-            options={[
-              { value: 'preview', label: t('artifact.preview') },
-              { value: 'code', label: t('artifact.code') },
-            ]}
-            onChange={(value) => !writing && setMode(value)}
-          />
         )}
         <CopyButton text={artifact.content} label={t('artifact.copy')} />
         <button
@@ -111,6 +146,7 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
         >
           <Icon icon={Download} size={16} />
         </button>
+        <CloseButton />
       </div>
       {shownMode === 'code' ? <ArtifactCode item={item} follow={writing} /> : <ArtifactPreview item={item} />}
     </div>

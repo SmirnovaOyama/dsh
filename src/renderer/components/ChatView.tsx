@@ -1,4 +1,5 @@
-import { Ellipsis, Folder, GitBranch, PanelRight, Trash2 } from 'lucide-react'
+import { Ellipsis, Folder, GitBranch, LayoutGrid, PanelRight, Trash2 } from 'lucide-react'
+import { isArtifact } from '../artifacts'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { tildify } from '../format'
 import { t } from '../i18n'
@@ -24,6 +25,8 @@ function Header() {
   const home = useApp((s) => s.app.home)
   const draftModel = useApp((s) => s.draft.model)
   const showChanges = useApp((s) => s.showChanges)
+  const hasArtifacts = useApp((s) => s.chat?.session.items.some(isArtifact) ?? false)
+  const showingArtifacts = useApp((s) => s.showChanges && s.panelTab === 'artifacts')
   const moreRef = useRef<HTMLButtonElement>(null)
   const [menu, setMenu] = useState(false)
   const [confirm, setConfirm] = useState(false)
@@ -53,10 +56,22 @@ function Header() {
         </p>
       </div>
       <div className="actions">
+        {hasArtifacts && (
+          <button
+            type="button"
+            className="btn-ghost hx-icon-btn"
+            aria-pressed={showingArtifacts}
+            aria-label={t('artifact.all')}
+            title={t('artifact.all')}
+            onClick={() => (showingArtifacts ? actions.closeArtifacts() : actions.viewArtifact(null))}
+          >
+            <Icon icon={LayoutGrid} size={18} />
+          </button>
+        )}
         <button
           type="button"
           className="btn-ghost hx-icon-btn"
-          aria-pressed={showChanges}
+          aria-pressed={showChanges && !showingArtifacts}
           aria-label={t(showChanges ? 'header.hideChanges' : 'header.showChanges')}
           title={t(showChanges ? 'header.hideChanges' : 'header.showChanges')}
           onClick={() => actions.toggleChanges()}

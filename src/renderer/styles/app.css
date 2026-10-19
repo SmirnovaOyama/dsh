@@ -565,7 +565,7 @@ button.hx-tool:hover { background: var(--surface-hover); }
   transition: background-color var(--duration-quick) var(--ease-standard), border-color var(--duration-quick) var(--ease-standard);
 }
 .hx-artifact-card:hover { background: var(--surface-hover); }
-.hx-artifact-card[aria-pressed="true"] { border-color: var(--border-strong); }
+.hx-artifact-card[aria-pressed="true"] { border-color: var(--border-strong); background: var(--surface-hover); }
 .hx-artifact-card .glyph, .hx-artifact-row .glyph {
   flex-shrink: 0; display: grid; place-items: center; width: 48px; height: 48px;
   border-radius: var(--radius-md); background: var(--surface-muted); color: var(--text-muted);
@@ -582,16 +582,23 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-artifact-row:hover { background: var(--surface-hover); }
 .hx-artifact-row .glyph { width: 36px; height: 36px; border-radius: var(--radius-sm); }
 
-/* The viewer bar keeps every control at 28px so switching views or versions never moves it. */
-.hx-artifact-bar { gap: 4px; }
-.hx-artifact-bar .p { margin-inline-start: 2px; }
-.hx-artifact-bar .oy-segmented { flex-shrink: 0; margin-inline: 6px 2px; padding: 2px; }
-.hx-artifact-bar .oy-segmented .seg { height: 24px; padding: 0 10px; font-size: 12px; }
-.hx-artifact-bar .hx-copy { width: 28px; height: 28px; color: var(--text-muted); }
-.hx-versions { flex-shrink: 0; display: inline-flex; align-items: center; gap: 0; font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+/* An open artifact: view switch, title, then versions and actions, all 28px tall so nothing moves. */
+.hx-artifact-head { gap: 6px; padding-inline-start: 12px; }
+.hx-artifact-head .title { min-width: 0; margin-inline-start: 4px; font-size: 14px; line-height: 20px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-artifact-head .hx-copy { width: 28px; height: 28px; color: var(--text-muted); }
+.hx-artifact-head .hx-copy:hover { color: var(--text); }
+.hx-iconseg { flex-shrink: 0; display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--radius-md); background: var(--surface-muted); }
+.hx-iconseg button {
+  display: grid; place-items: center; width: 30px; height: 26px; border-radius: var(--radius-sm); color: var(--text-muted);
+  transition: background-color var(--duration-quick) var(--ease-standard), color var(--duration-quick) var(--ease-standard);
+}
+.hx-iconseg button:hover:not(:disabled) { color: var(--text); }
+.hx-iconseg button[aria-pressed="true"] { background: var(--control-thumb); color: var(--text); box-shadow: var(--shadow-xs); }
+.hx-iconseg button:disabled { opacity: 0.4; }
+.hx-versions { flex-shrink: 0; display: inline-flex; align-items: center; gap: 0; margin-inline-end: 4px; font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .hx-versions .hx-icon-btn { width: 24px !important; height: 24px !important; }
 .hx-versions .hx-icon-btn:disabled { opacity: 0.35; }
-.hx-versions .n { min-width: 3.5em; text-align: center; white-space: nowrap; }
+.hx-versions .n { min-width: 4em; text-align: center; white-space: nowrap; }
 .hx-code-lines .num.is-static { cursor: default; }
 .hx-code-lines .num.is-static:hover { color: var(--text-disabled); }
 .hx-artifact-writing { display: flex; align-items: center; gap: 6px; padding: 8px 0 0 52px; font-size: 12px; color: var(--text-muted); }
