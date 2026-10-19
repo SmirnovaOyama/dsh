@@ -165,7 +165,7 @@ export function streamedId(json: string): string | undefined {
   const match = /"id"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(json)
   if (!match) return undefined
   try {
-    return JSON.parse(`"${match[1]}"`) as string
+    return (JSON.parse(`"${match[1]}"`) as string).trim()
   } catch {
     return undefined
   }
@@ -176,7 +176,8 @@ export function streamedId(json: string): string | undefined {
  * It follows the same rules as nextArtifact, so the finished version looks like the draft did.
  */
 export function draftArtifact(json: string, latest: (id: string) => ArtifactVersion | undefined): ArtifactVersion {
-  const id = partialField(json, 'id') ?? ''
+  // Trimmed as nextArtifact trims it, so the draft carries the id the version will have.
+  const id = partialField(json, 'id')?.trim() ?? ''
   const previous = id ? latest(id) : undefined
   const command = streamedCommand(json)
   const named = partialField(json, 'type') as ArtifactType | undefined

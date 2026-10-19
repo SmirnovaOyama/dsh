@@ -320,6 +320,8 @@ export class Agent {
     const names = new Map<number, string>()
     const argsOf = new Map<number, string>()
     const settled = new Set<number>()
+    // Calls whose complete arguments already show they will fail, with why.
+    const failing = new Map<number, string>()
     const latest = latestArtifacts(state.data.items)
     // Versions that earlier calls in this reply will make, so an update right after a create builds on it.
     const made = new Map<string, ArtifactVersion>()
@@ -340,8 +342,9 @@ export class Agent {
         item.artifact = version
         item.target = version.title
         this.schedule(state, item)
-      } catch {
+      } catch (error) {
         // Not a version: it is answered with the error when it runs.
+        failing.set(index, error instanceof Error ? error.message : String(error))
       }
     }
     const endDrafts = (status: ToolItem['status']) => {
@@ -450,14 +453,21 @@ export class Agent {
     const cut = result.finishReason === 'length' ? result.toolCalls[result.toolCalls.length - 1] : undefined
     if (cut) message.tool_calls = result.toolCalls.map((c) => (c === cut ? { ...c, function: { ...c.function, arguments: '{}' } } : c))
     // A draft behind another kind of step is written in full but runs after it, maybe after a prompt; its
-    // card says it is waiting rather than still writing.
+    // card says it is waiting rather than still writing. One that was cut off, or that can only fail, ends
+    // now: nothing more will be written to it. Its answer still goes to the model in the order of the calls.
     let behind = false
     result.toolCalls.forEach((call, i) => {
       const index = result.toolCallIndexes?.[i] ?? i
       const item = streaming.get(index)
       if (item) {
         item.callId = call.id
-        if (behind && call !== cut) {
+        const failure = call === cut ? CUT_OFF : failing.get(index)
+        if (failure !== undefined) {
+          item.status = 'error'
+          item.error = failure
+          item.endedAt = this.now()
+          this.flush(state, item)
+        } else if (behind) {
           item.queued = true
           this.flush(state, item)
         }
@@ -488,7 +498,7 @@ export class Agent {
       }
       if (signal.aborted || !keepGoing) {
         const draft = drafts.get(call.id)
-        if (draft) {
+        if (draft?.status === 'running') {
           delete draft.queued
           draft.status = 'stopped'
           this.flush(state, draft)
@@ -515,9 +525,10 @@ export class Agent {
       status: 'running',
       startedAt: this.now(),
     })
-    delete item.queued
+    // A queued draft stays queued until its status changes, so it never reads as being written again.
     const reply = (content: string) => state.messages.push({ role: 'tool', tool_call_id: call.id, content: clip(content) })
     const fail = (message: string) => {
+      delete item.queued
       item.status = 'error'
       item.error = message
       item.endedAt = this.now()
@@ -548,6 +559,7 @@ export class Agent {
         sessionCommandPrefixes: state.allowedPrefixes,
       })
       if (ask) {
+        delete item.queued
         item.status = 'waiting'
         this.flush(state, item)
         this.setStatus(state, 'waiting')
@@ -591,6 +603,7 @@ export class Agent {
           this.schedule(state, item)
         },
       })
+      delete item.queued
       item.status = signal.aborted ? 'stopped' : result.isError ? 'error' : 'done'
       item.output = result.display
       item.info = result.info

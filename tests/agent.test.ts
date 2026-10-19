@@ -419,6 +419,65 @@ describe('artifacts in the agent loop', () => {
     expect(made && 'queued' in made ? made.queued : undefined).toBeUndefined()
   })
 
+  it('keeps a queued artifact queued until it is made, so it never reads as being written again', async () => {
+    const { controller } = await setup([
+      {
+        stream: [
+          [0, 'edit_file', editCall.function.arguments],
+          [1, 'artifact', JSON.stringify(create)],
+        ],
+        toolCalls: [editCall, call('a', create)],
+        toolCallIndexes: [0, 1],
+      },
+      { content: 'ok' },
+    ])
+    const meta = await controller.start(ws, 'edit then make', opts('ask'))
+    const request = await until(permissionRequest)
+    controller.respond(meta.id, request.id, { type: 'allow' })
+    await idle(controller, meta.id)
+    const states = drafted('a').map((a) => (a.status === 'running' ? (a.queued ? 'queued' : 'writing') : a.status))
+    const firstQueued = states.indexOf('queued')
+    expect(firstQueued).toBeGreaterThan(-1)
+    expect(states.slice(firstQueued)).not.toContain('writing')
+    expect(states.at(-1)).toBe('done')
+  })
+
+  it('ends a draft that was cut off, or can only fail, as soon as the reply ends', async () => {
+    const update = { command: 'update', id: 'timer', old_str: 'nowhere', new_str: 'x' }
+    const big = '{"command":"create","id":"big","title":"Big","type":"html","content":"<p>so much'
+    const { controller } = await setup([
+      { toolCalls: [call('c1', create)] },
+      {
+        stream: [
+          [0, 'edit_file', editCall.function.arguments],
+          [1, 'artifact', JSON.stringify(update)],
+          [2, 'artifact', big],
+        ],
+        toolCalls: [editCall, call('u', update), call('b', big)],
+        toolCallIndexes: [0, 1, 2],
+        finishReason: 'length',
+      },
+      { content: 'ok' },
+    ])
+    const meta = await controller.start(ws, 'go', opts('ask'))
+    await until(permissionRequest)
+    const items = (await controller.snapshot(meta.id))!.session.items
+    expect(items.find((i) => i.kind === 'tool' && i.callId === 'u')).toMatchObject({ status: 'error', error: expect.stringMatching(/old_str/) })
+    expect(items.find((i) => i.kind === 'tool' && i.callId === 'b')).toMatchObject({ status: 'error', error: expect.stringMatching(/output limit/) })
+  })
+
+  it('reads an id with spaces around it the way the tool does', async () => {
+    const spaced = { ...create, id: ' timer ' }
+    const { controller } = await setup([
+      { stream: [[0, 'artifact', '{"command":"create","id":" timer "'], [0, 'artifact', JSON.stringify(spaced)]], toolCalls: [call('a', spaced)] },
+      { content: 'ok' },
+    ])
+    const meta = await controller.start(ws, 'make', opts('ask'))
+    await idle(controller, meta.id)
+    expect(drafted().length).toBeGreaterThan(0)
+    expect(drafted().every((a) => a.id === 'timer')).toBe(true)
+  })
+
   it('does not queue an artifact that only follows other artifacts', async () => {
     const second = { ...create, id: 'notes', title: 'Notes', type: 'markdown', content: '# hi' }
     const { controller } = await setup([

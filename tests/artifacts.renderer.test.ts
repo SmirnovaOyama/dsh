@@ -20,7 +20,7 @@ describe('artifacts in the renderer', () => {
   const doc: ArtifactVersion = { id: 'notes', title: 'Notes', type: 'markdown', content: '# Hi', version: 1 }
   const items: TranscriptItem[] = [item('a', page), item('b', doc), item('c', { ...v2, version: 3 }, 'error'), item('d', v2), item('e', { ...v2, version: 3 }, 'running')]
 
-  it('lists every version that is done or being written', () => {
+  it('lists every version that is done or being written, and not a failed try at one that was made', () => {
     expect(versionsOf(items, items[0] as ArtifactItem).map((i) => i.id)).toEqual(['a', 'd', 'e'])
     expect(versionsOf(items, items[2] as ArtifactItem).map((i) => i.id)).toEqual(['a', 'c', 'd', 'e'])
   })
@@ -31,6 +31,14 @@ describe('artifacts in the renderer', () => {
     expect(versionsOf(stopped, stopped[1] as ArtifactItem).map((i) => i.id)).toEqual(['a', 's'])
     const redone = [...stopped, item('d', v2)]
     expect(versionsOf(redone, redone[0] as ArtifactItem).map((i) => i.id)).toEqual(['a', 'd'])
+  })
+
+  it('keeps a failed version in the list, and only the last try at each version', () => {
+    const failed = [item('a', page), item('f', v2, 'error')]
+    expect(versionsOf(failed, failed[0] as ArtifactItem).map((i) => i.id)).toEqual(['a', 'f'])
+    const twice = [item('a', page), item('s1', v2, 'stopped'), item('s2', v2, 'stopped')]
+    expect(versionsOf(twice, twice[0] as ArtifactItem).map((i) => i.id)).toEqual(['a', 's2'])
+    expect(versionsOf(twice, twice[1] as ArtifactItem).map((i) => i.id)).toEqual(['a', 's1', 's2'])
   })
 
   it('lists the newest version of each artifact in the order they were made', () => {

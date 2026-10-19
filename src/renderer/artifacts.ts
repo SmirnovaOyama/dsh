@@ -15,14 +15,21 @@ const shown = (item: ArtifactItem) => item.status === 'done' || item.status === 
 export const anyArtifacts = (items: TranscriptItem[]) => items.some((i) => isArtifact(i) && shown(i))
 
 /**
- * Every version of the artifact that this item belongs to, oldest first: the shown ones, and a stopped
- * one unless the agent made that version again. So stepping off a stopped version keeps the same list.
+ * Every version of the artifact that this item belongs to, oldest first: the shown ones, and the last
+ * attempt at a version that never got made, marked unfinished where it is listed. So the list stays the
+ * same whichever version is open, and a version that stops or fails keeps its place.
  */
 export function versionsOf(items: TranscriptItem[], item: ArtifactItem): ArtifactItem[] {
   const id = item.artifact.id
   const family = items.filter((i): i is ArtifactItem => isArtifact(i) && (i.id === item.id || (!!id && i.artifact.id === id)))
-  const made = new Set(family.filter(shown).map((i) => i.artifact.version))
-  return family.filter((i) => i.id === item.id || shown(i) || (i.status === 'stopped' && !made.has(i.artifact.version)))
+  const taken = new Set(family.filter(shown).map((i) => i.artifact.version))
+  const attempts = new Set<string>()
+  for (const i of [...family].reverse()) {
+    if (shown(i) || taken.has(i.artifact.version)) continue
+    taken.add(i.artifact.version)
+    attempts.add(i.id)
+  }
+  return family.filter((i) => i.id === item.id || shown(i) || attempts.has(i.id))
 }
 
 /** The newest shown version of each artifact, in the order they were first made. */

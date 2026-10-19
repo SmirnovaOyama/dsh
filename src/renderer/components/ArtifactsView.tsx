@@ -188,7 +188,10 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
   const [full, setFull] = useState(false)
   const [device, setDevice] = useState<Device>('desktop')
   const [reloads, setReloads] = useState(0)
-  const [errors, setErrors] = useState<string[]>([])
+  // A page's errors belong to the version that showed them; another version never shows or sends them.
+  const [pageErrors, setPageErrors] = useState<{ item: string; list: string[] }>({ item: item.id, list: [] })
+  const errors = pageErrors.item === item.id ? pageErrors.list : []
+  const clearErrors = () => setPageErrors({ item: item.id, list: [] })
   const [notice, setNotice] = useState<Notice | null>(null)
   const [menu, setMenu] = useState<'more' | 'versions' | null>(null)
   const viewRef = useRef<HTMLDivElement>(null)
@@ -277,7 +280,7 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
   const fix = () => {
     if (!errors.length) return
     void actions.send(t('artifact.fixPrompt', { title: artifact.title, n: artifact.version, error: fenced(errors[0]) }), { withRefs: false })
-    setErrors([])
+    clearErrors()
   }
   // A link the page asks to open waits for the person, and a second request never swaps the address under them.
   const askLink = (url: string) => setNotice((n) => (n?.kind === 'link' ? n : { kind: 'link', url }))
@@ -416,8 +419,8 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
             device={full ? device : 'desktop'}
             reloads={reloads}
             hidden={shownMode !== 'preview'}
-            onLoadStart={() => setErrors([])}
-            onError={(error) => setErrors((list) => [...list, error])}
+            onLoadStart={clearErrors}
+            onError={(error) => setPageErrors((e) => ({ item: item.id, list: e.item === item.id ? [...e.list, error] : [error] }))}
             onEscape={() => full && shrink()}
             onLink={askLink}
           />
@@ -443,7 +446,10 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
               <div className="text">
                 <p className="title">
                   {t('artifact.error')}
-                  {errors.length > 1 && <span className="more">{t(errors.length === 2 ? 'artifact.errorMore.one' : 'artifact.errorMore', { n: errors.length - 1 })}</span>}
+                  {/* Its room is kept from the first error, so a second one never re-wraps the title. */}
+                  <span className="more" data-none={errors.length < 2 || undefined} aria-hidden={errors.length < 2 || undefined}>
+                    {t(errors.length <= 2 ? 'artifact.errorMore.one' : 'artifact.errorMore', { n: Math.max(1, errors.length - 1) })}
+                  </span>
                 </p>
                 <p className="detail">{errors[0]}</p>
               </div>
@@ -458,7 +464,7 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
                   {t('artifact.fix')}
                 </button>
               )}
-              <button type="button" className="btn-ghost hx-icon-btn" aria-label={t('artifact.dismiss')} title={t('artifact.dismiss')} onClick={() => setErrors([])}>
+              <button type="button" className="btn-ghost hx-icon-btn" aria-label={t('artifact.dismiss')} title={t('artifact.dismiss')} onClick={clearErrors}>
                 <Icon icon={X} size={14} />
               </button>
             </div>
@@ -633,8 +639,9 @@ function Frame(props: {
 }) {
   const { html, title, device, reloads, hidden } = props
   const ref = useRef<HTMLIFrameElement>(null)
-  // The newest page last; its address is null until the main process has it ready.
-  const [pages, setPages] = useState<{ src: string | null; shown: boolean }[]>([])
+  // The newest page last; its address is null until the main process has it ready. A page is settled once
+  // it has faded in fully, and only a settled page is kept under a new one as its cover.
+  const [pages, setPages] = useState<{ src: string | null; shown: boolean; settled?: boolean }[]>([])
   const [failed, setFailed] = useState<string | null>(null)
   // A page slow to load gives way to the loading note rather than leaving the old one up.
   const [slow, setSlow] = useState(false)
@@ -646,7 +653,7 @@ function Frame(props: {
     setFailed(null)
     setSlow(false)
     handlers.current.onLoadStart()
-    setPages((list) => [...list.filter((p) => p.shown).slice(-1), { src: null, shown: false }])
+    setPages((list) => [...list.filter((p) => p.settled).slice(-1), ...list.filter((p) => p.shown && !p.settled).slice(-1), { src: null, shown: false }])
     const timer = window.setTimeout(() => live && setSlow(true), 300)
     api.artifacts.preview(html).then(
       (src) => live && setPages((list) => [...list.slice(0, -1), { src, shown: false }]),
@@ -666,12 +673,12 @@ function Frame(props: {
   const waiting = !failed && !newest?.shown
   const covered = pages.some((p) => p.shown)
   const show = (src: string) => setPages((list) => (list.at(-1)?.src === src && !list.at(-1)?.shown ? [...list.slice(0, -1), { src, shown: true }] : list))
-  // Once the new page has faded in, the one under it goes; if it is slow to come, the old one goes first.
+  // Once the new page has faded in, it settles and the ones under it go; if it is slow to come, they go first.
   useEffect(() => {
-    if (!newest?.shown || pages.length < 2) return
-    const timer = window.setTimeout(() => setPages((list) => list.slice(-1)), 400)
+    if (!newest?.shown || newest.settled) return
+    const timer = window.setTimeout(() => setPages((list) => list.slice(-1).map((p) => (p.shown ? { ...p, settled: true } : p))), 400)
     return () => window.clearTimeout(timer)
-  }, [newest?.shown, pages.length])
+  }, [newest?.shown, newest?.settled, newest?.src])
   useEffect(() => {
     if (slow && waiting && covered) setPages((list) => list.slice(-1))
   }, [slow, waiting, covered])

@@ -94,7 +94,7 @@ export class Controller {
     // A conversation saved while it was running is idle once the app restarts.
     const items = stored.data.items.map((item) =>
       item.kind === 'tool' && (item.status === 'running' || item.status === 'waiting')
-        ? { ...item, status: 'stopped' as const }
+        ? { ...item, status: 'stopped' as const, queued: undefined }
         : item.kind === 'text' && item.streaming
           ? { ...item, streaming: false }
           : item,

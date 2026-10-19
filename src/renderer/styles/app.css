@@ -656,12 +656,15 @@ button.hx-tool:hover { background: var(--surface-hover); }
   .hx-version-pick .short { display: inline-grid; }
   .hx-artifact-head .title { min-width: 4em; }
 }
-/* At the app's smallest sizes the title takes a row of its own under the controls, so none of them is cut off. */
+/* At the app's smallest sizes the controls draw closer and the title gives way first, so the header keeps
+   its height and none of the controls is cut off; the title stays in the tooltip and the chat card. */
 @container (max-width: 360px) {
-  .hx-artifact-head { flex-wrap: wrap; row-gap: 0; padding-block: 6px; }
-  .hx-artifact-head .title { order: 1; flex: 1 0 100%; min-width: 0; margin-inline-start: 4px; padding-bottom: 4px; }
-  .hx-artifact-head > * { flex-shrink: 0; }
+  .hx-artifact-head { gap: 2px; }
+  .hx-artifact-head > :not(.title) { flex-shrink: 0; }
+  .hx-artifact-head .title { flex: 1 1 0; min-width: 0; }
+  .hx-artifact-head .grow { display: none; }
 }
+@container (max-width: 300px) { .hx-artifact-head .title { visibility: hidden; } }
 .hx-code-lines .num.is-static { cursor: default; }
 .hx-code-lines .num.is-static:hover { color: var(--text-disabled); }
 .hx-artifact-writing { display: flex; align-items: center; gap: 6px; padding: 8px 0 0 52px; font-size: 12px; color: var(--text-muted); }
@@ -675,7 +678,7 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-artifact-frame {
   position: relative; flex: 1; min-height: 0; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); justify-items: center; background: var(--bg);
 }
-.hx-artifact-frame[hidden] { display: none; }
+.hx-artifact-frame[hidden] { display: grid; position: absolute; inset: 0; visibility: hidden; pointer-events: none; }
 .hx-artifact-frame:not([data-device="desktop"]) { padding: 16px 0; background: var(--surface-muted); }
 /* A new page sits over the old one in the same cell and fades in on top of it. */
 .hx-artifact-frame iframe {
@@ -733,7 +736,8 @@ button.hx-tool:hover { background: var(--surface-hover); }
   margin-top: 2px; max-height: 72px; overflow-y: auto; font-family: var(--font-mono); font-size: 12px; line-height: 18px;
   color: var(--text-muted); white-space: pre-wrap; overflow-wrap: anywhere;
 }
-.hx-artifact-error .more { margin-inline-start: 8px; font-size: 12px; font-weight: 400; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.hx-artifact-error .more { margin-inline-start: 8px; font-size: 12px; font-weight: 400; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hx-artifact-error .more[data-none] { visibility: hidden; }
 .hx-artifact-error .hx-fix { flex-shrink: 0; height: 28px; padding: 0 10px; gap: 6px; font-size: 13px; }
 .hx-artifact-error .hx-icon-btn { width: 28px; height: 28px; color: var(--text-muted); }
 /* In a narrow panel the message keeps the width and the fix button goes under it, lined up with the text. */
@@ -750,6 +754,11 @@ button.hx-tool:hover { background: var(--surface-hover); }
 }
 .hx-artifact-notice:not(:has(.btn-ghost)) { padding-inline-end: 12px; }
 .hx-artifact-notice .text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* In a narrow panel the whole address shows over two lines, so the person can see where a link goes. */
+@container (max-width: 520px) {
+  .hx-artifact-notice { padding-block: 4px; }
+  .hx-artifact-notice .text { white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+}
 .hx-artifact-notice .btn-ghost { flex-shrink: 0; height: 28px; font-size: 13px; white-space: nowrap; }
 .hx-artifact-notice .btn-ghost:not(.hx-icon-btn) { color: var(--accent-ink); }
 .hx-artifact-notice .hx-icon-btn { width: 28px; color: var(--text-muted); }

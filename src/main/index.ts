@@ -7,7 +7,7 @@ import { Channels, EVENT_CHANNEL } from '../shared/ipc'
 import type { AgentEvent, FileRead, InitialState, PermissionDecision, PermissionMode, SaveResult, Settings, StartOptions } from '../shared/types'
 import { saveToFolder, safeFileName, writeTempPage } from './artifactFiles'
 import { PREVIEW_SCHEME, PreviewPages, withPolicy } from './artifactPreview'
-import { PreviewNetwork } from './previewNetwork'
+import { PreviewGate, gateProxy } from './previewNetwork'
 import { Controller, readWorkspace } from './controller'
 import { DeepSeekError, checkConnection } from './deepseek'
 import { cleanRefs } from './refs'
@@ -34,7 +34,9 @@ function emit(event: AgentEvent) {
 
 const controller = new Controller({ settings: settingsStore, sessions: sessionStore, emit })
 const previews = new PreviewPages()
-let network: PreviewNetwork | null = null
+// The way out for preview pages (see previewNetwork); previews run only once the session goes through it.
+const gate = new PreviewGate((url) => session.fromPartition('dsh-system-proxy').resolveProxy(url))
+let fenced = false
 
 // The scheme artifact previews load from; registered before the app is ready, as Electron requires.
 protocol.registerSchemesAsPrivileged([{ scheme: PREVIEW_SCHEME, privileges: { standard: true, secure: true } }])
@@ -208,10 +210,9 @@ function registerIpc() {
   handle('changesRevertAll', (id: string) => controller.revertAll(id))
   handle('changesCommit', (id: string, message: string) => controller.commit(id, message))
 
-  // A preview only runs once its network is fenced in; if that fails, the viewer shows the error instead.
-  handle('artifactsPreview', async (html: string) => {
-    if (!network) throw new Error('The preview network is not ready.')
-    await network.refresh()
+  // If the session could not be fenced in, the viewer shows this error instead of the page.
+  handle('artifactsPreview', (html: string) => {
+    if (!fenced) throw new Error('The preview network is not ready.')
     return previews.add(html)
   })
   handle('artifactsSave', async (name: string, content: string): Promise<SaveResult | null> => {
@@ -258,11 +259,13 @@ app.whenReady().then(async () => {
   protocol.handle(PREVIEW_SCHEME, (request) => previews.respond(request.url))
   // Nothing in the app downloads files; a page in a preview must not open save dialogs either.
   session.defaultSession.on('will-download', (event) => event.preventDefault())
-  // An in-memory session the app never changes, so it always answers with the system's own routes.
-  const system = session.fromPartition('dsh-system-proxy')
-  network = new PreviewNetwork(session.defaultSession, (url) => system.resolveProxy(url), Boolean(devServerUrl))
-  // Each preview refreshes it again, so a failure here only matters if it keeps failing.
-  await Promise.all([settingsStore.load(), sessionStore.load(), network.refresh().catch(() => undefined)])
+  // The gate asks an in-memory session the app never changes, so it always gets the system's own routes.
+  // If the gate cannot start, the session still goes nowhere but the dev server.
+  const port = await gate.listen().catch(() => null)
+  await session.defaultSession
+    .setProxy(gateProxy(port, devServerUrl ? new URL(devServerUrl).hostname : undefined))
+    .then(() => (fenced = true), () => undefined)
+  await Promise.all([settingsStore.load(), sessionStore.load()])
   registerIpc()
   createWindow()
   app.on('activate', () => {
