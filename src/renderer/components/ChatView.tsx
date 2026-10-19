@@ -2,6 +2,7 @@ import { Ellipsis, Folder, GitBranch, PanelRight, Trash2 } from 'lucide-react'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { tildify } from '../format'
 import { t } from '../i18n'
+import { modelName } from '../models'
 import { HoldScroll } from '../scroll'
 import { actions, useApp } from '../store'
 import { Composer } from './Composer'
@@ -49,7 +50,7 @@ function Header() {
               {workspace.branch}
             </span>
           )}
-          <span>{model}</span>
+          <span>{modelName(model)}</span>
         </p>
       </div>
       <div className="actions">

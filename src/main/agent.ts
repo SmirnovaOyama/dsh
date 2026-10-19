@@ -3,6 +3,7 @@
 import { randomUUID } from 'node:crypto'
 import type {
   AgentEvent,
+  Effort,
   ErrorCode,
   FileRef,
   PermissionDecision,
@@ -12,7 +13,7 @@ import type {
   TranscriptItem,
 } from '../shared/types'
 import type { ChangeTracker } from './changes'
-import { COMPACT_AT, compactedMessages, isContextOverflow, splitForCompact, summaryRequest } from './compact'
+import { compactAt, compactedMessages, isContextOverflow, splitForCompact, summaryRequest } from './compact'
 import { DeepSeekError, streamChat, type ApiUsage, type ChatMessage, type ChatResult, type ToolCall } from './deepseek'
 import { needsApproval } from './permissions'
 import { withRefs } from './refs'
@@ -56,16 +57,16 @@ export function temperatureFor(style: Settings['replyStyle']): number {
   return style === 'varied' ? 1.3 : style === 'balanced' ? 0.7 : 0
 }
 
-export function isReasoner(model: string): boolean {
-  return /reason/i.test(model)
+export function thinks(effort: Effort): boolean {
+  return effort !== 'none'
 }
 
 /**
  * Thinking models need the reasoning of the current turn sent back between tool calls,
  * but not the reasoning of earlier turns. Other models never get it.
  */
-export function apiHistory(messages: ChatMessage[], model: string): ChatMessage[] {
-  const keepReasoning = isReasoner(model)
+export function apiHistory(messages: ChatMessage[], thinking: boolean): ChatMessage[] {
+  const keepReasoning = thinking
   let lastUser = -1
   messages.forEach((m, i) => {
     if (m.role === 'user') lastUser = i
@@ -177,7 +178,7 @@ export class Agent {
           this.add(state, { kind: 'notice', id: randomUUID(), code: 'max-steps' })
           break
         }
-        if (!autoCompactFailed && state.data.usage.contextTokens >= COMPACT_AT && this.host.apiKey()) {
+        if (!autoCompactFailed && state.data.usage.contextTokens >= compactAt(state.data.model) && this.host.apiKey()) {
           // A failed compaction leaves the history as it was, and the request may still fit.
           autoCompactFailed = !(await this.summarize(state, signal, true))
           if (signal.aborted) {
@@ -218,13 +219,14 @@ export class Agent {
     })
     try {
       const settings = this.host.settings()
-      const model = state.data.model
+      const { model, effort } = state.data
       const result = await this.chat({
         baseUrl: settings.baseUrl,
         apiKey,
         model,
+        effort,
         messages: summaryRequest(history, focus),
-        temperature: isReasoner(model) ? undefined : 0,
+        temperature: thinks(effort) ? undefined : 0,
         signal,
       })
       const summary = result.content.trim()
@@ -262,7 +264,7 @@ export class Agent {
       this.add(state, { kind: 'error', id: randomUUID(), code: 'no-key', retryable: true })
       return null
     }
-    const model = state.data.model
+    const { model, effort } = state.data
     let reasoning: ReasoningItem | null = null
     let text: TextItem | null = null
     const endReasoning = () => {
@@ -280,9 +282,10 @@ export class Agent {
           baseUrl: settings.baseUrl,
           apiKey,
           model,
-          messages: [{ role: 'system', content: system }, ...apiHistory(state.messages, model)],
+          effort,
+          messages: [{ role: 'system', content: system }, ...apiHistory(state.messages, thinks(effort))],
           tools: TOOL_SPECS,
-          temperature: isReasoner(model) ? undefined : temperatureFor(settings.replyStyle),
+          temperature: thinks(effort) ? undefined : temperatureFor(settings.replyStyle),
           signal,
         },
         {

@@ -270,7 +270,8 @@ function mainSession(): SessionData {
     workspace: DSH,
     createdAt: t0,
     updatedAt: now - 2 * MIN,
-    model: 'deepseek-chat',
+    model: 'deepseek-flash',
+    effort: 'high',
     permissionMode: 'ask',
     status: perm ? 'waiting' : running ? 'running' : 'idle',
     items,
@@ -285,7 +286,8 @@ function shortSession(sid: string, title: string, updatedAt: number, status: Ses
     workspace: DSH,
     createdAt: updatedAt - 20 * MIN,
     updatedAt,
-    model: 'deepseek-chat',
+    model: 'deepseek-flash',
+    effort: 'high',
     permissionMode: 'ask',
     status,
     items: [
@@ -369,7 +371,7 @@ async function runAgent(sid: string, text: string, refs: FileRef[] = []) {
   setStatus(data, 'running')
   try {
     await sleep(700, signal)
-    if (data.model === 'deepseek-reasoner') {
+    if (data.effort !== 'none') {
       const reasoning: Extract<TranscriptItem, { kind: 'reasoning' }> = { kind: 'reasoning', id: id(), text: '', startedAt: Date.now() }
       await stream(data, reasoning, '先看專案結構，找到 README，再決定要補哪些段落', signal)
       put(data, { ...reasoning, endedAt: Date.now() })
@@ -510,6 +512,7 @@ export function createMockApi(): DshApi {
           createdAt: Date.now(),
           updatedAt: Date.now(),
           model: opts.model,
+          effort: opts.effort,
           permissionMode: opts.permissionMode,
           status: 'idle',
           items: [],
