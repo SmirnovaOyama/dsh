@@ -127,9 +127,11 @@ export type TranscriptItem =
       stats?: DiffStats
       /** The artifact tool carries the version it made, so the conversation holds every version. */
       artifact?: ArtifactVersion
+      /** An artifact written in full that waits for earlier steps in the same reply before it is made. */
+      queued?: boolean
     }
   | { kind: 'error'; id: string; code: ErrorCode; detail?: string; retryable: boolean }
-  | { kind: 'notice'; id: string; code: 'max-steps' | 'stopped' }
+  | { kind: 'notice'; id: string; code: 'max-steps' | 'stopped' | 'length' }
   | {
       kind: 'compact'
       id: string

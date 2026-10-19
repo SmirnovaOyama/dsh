@@ -170,6 +170,13 @@ function leaveUnfinished(item: ArtifactItem) {
   else actions.closeArtifacts()
 }
 
+/** Leaving a conversation leaves its artifacts: the panel goes back to what it showed before one opened. */
+function leaveArtifacts(s: AppState): Partial<AppState> {
+  if (s.panelTab !== 'artifacts') return { viewedArtifact: null, panelBefore: null }
+  const before = s.panelBefore
+  return { viewedArtifact: null, panelBefore: null, panelTab: before?.tab ?? 'changes', showChanges: before ? before.show : s.showChanges }
+}
+
 function handleEvent(event: AgentEvent) {
   switch (event.type) {
     case 'item': {
@@ -178,7 +185,8 @@ function handleEvent(event: AgentEvent) {
       updateChat(event.sessionId, (chat) => ({ session: { ...chat.session, items: upsertItem(chat.session.items, item) } }))
       // A new artifact opens beside the chat as the agent starts writing it, as it does in Claude.
       if (isNew && item.kind === 'tool' && item.artifact && item.status === 'running') actions.viewArtifact(item.id)
-      if (isArtifact(item) && (item.status === 'error' || item.status === 'stopped') && state.viewedArtifact === item.id) leaveUnfinished(item)
+      const showing = state.showChanges && state.panelTab === 'artifacts' && state.viewedArtifact === item.id
+      if (isArtifact(item) && (item.status === 'error' || item.status === 'stopped') && showing) leaveUnfinished(item)
       break
     }
     case 'remove':
@@ -215,7 +223,7 @@ function handleEvent(event: AgentEvent) {
       const changed = event.workspace?.path !== state.workspace?.path
       set({ workspace: event.workspace })
       if (changed) {
-        set({ chatId: null, chat: null, sessions: [], activeAt: {}, selectedFile: null, viewedFile: null, viewedArtifact: null, refs: [] })
+        set((s) => ({ chatId: null, chat: null, sessions: [], activeAt: {}, selectedFile: null, viewedFile: null, refs: [], ...leaveArtifacts(s) }))
         void loadSessions()
       }
       break
@@ -257,8 +265,7 @@ export const actions = {
       chatId: null,
       chat: null,
       selectedFile: null,
-      viewedArtifact: null,
-      panelTab: s.panelTab === 'artifacts' ? 'changes' : s.panelTab,
+      ...leaveArtifacts(s),
       draft: { model: s.settings.model, permissionMode: s.settings.permissionMode },
       focusTick: s.focusTick + 1,
     }))
@@ -267,7 +274,7 @@ export const actions = {
   async openSession(id: string) {
     if (state.chatId === id && state.view === 'chat') return
     // Events for this conversation are ignored until the snapshot arrives; the snapshot already contains them.
-    set((s) => ({ view: 'chat', chatId: id, chat: null, selectedFile: null, viewedArtifact: null, panelTab: s.panelTab === 'artifacts' ? 'changes' : s.panelTab }))
+    set((s) => ({ view: 'chat', chatId: id, chat: null, selectedFile: null, ...leaveArtifacts(s) }))
     const snapshot = await api.sessions.load(id)
     if (state.chatId !== id) return
     if (!snapshot) {
@@ -364,7 +371,7 @@ export const actions = {
     await api.sessions.remove(id)
     set((s) => ({
       sessions: s.sessions.filter((m) => m.id !== id),
-      ...(s.chatId === id ? { chatId: null, chat: null, selectedFile: null } : {}),
+      ...(s.chatId === id ? { chatId: null, chat: null, selectedFile: null, ...leaveArtifacts(s) } : {}),
     }))
   },
 

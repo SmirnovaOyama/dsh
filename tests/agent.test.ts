@@ -333,4 +333,123 @@ describe('artifacts in the agent loop', () => {
     expect(at('a')).toBeLessThan(at('r'))
     expect(at('b')).toBeLessThan(at('r'))
   })
+
+  // Every version of an artifact card that reached the panel, in order.
+  const drafted = (callIdOrTitle?: string) =>
+    events.flatMap((e) => (e.type === 'item' && e.item.kind === 'tool' && e.item.artifact && (!callIdOrTitle || e.item.callId === callIdOrTitle || e.item.callId === '') ? [{ ...e.item.artifact, status: e.item.status, queued: e.item.queued }] : []))
+
+  it('drafts a change only once its id has arrived, so it never shows as another artifact', async () => {
+    const update = { command: 'update', id: 'timer', old_str: '25:00', new_str: '50:00' }
+    const { controller } = await setup([
+      { toolCalls: [call('c1', create)] },
+      {
+        stream: [
+          [0, 'artifact', '{"command":"update","id":"'],
+          [0, 'artifact', '{"command":"update","id":"tim'],
+          [0, 'artifact', '{"command":"update","id":"timer","old_str":"25'],
+          [0, 'artifact', JSON.stringify(update)],
+        ],
+        toolCalls: [call('c2', update)],
+      },
+      { content: 'ok' },
+    ])
+    const meta = await controller.start(ws, 'make it longer', opts('ask'))
+    await idle(controller, meta.id)
+    const second = drafted().filter((a) => a.version === 2)
+    expect(second.length).toBeGreaterThan(0)
+    expect(drafted().every((a) => a.id === 'timer' && a.type === 'html')).toBe(true)
+    expect(second.at(-1)).toMatchObject({ status: 'done', content: '<b>50:00</b>' })
+  })
+
+  it('builds a change on a version made earlier in the same reply', async () => {
+    const update = { command: 'update', id: 'timer', old_str: '25:00', new_str: '50:00' }
+    const { controller } = await setup([
+      {
+        stream: [
+          [0, 'artifact', JSON.stringify(create)],
+          [1, 'artifact', '{"command":"update","id":"timer"'],
+          [1, 'artifact', JSON.stringify(update)],
+        ],
+        toolCalls: [call('a', create), call('b', update)],
+        toolCallIndexes: [0, 1],
+      },
+      { content: 'ok' },
+    ])
+    const meta = await controller.start(ws, 'make', opts('ask'))
+    const snap = await idle(controller, meta.id)
+    // The update was never an empty first version of a code artifact.
+    expect(drafted().filter((a) => a.version === 1).every((a) => a.type === 'html' && a.content === '<b>25:00</b>')).toBe(true)
+    expect(drafted().filter((a) => a.version === 2).every((a) => a.type === 'html' && a.title === '番茄鐘')).toBe(true)
+    const tools = snap.session.items.filter((i) => i.kind === 'tool')
+    expect(tools).toMatchObject([
+      { callId: 'a', status: 'done', artifact: { version: 1 } },
+      { callId: 'b', status: 'done', artifact: { version: 2, content: '<b>50:00</b>' } },
+    ])
+  })
+
+  it('gives no draft to a change of an artifact that does not exist', async () => {
+    const update = { command: 'update', id: 'nope', old_str: 'a', new_str: 'b' }
+    const { controller } = await setup([{ stream: [[0, 'artifact', JSON.stringify(update)]], toolCalls: [call('c1', update)] }, { content: 'ok' }])
+    const meta = await controller.start(ws, 'change it', opts('ask'))
+    const snap = await idle(controller, meta.id)
+    expect(drafted()).toEqual([])
+    expect(snap.session.items.find((i) => i.kind === 'tool')).toMatchObject({ callId: 'c1', status: 'error' })
+  })
+
+  it('marks an artifact that waits behind another step as queued, not still writing', async () => {
+    const { controller } = await setup([
+      {
+        stream: [
+          [0, 'edit_file', editCall.function.arguments],
+          [1, 'artifact', JSON.stringify(create)],
+        ],
+        toolCalls: [editCall, call('a', create)],
+        toolCallIndexes: [0, 1],
+      },
+      { content: 'ok' },
+    ])
+    const meta = await controller.start(ws, 'edit then make', opts('ask'))
+    const request = await until(permissionRequest)
+    const waiting = (await controller.snapshot(meta.id))!.session.items.find((i) => i.kind === 'tool' && i.callId === 'a')
+    expect(waiting).toMatchObject({ status: 'running', queued: true })
+    controller.respond(meta.id, request.id, { type: 'allow' })
+    const snap = await idle(controller, meta.id)
+    const made = snap.session.items.find((i) => i.kind === 'tool' && i.callId === 'a')
+    expect(made).toMatchObject({ status: 'done' })
+    expect(made && 'queued' in made ? made.queued : undefined).toBeUndefined()
+  })
+
+  it('does not queue an artifact that only follows other artifacts', async () => {
+    const second = { ...create, id: 'notes', title: 'Notes', type: 'markdown', content: '# hi' }
+    const { controller } = await setup([
+      {
+        stream: [
+          [0, 'artifact', JSON.stringify(create)],
+          [1, 'artifact', JSON.stringify(second)],
+        ],
+        toolCalls: [call('a', create), call('b', second)],
+        toolCallIndexes: [0, 1],
+      },
+      { content: 'ok' },
+    ])
+    const meta = await controller.start(ws, 'make two', opts('ask'))
+    await idle(controller, meta.id)
+    expect(drafted().some((a) => a.queued)).toBe(false)
+  })
+})
+
+describe('the output limit', () => {
+  it('says so when a reply stops at the limit with nothing to run', async () => {
+    const { controller } = await setup([{ content: '寫到一半', finishReason: 'length' }])
+    const meta = await controller.start(ws, 'write a lot', opts('ask'))
+    const snap = await idle(controller, meta.id)
+    expect(snap.session.items.at(-1)).toMatchObject({ kind: 'notice', code: 'length' })
+  })
+
+  it('stays quiet when a reply simply ends', async () => {
+    const { controller } = await setup([{ content: '好了' }])
+    const meta = await controller.start(ws, 'hi', opts('ask'))
+    const snap = await idle(controller, meta.id)
+    expect(snap.session.items.some((i) => i.kind === 'notice')).toBe(false)
+  })
 })

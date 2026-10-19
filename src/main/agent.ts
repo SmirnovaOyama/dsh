@@ -18,7 +18,7 @@ import { DeepSeekError, streamChat, type ApiUsage, type ChatMessage, type ChatRe
 import { needsApproval } from './permissions'
 import { withRefs } from './refs'
 import { TOOL_SPECS, ToolError, prepareToolCall, type PermissionNeed, type PreparedCall } from './tools'
-import { draftArtifact, streamedCommand } from './tools/artifact'
+import { draftArtifact, nextArtifact, streamedCommand, streamedId } from './tools/artifact'
 
 const MAX_TOOL_RESULT_CHARS = 60_000
 const STREAM_FLUSH_MS = 50
@@ -231,7 +231,11 @@ export class Agent {
           break
         }
         if (!result) break
-        if (!result.toolCalls.length) break
+        if (!result.toolCalls.length) {
+          // The reply stopped at the output limit; say so, with a way to go on.
+          if (result.finishReason === 'length') this.add(state, { kind: 'notice', id: randomUUID(), code: 'length' })
+          break
+        }
         // At the output limit the last call is cut off mid-arguments; it is answered, not run.
         const cutOff = result.finishReason === 'length' ? result.toolCalls[result.toolCalls.length - 1].id : null
         const keepGoing = await this.runTools(state, result.toolCalls, signal, drafts, cutOff)
@@ -310,12 +314,36 @@ export class Agent {
     let reasoning: ReasoningItem | null = null
     let text: TextItem | null = null
     // Artifacts show up while the model is still writing them, keyed by the call's place in the reply.
-    // A draft waits until every artifact call before it has its card, so the cards stay in the order of the calls.
+    // A draft waits until every artifact call before it has its card, so the cards stay in the order of the
+    // calls, and until its id has arrived in full, so it never passes for another artifact on the way.
     const streaming = new Map<number, ToolItem>()
     const names = new Map<number, string>()
+    const argsOf = new Map<number, string>()
     const settled = new Set<number>()
     const latest = latestArtifacts(state.data.items)
+    // Versions that earlier calls in this reply will make, so an update right after a create builds on it.
+    const made = new Map<string, ArtifactVersion>()
+    const lookup = (id: string) => made.get(id) ?? latest(id)
     const draftable = (index: number) => [...names.keys()].every((j) => j >= index || settled.has(j))
+    // A call's arguments are complete once the next call starts or the reply ends; its card then shows the
+    // version it will make. A call that would fail leaves nothing for later ones to build on.
+    const complete = (index: number) => {
+      const args = argsOf.get(index)
+      argsOf.delete(index)
+      settled.add(index)
+      if (args === undefined) return
+      try {
+        const version = nextArtifact(JSON.parse(args) as Record<string, unknown>, lookup)
+        made.set(version.id, version)
+        const item = streaming.get(index)
+        if (!item) return
+        item.artifact = version
+        item.target = version.title
+        this.schedule(state, item)
+      } catch {
+        // Not a version: it is answered with the error when it runs.
+      }
+    }
     const endDrafts = (status: ToolItem['status']) => {
       for (const item of streaming.values()) {
         item.status = status
@@ -357,23 +385,29 @@ export class Agent {
           },
           onToolCall: (index, name) => {
             endReasoning()
+            for (const j of [...argsOf.keys()]) if (j < index) complete(j)
             names.set(index, name)
             if (name !== 'artifact') settled.add(index)
           },
           onToolArguments: (index, args) => {
             if (names.get(index) !== 'artifact') return
-            const artifact = draftArtifact(args, latest)
+            argsOf.set(index, args)
             const item = streaming.get(index)
             if (item) {
+              const artifact = draftArtifact(args, lookup)
               item.artifact = artifact
               item.target = artifact.title
               this.schedule(state, item)
               return
             }
+            if (settled.has(index)) return
             const command = streamedCommand(args)
-            // Reading an artifact gets a plain row once it runs, not a card.
-            if (command === 'view') settled.add(index)
-            if (!command || command === 'view' || !draftable(index)) return
+            const id = streamedId(args)
+            // Reading an artifact gets a plain row once it runs, not a card; so does changing one that does
+            // not exist, which fails then.
+            if (command === 'view' || (command && id !== undefined && command !== 'create' && !lookup(id))) settled.add(index)
+            if (!command || id === undefined || settled.has(index) || !draftable(index)) return
+            const artifact = draftArtifact(args, lookup)
             streaming.set(index, this.add<ToolItem>(state, { kind: 'tool', id: randomUUID(), callId: '', name: 'artifact', target: artifact.title, status: 'running', startedAt: this.now(), artifact }))
             settled.add(index)
           },
@@ -401,6 +435,7 @@ export class Agent {
     }
 
     endReasoning()
+    for (const j of [...argsOf.keys()]) complete(j)
     const finished = text as TextItem | null
     if (finished) {
       finished.streaming = false
@@ -414,13 +449,22 @@ export class Agent {
     // A call cut off at the output limit is kept out of the history, so its half-written arguments are not sent again.
     const cut = result.finishReason === 'length' ? result.toolCalls[result.toolCalls.length - 1] : undefined
     if (cut) message.tool_calls = result.toolCalls.map((c) => (c === cut ? { ...c, function: { ...c.function, arguments: '{}' } } : c))
+    // A draft behind another kind of step is written in full but runs after it, maybe after a prompt; its
+    // card says it is waiting rather than still writing.
+    let behind = false
     result.toolCalls.forEach((call, i) => {
       const index = result.toolCallIndexes?.[i] ?? i
       const item = streaming.get(index)
-      if (!item) return
-      item.callId = call.id
-      drafts.set(call.id, item)
-      streaming.delete(index)
+      if (item) {
+        item.callId = call.id
+        if (behind && call !== cut) {
+          item.queued = true
+          this.flush(state, item)
+        }
+        drafts.set(call.id, item)
+        streaming.delete(index)
+      }
+      if (call.function.name !== 'artifact') behind = true
     })
     endDrafts('error')
     state.messages.push(message)
@@ -434,6 +478,7 @@ export class Agent {
     for (const call of calls) {
       if (call.id === cutOff && !signal.aborted && keepGoing) {
         const item = drafts.get(call.id) ?? this.add<ToolItem>(state, { kind: 'tool', id: randomUUID(), callId: call.id, name: itemName(call), target: '', status: 'running', startedAt: this.now() })
+        delete item.queued
         item.status = 'error'
         item.error = CUT_OFF
         item.endedAt = this.now()
@@ -444,6 +489,7 @@ export class Agent {
       if (signal.aborted || !keepGoing) {
         const draft = drafts.get(call.id)
         if (draft) {
+          delete draft.queued
           draft.status = 'stopped'
           this.flush(state, draft)
         }
@@ -469,6 +515,7 @@ export class Agent {
       status: 'running',
       startedAt: this.now(),
     })
+    delete item.queued
     const reply = (content: string) => state.messages.push({ role: 'tool', tool_call_id: call.id, content: clip(content) })
     const fail = (message: string) => {
       item.status = 'error'

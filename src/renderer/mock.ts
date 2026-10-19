@@ -300,6 +300,8 @@ function shortSession(sid: string, title: string, updatedAt: number, status: Ses
 function artifactSession(): SessionData {
   const t0 = now - 12 * MIN
   const writing = params.has('writing')
+  // ?queued shows a second version written in full that waits for a command before it in the same reply.
+  const queued = params.has('queued')
   const card = (version: number, content: string, status: 'done' | 'running' | 'stopped', callId: string, at: number): TranscriptItem => ({
     kind: 'tool',
     id: id(),
@@ -309,6 +311,7 @@ function artifactSession(): SessionData {
     status,
     startedAt: at,
     ...(status === 'done' ? { endedAt: at + 9000 } : {}),
+    ...(queued && version === 2 ? { queued: true } : {}),
     artifact: { id: 'pomodoro-timer', title: '番茄鐘', type: 'html', content, version },
   })
   // ?broken gives the second version a script error, to show the error bar.
@@ -322,9 +325,10 @@ function artifactSession(): SessionData {
     { kind: 'user', id: id(), text: '按鈕不要那麼圓，再加一個休息 5 分鐘的模式', at: t0 + 6 * MIN },
     { kind: 'text', id: id(), text: '好，我把按鈕改成小圓角，上面加一個切換專心和休息的開關', streaming: false },
     // ?stopped shows a second version that was stopped partway, and ?writing one still streaming in.
-    params.has('stopped') ? card(2, v2.slice(0, 1900), 'stopped', 'a2', t0 + 6 * MIN + 4000) : card(2, writing ? v2.slice(0, 1900) : v2, writing ? 'running' : 'done', 'a2', t0 + 6 * MIN + 4000),
+    params.has('stopped') ? card(2, v2.slice(0, 1900), 'stopped', 'a2', t0 + 6 * MIN + 4000) : card(2, writing ? v2.slice(0, 1900) : v2, writing || queued ? 'running' : 'done', 'a2', t0 + 6 * MIN + 4000),
   ]
-  if (!writing && !params.has('stopped')) {
+  if (queued) items.push({ kind: 'tool', id: id(), callId: 'r1', name: 'run_command', target: 'npx prettier --check index.html', status: 'running', startedAt: now - 20_000 })
+  if (!writing && !queued && !params.has('stopped')) {
     items.push({ kind: 'text', id: id(), text: '改好了，這是第 2 版\n\n- 按鈕的圓角改小了\n- 上面可以切換「專心 25 分」和「休息 5 分」', streaming: false })
     if (params.has('more')) {
       const t1 = t0 + 9 * MIN
@@ -344,7 +348,7 @@ function artifactSession(): SessionData {
     updatedAt: now - MIN,
     model: 'deepseek-chat',
     permissionMode: 'ask',
-    status: writing ? 'running' : 'idle',
+    status: writing || queued ? 'running' : 'idle',
     items,
     usage: { promptTokens: 22_400, completionTokens: 4_900, cacheHitTokens: 12_800, contextTokens: 9_870 },
   }

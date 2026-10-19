@@ -14,10 +14,15 @@ const shown = (item: ArtifactItem) => item.status === 'done' || item.status === 
 /** Whether the conversation has an artifact worth listing; cheap enough to run on every update. */
 export const anyArtifacts = (items: TranscriptItem[]) => items.some((i) => isArtifact(i) && shown(i))
 
-/** Every shown version of the artifact that this item belongs to, oldest first. */
+/**
+ * Every version of the artifact that this item belongs to, oldest first: the shown ones, and a stopped
+ * one unless the agent made that version again. So stepping off a stopped version keeps the same list.
+ */
 export function versionsOf(items: TranscriptItem[], item: ArtifactItem): ArtifactItem[] {
   const id = item.artifact.id
-  return items.filter((i): i is ArtifactItem => isArtifact(i) && (i.id === item.id || (!!id && i.artifact.id === id && shown(i))))
+  const family = items.filter((i): i is ArtifactItem => isArtifact(i) && (i.id === item.id || (!!id && i.artifact.id === id)))
+  const made = new Set(family.filter(shown).map((i) => i.artifact.version))
+  return family.filter((i) => i.id === item.id || shown(i) || (i.status === 'stopped' && !made.has(i.artifact.version)))
 }
 
 /** The newest shown version of each artifact, in the order they were first made. */

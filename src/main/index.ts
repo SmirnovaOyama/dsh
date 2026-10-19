@@ -7,6 +7,7 @@ import { Channels, EVENT_CHANNEL } from '../shared/ipc'
 import type { AgentEvent, FileRead, InitialState, PermissionDecision, PermissionMode, SaveResult, Settings, StartOptions } from '../shared/types'
 import { saveToFolder, safeFileName, writeTempPage } from './artifactFiles'
 import { PREVIEW_SCHEME, PreviewPages, withPolicy } from './artifactPreview'
+import { PreviewNetwork } from './previewNetwork'
 import { Controller, readWorkspace } from './controller'
 import { DeepSeekError, checkConnection } from './deepseek'
 import { cleanRefs } from './refs'
@@ -33,6 +34,7 @@ function emit(event: AgentEvent) {
 
 const controller = new Controller({ settings: settingsStore, sessions: sessionStore, emit })
 const previews = new PreviewPages()
+let network: PreviewNetwork | null = null
 
 // The scheme artifact previews load from; registered before the app is ready, as Electron requires.
 protocol.registerSchemesAsPrivileged([{ scheme: PREVIEW_SCHEME, privileges: { standard: true, secure: true } }])
@@ -66,6 +68,9 @@ function createWindow() {
   })
 
   window.once('ready-to-show', () => window?.show())
+
+  // WebRTC is outside a preview's content policy, so it may only go through the proxy (see previewNetwork).
+  window.webContents.setWebRTCIPHandlingPolicy('disable_non_proxied_udp')
 
   // Links in answers open in the person's browser, never inside the app.
   window.webContents.setWindowOpenHandler(({ url }) => {
@@ -203,7 +208,12 @@ function registerIpc() {
   handle('changesRevertAll', (id: string) => controller.revertAll(id))
   handle('changesCommit', (id: string, message: string) => controller.commit(id, message))
 
-  handle('artifactsPreview', (html: string) => previews.add(html))
+  // A preview only runs once its network is fenced in; if that fails, the viewer shows the error instead.
+  handle('artifactsPreview', async (html: string) => {
+    if (!network) throw new Error('The preview network is not ready.')
+    await network.refresh()
+    return previews.add(html)
+  })
   handle('artifactsSave', async (name: string, content: string): Promise<SaveResult | null> => {
     const options: Electron.SaveDialogOptions = { defaultPath: safeFileName(name) }
     const result = window ? await dialog.showSaveDialog(window, options) : await dialog.showSaveDialog(options)
@@ -248,7 +258,11 @@ app.whenReady().then(async () => {
   protocol.handle(PREVIEW_SCHEME, (request) => previews.respond(request.url))
   // Nothing in the app downloads files; a page in a preview must not open save dialogs either.
   session.defaultSession.on('will-download', (event) => event.preventDefault())
-  await Promise.all([settingsStore.load(), sessionStore.load()])
+  // An in-memory session the app never changes, so it always answers with the system's own routes.
+  const system = session.fromPartition('dsh-system-proxy')
+  network = new PreviewNetwork(session.defaultSession, (url) => system.resolveProxy(url), Boolean(devServerUrl))
+  // Each preview refreshes it again, so a failure here only matters if it keeps failing.
+  await Promise.all([settingsStore.load(), sessionStore.load(), network.refresh().catch(() => undefined)])
   registerIpc()
   createWindow()
   app.on('activate', () => {

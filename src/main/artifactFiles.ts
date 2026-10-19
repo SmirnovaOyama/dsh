@@ -49,8 +49,11 @@ const privateDirs = new Map<string, Promise<string>>()
 async function privateDir(tempRoot: string, fresh = false): Promise<string> {
   let dir = privateDirs.get(tempRoot)
   if (!dir || fresh) {
-    dir = mkdtemp(path.join(tempRoot, 'dsh-artifacts-'))
-    privateDirs.set(tempRoot, dir)
+    const made = mkdtemp(path.join(tempRoot, 'dsh-artifacts-'))
+    privateDirs.set(tempRoot, made)
+    // A failure is not kept, so the next open tries again.
+    made.catch(() => privateDirs.get(tempRoot) === made && privateDirs.delete(tempRoot))
+    dir = made
   }
   return dir
 }
@@ -62,8 +65,8 @@ async function privateDir(tempRoot: string, fresh = false): Promise<string> {
 export async function writeTempPage(tempRoot: string, name: unknown, html: unknown): Promise<string> {
   const base = safeFileName(name, 'artifact.html').replace(/\.[^.]*$/, '') || 'artifact'
   for (const fresh of [false, true]) {
-    const dir = await privateDir(tempRoot, fresh)
     try {
+      const dir = await privateDir(tempRoot, fresh)
       const file = path.join(dir, await freeName(dir, `${base}.html`))
       await writeFile(file, String(html ?? ''), { encoding: 'utf8', flag: 'wx' })
       return file

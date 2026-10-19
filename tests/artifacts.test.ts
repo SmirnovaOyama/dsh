@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -188,6 +188,13 @@ describe('saving artifacts', () => {
     await rm(path.dirname(first), { recursive: true, force: true })
     const again = await writeTempPage(dir, 'a.html', 'y')
     expect(await readFile(again, 'utf8')).toBe('y')
+  })
+
+  it('tries again after a folder could not be made', async () => {
+    const root = path.join(dir, 'later')
+    await expect(writeTempPage(root, 'a.html', 'x')).rejects.toThrow(/ENOENT/)
+    await mkdir(root)
+    expect(await readFile(await writeTempPage(root, 'a.html', 'y'), 'utf8')).toBe('y')
   })
 })
 

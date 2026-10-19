@@ -656,6 +656,12 @@ button.hx-tool:hover { background: var(--surface-hover); }
   .hx-version-pick .short { display: inline-grid; }
   .hx-artifact-head .title { min-width: 4em; }
 }
+/* At the app's smallest sizes the title takes a row of its own under the controls, so none of them is cut off. */
+@container (max-width: 360px) {
+  .hx-artifact-head { flex-wrap: wrap; row-gap: 0; padding-block: 6px; }
+  .hx-artifact-head .title { order: 1; flex: 1 0 100%; min-width: 0; margin-inline-start: 4px; padding-bottom: 4px; }
+  .hx-artifact-head > * { flex-shrink: 0; }
+}
 .hx-code-lines .num.is-static { cursor: default; }
 .hx-code-lines .num.is-static:hover { color: var(--text-disabled); }
 .hx-artifact-writing { display: flex; align-items: center; gap: 6px; padding: 8px 0 0 52px; font-size: 12px; color: var(--text-muted); }
@@ -666,18 +672,26 @@ button.hx-tool:hover { background: var(--surface-hover); }
 /* Pages render on white, as they would in a browser, and fade in once their document is ready; until
    then a quiet note says the preview is loading. A page that picks a dark scheme paints its own canvas.
    A narrower device width centres the page on the panel colour with a hairline either side. */
-.hx-artifact-frame { position: relative; flex: 1; min-height: 0; display: flex; justify-content: center; background: var(--bg); }
+.hx-artifact-frame {
+  position: relative; flex: 1; min-height: 0; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); justify-items: center; background: var(--bg);
+}
+.hx-artifact-frame[hidden] { display: none; }
 .hx-artifact-frame:not([data-device="desktop"]) { padding: 16px 0; background: var(--surface-muted); }
-.hx-artifact-frame iframe { flex: 1; width: 100%; border: 0; background: #fff; color-scheme: light; opacity: 0; transition: opacity var(--duration-base) var(--ease-standard), max-width var(--duration-base) var(--ease-out); }
-.hx-artifact-frame[data-device="tablet"] iframe { flex: 0 1 768px; max-width: 768px; border-radius: var(--radius-md); box-shadow: 0 0 0 1px var(--border); }
-.hx-artifact-frame[data-device="phone"] iframe { flex: 0 1 390px; max-width: 390px; border-radius: var(--radius-lg); box-shadow: 0 0 0 1px var(--border); }
+/* A new page sits over the old one in the same cell and fades in on top of it. */
+.hx-artifact-frame iframe {
+  grid-area: 1 / 1; width: 100%; height: 100%; border: 0; background: #fff; color-scheme: light; opacity: 0;
+  transition: opacity var(--duration-base) var(--ease-standard);
+}
+.hx-artifact-frame[data-device="tablet"] iframe { max-width: 768px; border-radius: var(--radius-md); box-shadow: 0 0 0 1px var(--border); }
+.hx-artifact-frame[data-device="phone"] iframe { max-width: 390px; border-radius: var(--radius-lg); box-shadow: 0 0 0 1px var(--border); }
 .hx-artifact-frame iframe[data-shown="true"] { opacity: 1; }
 .hx-artifact-loading {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0; padding: 24px;
   font-size: 13px; line-height: 18px; color: var(--text-muted); text-align: center; pointer-events: none;
   animation: hx-fade-in var(--duration-base) var(--ease-standard) 300ms both;
 }
-.hx-artifact-loading.is-failed { animation-delay: 0ms; overflow-wrap: anywhere; }
+.hx-artifact-loading:is(.is-failed, .is-late) { animation-delay: 0ms; }
+.hx-artifact-loading.is-failed { overflow-wrap: anywhere; }
 .hx-artifact-doc { padding: 20px 28px 40px; }
 
 /* Expanded, the artifact covers the window from where it is, so the page in it keeps running; the
@@ -698,10 +712,11 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-artifact-unfinished .text { flex: 1; min-width: 0; }
 .hx-artifact-unfinished .btn-ghost { flex-shrink: 0; height: 28px; padding: 0 8px; font-size: 13px; color: var(--accent-ink); }
 
-/* Notes float over the foot of the artifact, one above the other. */
+/* Notes float over the artifact: what just happened at the top, the page's errors at the foot. */
 .hx-artifact-notes {
-  position: absolute; inset: auto 12px 12px; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none;
+  position: absolute; inset: auto 12px 12px; z-index: 2; display: flex; flex-direction: column; align-items: center; pointer-events: none;
 }
+.hx-artifact-notes.is-top { inset: 12px 12px auto; }
 .hx-artifact-notes > * { pointer-events: auto; }
 
 /* The page failed: say so plainly, and offer to hand it to the agent. */
@@ -718,9 +733,15 @@ button.hx-tool:hover { background: var(--surface-hover); }
   margin-top: 2px; max-height: 72px; overflow-y: auto; font-family: var(--font-mono); font-size: 12px; line-height: 18px;
   color: var(--text-muted); white-space: pre-wrap; overflow-wrap: anywhere;
 }
-.hx-artifact-error .more { margin-top: 2px; font-size: 12px; line-height: 16px; color: var(--text-muted); }
+.hx-artifact-error .more { margin-inline-start: 8px; font-size: 12px; font-weight: 400; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .hx-artifact-error .hx-fix { flex-shrink: 0; height: 28px; padding: 0 10px; gap: 6px; font-size: 13px; }
 .hx-artifact-error .hx-icon-btn { width: 28px; height: 28px; color: var(--text-muted); }
+/* In a narrow panel the message keeps the width and the fix button goes under it, lined up with the text. */
+@container (max-width: 520px) {
+  .hx-artifact-error { flex-wrap: wrap; row-gap: 8px; }
+  .hx-artifact-error .text { flex: 1 1 calc(100% - 64px); }
+  .hx-artifact-error .hx-fix { order: 3; margin-inline-start: 26px; }
+}
 
 .hx-artifact-notice {
   max-width: 100%; display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 4px 0 12px;
@@ -729,5 +750,7 @@ button.hx-tool:hover { background: var(--surface-hover); }
 }
 .hx-artifact-notice:not(:has(.btn-ghost)) { padding-inline-end: 12px; }
 .hx-artifact-notice .text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hx-artifact-notice .btn-ghost { height: 28px; font-size: 13px; color: var(--accent-ink); }
+.hx-artifact-notice .btn-ghost { flex-shrink: 0; height: 28px; font-size: 13px; white-space: nowrap; }
+.hx-artifact-notice .btn-ghost:not(.hx-icon-btn) { color: var(--accent-ink); }
+.hx-artifact-notice .hx-icon-btn { width: 28px; color: var(--text-muted); }
 .hx-artifact-doc .hx-prose { font-size: 15px; line-height: 24px; }

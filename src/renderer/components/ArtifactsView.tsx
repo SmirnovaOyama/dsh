@@ -107,7 +107,7 @@ function ArtifactList() {
                   {item.artifact.version > 1 && <span>{t('artifact.versions', { n: item.artifact.version })}</span>}
                 </span>
               </span>
-              {item.status === 'running' ? <ThinkingMark size={14} /> : <Icon icon={ChevronRight} size={16} className="hx-row-chev" />}
+              {item.status === 'running' && !item.queued ? <ThinkingMark size={14} /> : <Icon icon={ChevronRight} size={16} className="hx-row-chev" />}
             </button>
           ))}
         </div>
@@ -171,14 +171,18 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
   const versions = useMemo(() => versionsOf(items ?? [], item), [items, item])
   const index = versions.findIndex((v) => v.id === item.id)
   const artifact = item.artifact
-  const writing = item.status === 'running'
+  // Written in full but waiting for earlier steps: it can be looked at, not yet copied or saved.
+  const queued = item.status === 'running' && !!item.queued
+  const writing = item.status === 'running' && !queued
   const ready = item.status === 'done'
-  const unfinished = !writing && !ready
+  const unfinished = !writing && !queued && !ready
   const page = isPage(artifact.type)
   const prev = versions[index - 1]
   const next = versions[index + 1]
   const last = versions[versions.length - 1]
   const newestDone = versions.findLast((v) => v.status === 'done')
+  // A diff is against the version this one was made from, which is never a stopped one.
+  const base = versions.slice(0, Math.max(0, index)).findLast((v) => v.status === 'done')
 
   const [mode, setMode] = useState<Mode>('preview')
   const [full, setFull] = useState(false)
@@ -194,7 +198,7 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
 
   // The diff toggle stays put across versions and is only unavailable on the first, so the title never moves.
   const modes: Mode[] = [...(hasPreview(artifact.type) ? (['preview'] as const) : []), 'code', ...(versions.length > 1 ? (['diff'] as const) : [])]
-  const usable = modes.filter((m) => m !== 'diff' || prev)
+  const usable = modes.filter((m) => m !== 'diff' || base)
   // While the agent writes, and for a version it never finished, the code is what there is to see.
   const shownMode: Mode = writing || unfinished ? 'code' : usable.includes(mode) ? mode : usable[0]
 
@@ -205,8 +209,6 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
     wasWriting.current = writing
   }, [writing])
 
-  // A new version, or a reload, starts with a clean slate of errors.
-  useEffect(() => setErrors([]), [item.id, reloads])
   useEffect(() => {
     if (!notice) return
     const timer = window.setTimeout(() => setNotice(null), notice.kind === 'link' ? 15000 : 5000)
@@ -284,7 +286,7 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
   const versionLabel = (n: number) => t('artifact.version', { n })
   const shortLabel = (n: number) => t('artifact.versionShort', { n })
   const versionSub = (v: ArtifactItem) => {
-    if (v.status === 'running') return t('artifact.writing')
+    if (v.status === 'running') return t(v.queued ? 'artifact.queued' : 'artifact.writing')
     if (v.status !== 'done') return t('artifact.failed')
     if (v.id === newestDone?.id) return t('artifact.latest')
     const at = v.endedAt ?? v.startedAt
@@ -312,8 +314,8 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
             value: m,
             icon: MODE_ICONS[m],
             label: t(MODE_LABELS[m]),
-            title: m === 'diff' && !prev ? t('artifact.diffFirst') : undefined,
-            disabled: ((writing || unfinished) && m !== 'code') || (m === 'diff' && !prev),
+            title: m === 'diff' && !base ? t('artifact.diffFirst') : undefined,
+            disabled: ((writing || unfinished) && m !== 'code') || (m === 'diff' && !base),
           }))}
           onChange={setMode}
         />
@@ -399,27 +401,31 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
       <div className="hx-artifact-body">
         {shownMode === 'code' ? (
           <ArtifactCode item={item} follow={writing} />
-        ) : shownMode === 'diff' && prev ? (
-          <ArtifactDiff before={prev} after={item} />
+        ) : shownMode === 'diff' && base ? (
+          <ArtifactDiff before={base} after={item} />
         ) : artifact.type === 'markdown' ? (
           <div className="hx-viewer hx-artifact-doc">
             <Markdown text={artifact.content} />
           </div>
-        ) : (
+        ) : null}
+        {/* The page stays loaded behind the code and the diff, so a look at them neither restarts it nor repeats its errors. */}
+        {page && !writing && !unfinished && (
           <Frame
             html={html}
             title={artifact.title}
             device={full ? device : 'desktop'}
             reloads={reloads}
+            hidden={shownMode !== 'preview'}
+            onLoadStart={() => setErrors([])}
             onError={(error) => setErrors((list) => [...list, error])}
             onEscape={() => full && shrink()}
             onLink={askLink}
           />
         )}
 
-        {/* Notes stack at the foot of the artifact, so one never covers another. */}
-        <div className="hx-artifact-notes">
-          {notice && (
+        {/* What just happened sits at the top, the page's errors at the foot, so neither moves the other. */}
+        {notice && (
+          <div className="hx-artifact-notes is-top">
             <NoticeBar
               notice={notice}
               onClose={() => setNotice(null)}
@@ -428,18 +434,22 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
                 actions.viewFile(path)
               }}
             />
-          )}
-          {shownMode === 'preview' && errors.length > 0 && (
+          </div>
+        )}
+        {shownMode === 'preview' && errors.length > 0 && (
+          <div className="hx-artifact-notes">
             <div className="hx-artifact-error" role="alert">
               <Icon icon={CircleAlert} size={16} />
               <div className="text">
-                <p className="title">{t('artifact.error')}</p>
+                <p className="title">
+                  {t('artifact.error')}
+                  {errors.length > 1 && <span className="more">{t(errors.length === 2 ? 'artifact.errorMore.one' : 'artifact.errorMore', { n: errors.length - 1 })}</span>}
+                </p>
                 <p className="detail">{errors[0]}</p>
-                {errors.length > 1 && <p className="more">{t(errors.length === 2 ? 'artifact.errorMore.one' : 'artifact.errorMore', { n: errors.length - 1 })}</p>}
               </div>
-              {/* The agent only ever edits the newest version, so an older one points there instead. */}
-              {next ? (
-                <button type="button" className="btn-secondary hx-fix" onClick={() => actions.viewArtifact(last.id)}>
+              {/* The agent only ever edits the newest version, so any other one points there instead. */}
+              {newestDone && ready && item.id !== newestDone.id ? (
+                <button type="button" className="btn-secondary hx-fix" onClick={() => actions.viewArtifact(newestDone.id)}>
                   {t('artifact.toLatest')}
                 </button>
               ) : (
@@ -452,8 +462,8 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
                 <Icon icon={X} size={14} />
               </button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       <Menu anchor={moreRef.current} open={menu === 'more'} onClose={() => setMenu(null)} label={t('artifact.more')} align="end" minWidth={220}>
@@ -606,46 +616,76 @@ function ArtifactDiff({ before, after }: { before: ArtifactItem; after: Artifact
  * from a few public CDNs and nothing else, in a sandbox with no origin: it cannot reach the app, the
  * person's files or the rest of the window. All it can do is post messages, which are read as text:
  * that it loaded, that it failed, that Escape was pressed, or that a link was clicked.
+ *
+ * A new page fades in over the one it replaces, so stepping through versions never shows the panel
+ * between them. Only the newest page is listened to.
  */
 function Frame(props: {
   html: string
   title: string
   device: Device
   reloads: number
+  hidden: boolean
+  onLoadStart(): void
   onError(error: string): void
   onEscape(): void
   onLink(url: string): void
 }) {
-  const { html, title, device, reloads } = props
+  const { html, title, device, reloads, hidden } = props
   const ref = useRef<HTMLIFrameElement>(null)
-  const [src, setSrc] = useState<string | null>(null)
+  // The newest page last; its address is null until the main process has it ready.
+  const [pages, setPages] = useState<{ src: string | null; shown: boolean }[]>([])
   const [failed, setFailed] = useState<string | null>(null)
-  const [shown, setShown] = useState(false)
+  // A page slow to load gives way to the loading note rather than leaving the old one up.
+  const [slow, setSlow] = useState(false)
   const handlers = useRef(props)
   handlers.current = props
 
   useEffect(() => {
     let live = true
-    setSrc(null)
     setFailed(null)
-    setShown(false)
+    setSlow(false)
+    handlers.current.onLoadStart()
+    setPages((list) => [...list.filter((p) => p.shown).slice(-1), { src: null, shown: false }])
+    const timer = window.setTimeout(() => live && setSlow(true), 300)
     api.artifacts.preview(html).then(
-      (url) => live && setSrc(url),
-      (error) => live && setFailed(errorText(error)),
+      (src) => live && setPages((list) => [...list.slice(0, -1), { src, shown: false }]),
+      (error) => {
+        if (!live) return
+        setPages([])
+        setFailed(errorText(error))
+      },
     )
     return () => {
       live = false
+      window.clearTimeout(timer)
     }
   }, [html, reloads])
 
+  const newest = pages.at(-1)
+  const waiting = !failed && !newest?.shown
+  const covered = pages.some((p) => p.shown)
+  const show = (src: string) => setPages((list) => (list.at(-1)?.src === src && !list.at(-1)?.shown ? [...list.slice(0, -1), { src, shown: true }] : list))
+  // Once the new page has faded in, the one under it goes; if it is slow to come, the old one goes first.
   useEffect(() => {
+    if (!newest?.shown || pages.length < 2) return
+    const timer = window.setTimeout(() => setPages((list) => list.slice(-1)), 400)
+    return () => window.clearTimeout(timer)
+  }, [newest?.shown, pages.length])
+  useEffect(() => {
+    if (slow && waiting && covered) setPages((list) => list.slice(-1))
+  }, [slow, waiting, covered])
+
+  const newestSrc = newest?.src
+  useEffect(() => {
+    if (!newestSrc) return
     // Each page gets a few distinct errors; anything past that is dropped without touching the app.
     const seen = new Set<string>()
     const onMessage = (event: MessageEvent) => {
       if (!ref.current || event.source !== ref.current.contentWindow) return
       const data = event.data as Record<string, unknown> | null
       if (!data || typeof data !== 'object') return
-      if (data.dshArtifactReady === true) setShown(true)
+      if (data.dshArtifactReady === true) show(newestSrc)
       else if (data.dshArtifactKey === 'Escape') handlers.current.onEscape()
       else if (typeof data.dshArtifactOpen === 'string') {
         const url = data.dshArtifactOpen
@@ -659,26 +699,31 @@ function Frame(props: {
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-  }, [src])
+  }, [newestSrc])
 
   return (
-    <div className="hx-artifact-frame" data-device={device}>
-      {src && (
-        <iframe
-          key={src}
-          ref={ref}
-          title={t('artifact.frame', { title })}
-          sandbox="allow-scripts allow-forms allow-modals"
-          src={src}
-          data-shown={shown}
-          onLoad={() => setShown(true)}
-        />
+    <div className="hx-artifact-frame" data-device={device} hidden={hidden}>
+      {pages.map(({ src, shown }) =>
+        src ? (
+          <iframe
+            key={src}
+            ref={src === newest?.src ? ref : undefined}
+            title={t('artifact.frame', { title })}
+            sandbox="allow-scripts allow-forms allow-modals"
+            src={src}
+            data-shown={shown}
+            aria-hidden={src !== newest?.src || undefined}
+            tabIndex={src !== newest?.src ? -1 : undefined}
+            onLoad={() => show(src)}
+          />
+        ) : null,
       )}
       {failed ? (
         <p className="hx-artifact-loading is-failed">{t('artifact.previewFailed', { error: failed })}</p>
       ) : (
-        !shown && (
-          <p className="hx-artifact-loading" role="status">
+        waiting &&
+        (slow || !covered) && (
+          <p className={slow ? 'hx-artifact-loading is-late' : 'hx-artifact-loading'} role="status">
             <ThinkingMark size={14} />
             <Shimmer>{t('artifact.loading')}</Shimmer>
           </p>

@@ -25,6 +25,14 @@ describe('artifacts in the renderer', () => {
     expect(versionsOf(items, items[2] as ArtifactItem).map((i) => i.id)).toEqual(['a', 'c', 'd', 'e'])
   })
 
+  it('keeps a stopped version in the list from any version, unless that version was made again', () => {
+    const stopped = [item('a', page), item('s', v2, 'stopped')]
+    expect(versionsOf(stopped, stopped[0] as ArtifactItem).map((i) => i.id)).toEqual(['a', 's'])
+    expect(versionsOf(stopped, stopped[1] as ArtifactItem).map((i) => i.id)).toEqual(['a', 's'])
+    const redone = [...stopped, item('d', v2)]
+    expect(versionsOf(redone, redone[0] as ArtifactItem).map((i) => i.id)).toEqual(['a', 'd'])
+  })
+
   it('lists the newest version of each artifact in the order they were made', () => {
     expect(latestArtifacts(items).map((i) => i.id)).toEqual(['e', 'b'])
   })

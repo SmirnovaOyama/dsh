@@ -92,7 +92,10 @@ const ArtifactCard = memo(function ArtifactCard({ item }: { item: ArtifactItem }
   const open = useApp((s) => s.showChanges && s.panelTab === 'artifacts' && s.viewedArtifact === item.id)
   const { artifact } = item
   const title = artifact.title || t('artifact.untitled')
-  const writing = item.status === 'running'
+  const busy = item.status === 'running'
+  const writing = busy && !item.queued
+  // Only a finished version can be copied or saved; a stopped or failed one is half written.
+  const ready = item.status === 'done'
   const [saveError, setSaveError] = useState<string | null>(null)
   useEffect(() => {
     if (!saveError) return
@@ -120,8 +123,12 @@ const ArtifactCard = memo(function ArtifactCard({ item }: { item: ArtifactItem }
                 <ThinkingMark size={14} />
                 <Shimmer>{t('artifact.writing')}</Shimmer>
               </>
+            ) : busy ? (
+              <span>{t('artifact.queued')}</span>
             ) : item.status === 'stopped' ? (
               <span>{t('artifact.stopped')}</span>
+            ) : item.status === 'error' ? (
+              <span>{t('artifact.failed')}</span>
             ) : (
               <>
                 <span>{typeLabel(artifact)}</span>
@@ -132,12 +139,12 @@ const ArtifactCard = memo(function ArtifactCard({ item }: { item: ArtifactItem }
         </span>
       </button>
       {/* The quick actions keep their place while the agent writes, so the card never changes size. */}
-      <span className="acts" data-hidden={writing || undefined}>
-        <CopyButton text={artifact.content} label={t('artifact.copy')} disabled={writing} />
+      <span className="acts" data-hidden={busy || undefined}>
+        <CopyButton text={artifact.content} label={t('artifact.copy')} disabled={!ready} />
         <button
           type="button"
           className="btn-ghost hx-icon-btn"
-          disabled={writing}
+          disabled={!ready}
           aria-label={saveLabel}
           title={saveLabel}
           onClick={() => {
@@ -181,6 +188,18 @@ function ErrorBlock({ item, active }: { item: Extract<TranscriptItem, { kind: 'e
 
 function Notice({ item, active }: { item: Extract<TranscriptItem, { kind: 'notice' }>; active: boolean }) {
   if (item.code === 'stopped') return <p className="hx-notice">{t('notice.stopped')}</p>
+  if (item.code === 'length') {
+    return (
+      <div className="hx-notice">
+        <span>{t('notice.length')}</span>
+        {active && (
+          <button type="button" className="btn-ghost is-accent" onClick={() => void actions.send(t('notice.length.prompt'), { withRefs: false })}>
+            {t('notice.continue')}
+          </button>
+        )}
+      </div>
+    )
+  }
   return (
     <div className="hx-notice">
       <span>{t('notice.max-steps', { n: getState().settings.maxSteps })}</span>

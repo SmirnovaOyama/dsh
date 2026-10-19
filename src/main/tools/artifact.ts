@@ -160,6 +160,17 @@ export function streamedCommand(json: string): 'create' | 'update' | 'rewrite' |
   return match ? (match[1] as 'create' | 'update' | 'rewrite' | 'view') : undefined
 }
 
+/** The id of a call that is still streaming in, once its closing quote has arrived; a prefix could name another artifact. */
+export function streamedId(json: string): string | undefined {
+  const match = /"id"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(json)
+  if (!match) return undefined
+  try {
+    return JSON.parse(`"${match[1]}"`) as string
+  } catch {
+    return undefined
+  }
+}
+
 /**
  * The artifact as far as it has streamed in, for the panel to show while the agent writes it.
  * It follows the same rules as nextArtifact, so the finished version looks like the draft did.
