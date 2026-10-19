@@ -120,7 +120,7 @@ const ArtifactCard = memo(function ArtifactCard({ item }: { item: ArtifactItem }
           <span className="sub">
             {writing ? (
               <>
-                <ThinkingMark size={14} />
+                <ThinkingMark size={16} />
                 <Shimmer>{t('artifact.writing')}</Shimmer>
               </>
             ) : busy ? (

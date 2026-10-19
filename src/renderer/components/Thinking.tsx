@@ -2,14 +2,19 @@ import { useEffect, useState } from 'react'
 import { t } from '../i18n'
 
 /**
- * The mark shown while the agent thinks: a four-point sparkle that slowly turns and breathes,
- * with a small one beside it that twinkles. Only opacity, scale and rotation move; nothing travels.
+ * The mark shown while the agent thinks: a thought bubble whose three dots light up one after
+ * another, with the two little circles under it fading in turn like a thought rising. Only opacity
+ * and scale change; nothing moves across the screen.
  */
-export function ThinkingMark({ size = 16 }: { size?: number }) {
+export function ThinkingMark({ size = 20 }: { size?: number }) {
   return (
     <svg className="hx-think" viewBox="0 0 24 24" width={size} height={size} aria-hidden="true">
-      <path className="big" d="M11 5C11.6 10.4 13.6 12.4 19 13C13.6 13.6 11.6 15.6 11 21C10.4 15.6 8.4 13.6 3 13C8.4 12.4 10.4 10.4 11 5Z" />
-      <path className="small" d="M19 1.5C19.25 3.9 19.6 4.25 22 4.5C19.6 4.75 19.25 5.1 19 7.5C18.75 5.1 18.4 4.75 16 4.5C18.4 4.25 18.75 3.9 19 1.5Z" />
+      <rect className="bubble" x="5" y="5" width="16" height="13" rx="4.5" />
+      <circle className="dot" cx="9" cy="11.5" r="1.5" />
+      <circle className="dot" cx="13" cy="11.5" r="1.5" />
+      <circle className="dot" cx="17" cy="11.5" r="1.5" />
+      <circle className="trail near" cx="4.25" cy="20.5" r="1.75" />
+      <circle className="trail far" cx="1.5" cy="23.25" r="1.15" />
     </svg>
   )
 }

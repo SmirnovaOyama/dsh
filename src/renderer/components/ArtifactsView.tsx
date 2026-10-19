@@ -107,7 +107,7 @@ function ArtifactList() {
                   {item.artifact.version > 1 && <span>{t('artifact.versions', { n: item.artifact.version })}</span>}
                 </span>
               </span>
-              {item.status === 'running' && !item.queued ? <ThinkingMark size={14} /> : <Icon icon={ChevronRight} size={16} className="hx-row-chev" />}
+              {item.status === 'running' && !item.queued ? <ThinkingMark size={16} /> : <Icon icon={ChevronRight} size={16} className="hx-row-chev" />}
             </button>
           ))}
         </div>
@@ -600,7 +600,7 @@ const ArtifactCode = memo(function ArtifactCode({ item, follow }: { item: Artifa
       </div>
       {follow && (
         <p className="hx-artifact-writing">
-          <ThinkingMark size={14} />
+          <ThinkingMark size={16} />
           <Shimmer>{t('artifact.writing')}</Shimmer>
         </p>
       )}
@@ -731,7 +731,7 @@ function Frame(props: {
         waiting &&
         (slow || !covered) && (
           <p className={slow ? 'hx-artifact-loading is-late' : 'hx-artifact-loading'} role="status">
-            <ThinkingMark size={14} />
+            <ThinkingMark size={16} />
             <Shimmer>{t('artifact.loading')}</Shimmer>
           </p>
         )
