@@ -32,8 +32,8 @@ const controller = new Controller({ settings: settingsStore, sessions: sessionSt
 
 function backgroundFor(theme: Settings['theme']) {
   const dark = theme === 'dark' || (theme === 'system' && nativeTheme.shouldUseDarkColors)
-  // The ODS page colour, so the window never flashes white before the first paint.
-  return dark ? '#1b1a18' : '#ffffff'
+  // The page colour, so the window never flashes a different shade before the first paint.
+  return dark ? '#252525' : '#fafafa'
 }
 
 function createWindow() {
