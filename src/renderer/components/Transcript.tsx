@@ -1,14 +1,17 @@
-import { ChevronRight, CircleAlert, FileText, LoaderCircle } from 'lucide-react'
+import { ChevronRight, CircleAlert, Download, FileText } from 'lucide-react'
+import { memo, useContext, useEffect, useMemo, useState } from 'react'
 import { artifactIcon, isArtifact, typeLabel, type ArtifactItem } from '../artifacts'
-import { memo, useContext, useMemo, useState } from 'react'
 import type { FileChange, SessionData, TranscriptItem } from '../../shared/types'
 import { clockTime } from '../format'
 import { t, type MessageKey } from '../i18n'
 import { HoldScroll } from '../scroll'
 import { actions, getState, useApp } from '../store'
+import { saveArtifact } from './ArtifactsView'
+import { CopyButton } from './CodeBlock'
 import { RefLabel } from './Composer'
 import { Icon } from './Icon'
 import { Markdown } from './Markdown'
+import { Shimmer, ThinkingMark, ThinkingRow, useSeconds } from './Thinking'
 import { ToolRow, nameFor, type ToolItem } from './ToolRow'
 
 type ReasoningItem = Extract<TranscriptItem, { kind: 'reasoning' }>
@@ -84,35 +87,67 @@ const UserMessage = memo(function UserMessage({ item }: { item: Extract<Transcri
   )
 })
 
-/** An artifact the agent made, as Claude shows it: a card that opens it beside the chat. */
+/** An artifact the agent made, as Claude shows it: a card that opens it beside the chat, with quick copy and save. */
 const ArtifactCard = memo(function ArtifactCard({ item }: { item: ArtifactItem }) {
   const open = useApp((s) => s.showChanges && s.panelTab === 'artifacts' && s.viewedArtifact === item.id)
   const { artifact } = item
   const title = artifact.title || t('artifact.untitled')
+  const writing = item.status === 'running'
+  const [saveError, setSaveError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!saveError) return
+    const timer = window.setTimeout(() => setSaveError(null), 4000)
+    return () => window.clearTimeout(timer)
+  }, [saveError])
+  const saveLabel = saveError ? t('artifact.saveFailed', { error: saveError }) : t('artifact.save')
   return (
-    <button type="button" className="hx-artifact-card" aria-pressed={open} aria-label={t('artifact.open', { title })} onClick={() => actions.viewArtifact(item.id)}>
-      <span className="glyph">
-        <Icon icon={artifactIcon(artifact.type)} size={18} />
-      </span>
-      <span className="text">
-        <span className="title">{title}</span>
-        <span className="sub">
-          {item.status === 'running' ? (
-            <>
-              <Icon icon={LoaderCircle} size={14} className="hx-spin" />
-              <span>{t('artifact.writing')}</span>
-            </>
-          ) : item.status === 'stopped' ? (
-            <span>{t('artifact.stopped')}</span>
-          ) : (
-            <>
-              <span>{typeLabel(artifact)}</span>
-              {artifact.version > 1 && <span>{t('artifact.version', { n: artifact.version })}</span>}
-            </>
-          )}
+    <div className="hx-artifact-card" data-open={open}>
+      <button
+        type="button"
+        className="main"
+        aria-pressed={open}
+        aria-label={t('artifact.open', { title })}
+        onClick={() => (open ? actions.closeArtifacts() : actions.viewArtifact(item.id))}
+      >
+        <span className="glyph">
+          <Icon icon={artifactIcon(artifact.type)} size={18} />
         </span>
+        <span className="text">
+          <span className="title">{title}</span>
+          <span className="sub">
+            {writing ? (
+              <>
+                <ThinkingMark size={14} />
+                <Shimmer>{t('artifact.writing')}</Shimmer>
+              </>
+            ) : item.status === 'stopped' ? (
+              <span>{t('artifact.stopped')}</span>
+            ) : (
+              <>
+                <span>{typeLabel(artifact)}</span>
+                {artifact.version > 1 && <span>{t('artifact.version', { n: artifact.version })}</span>}
+              </>
+            )}
+          </span>
+        </span>
+      </button>
+      {/* The quick actions keep their place while the agent writes, so the card never changes size. */}
+      <span className="acts" data-hidden={writing || undefined}>
+        <CopyButton text={artifact.content} label={t('artifact.copy')} disabled={writing} />
+        <button
+          type="button"
+          className="btn-ghost hx-icon-btn"
+          disabled={writing}
+          aria-label={saveLabel}
+          title={saveLabel}
+          onClick={() => {
+            void saveArtifact(artifact).then((saved) => setSaveError(saved && !saved.ok ? saved.error : null))
+          }}
+        >
+          {saveError ? <Icon icon={CircleAlert} size={16} className="hx-danger" /> : <Icon icon={Download} size={16} />}
+        </button>
       </span>
-    </button>
+    </div>
   )
 })
 
@@ -184,8 +219,8 @@ function stepsLabel(items: StepItem[]): string {
   return t('reasoning.done', { s: Math.max(1, Math.round(thought / 1000)) })
 }
 
-function liveLabel(item: StepItem): string {
-  if (item.kind === 'reasoning') return t('reasoning.live')
+function liveLabel(item: StepItem, seconds: number): string {
+  if (item.kind === 'reasoning') return seconds > 0 ? t('reasoning.liveFor', { s: seconds }) : t('reasoning.live')
   if (item.status === 'waiting') return t('steps.waiting', { action: `${nameFor(item)} ${item.target}` })
   return `${nameFor(item)} ${item.target}`
 }
@@ -195,7 +230,9 @@ const Steps = memo(function Steps({ items, live, changed }: { items: StepItem[];
   const [rendered, setRendered] = useState(false)
   const hold = useContext(HoldScroll)
   const current = items[items.length - 1]
-  const label = live ? liveLabel(current) : stepsLabel(items)
+  const waiting = live && current.kind === 'tool' && current.status === 'waiting'
+  const seconds = useSeconds(live && current.kind === 'reasoning' ? current.startedAt : undefined)
+  const label = live ? liveLabel(current, seconds) : stepsLabel(items)
   const rows: Array<{ type: 'reasoning'; item: ReasoningItem } | { type: 'tools'; id: string; items: ToolItem[] }> = []
   for (const item of items) {
     const last = rows[rows.length - 1]
@@ -215,9 +252,11 @@ const Steps = memo(function Steps({ items, live, changed }: { items: StepItem[];
           setOpen((o) => !o)
         }}
       >
-        <Icon icon={ChevronRight} size={16} className="hx-chev" />
-        {live && current.kind === 'tool' && current.status === 'running' && <Icon icon={LoaderCircle} size={14} className="hx-spin" />}
-        <span className={live ? 'label live' : 'label'}>{label}</span>
+        <span className="hx-lead" data-live={(live && !waiting) || undefined}>
+          <Icon icon={ChevronRight} size={16} className="hx-chev" />
+          {live && <ThinkingMark />}
+        </span>
+        {live && !waiting ? <Shimmer className="label">{label}</Shimmer> : <span className="label">{label}</span>}
       </button>
       <div className={`hx-disc ${open ? 'is-open' : ''}`}>
         <div>
@@ -288,13 +327,13 @@ export function Transcript({ session, changes }: { session: SessionData; changes
                 <ItemView key={part.item.id} item={part.item} isLast={part.item.id === lastId} session={session} />
               ),
             )}
-            {pending && index === blocks.length - 1 && <p className="hx-pending" aria-hidden="true" />}
+            {pending && index === blocks.length - 1 && <ThinkingRow />}
           </section>
         ),
       )}
       {pending && lastIsUser && (
         <section className="hx-turn">
-          <p className="hx-pending" aria-hidden="true" />
+          <ThinkingRow />
         </section>
       )}
     </>

@@ -83,6 +83,7 @@ export function App() {
   const panel = useApp((s) => s.showChanges && (s.chatId !== null || (s.hasApiKey && s.workspace !== null)))
   const chat = useApp((s) => s.chat)
   const panelMotion = usePresence(panel, 220)
+  const panelPane = useApp((s) => (s.panelTab === 'artifacts' ? 'artifacts' : 'changes'))
   const [searchTick, setSearchTick] = useState(0)
 
   setLocale(locale)
@@ -111,7 +112,7 @@ export function App() {
       <Sidebar searchTick={searchTick} />
       <Resizer pane="sidebar" />
       <ChatView />
-      {panelMotion && panelMotion !== 'out' && <Resizer pane="changes" />}
+      {panelMotion && panelMotion !== 'out' && <Resizer key={panelPane} pane={panelPane} />}
       {panelMotion && <ChangesPanel chat={chat} motion={panelMotion} />}
     </div>
   )

@@ -16,7 +16,7 @@ interface MenuProps {
   children: ReactNode
 }
 
-const ITEMS = '[role="menuitem"], [role="menuitemradio"]'
+const ITEMS = '[role="menuitem"]:not(:disabled), [role="menuitemradio"]:not(:disabled)'
 
 /** A popover menu in a portal, placed against its anchor, so opening it never moves the layout. */
 export function Menu({ anchor, open, onClose, label, side = 'bottom', align = 'start', matchWidth, minWidth, children }: MenuProps) {
@@ -29,8 +29,11 @@ export function Menu({ anchor, open, onClose, label, side = 'bottom', align = 's
     if (open && anchor) setRect(anchor.getBoundingClientRect())
   }, [open, anchor])
 
+  // The menu is in the page only once it has been placed, so wait for that before wiring it up;
+  // otherwise the first click inside a freshly opened menu reads as a click outside and closes it.
+  const placed = open && rect !== null
   useEffect(() => {
-    if (!open) return
+    if (!placed) return
     const menu = ref.current
     const items = () => Array.from(menu?.querySelectorAll<HTMLElement>(ITEMS) ?? [])
     const first = items().find((el) => el.getAttribute('aria-checked') === 'true') ?? items()[0]
@@ -74,7 +77,7 @@ export function Menu({ anchor, open, onClose, label, side = 'bottom', align = 's
       window.removeEventListener('resize', onResize)
       window.removeEventListener('blur', onResize)
     }
-  }, [open, anchor])
+  }, [placed, anchor])
 
   if (!open || !rect) return null
   const style: CSSProperties = {
@@ -102,10 +105,11 @@ interface MenuItemProps {
   desc?: string
   sub?: string
   danger?: boolean
+  disabled?: boolean
   children: ReactNode
 }
 
-export function MenuItem({ onSelect, checked, icon, desc, sub, danger, children }: MenuItemProps) {
+export function MenuItem({ onSelect, checked, icon, desc, sub, danger, disabled, children }: MenuItemProps) {
   const isChoice = checked !== undefined
   const classes = ['oy-menu-item', desc || sub ? 'has-desc' : '', danger ? 'is-danger' : ''].filter(Boolean).join(' ')
   return (
@@ -115,6 +119,7 @@ export function MenuItem({ onSelect, checked, icon, desc, sub, danger, children 
       role={isChoice ? 'menuitemradio' : 'menuitem'}
       aria-checked={isChoice ? checked : undefined}
       tabIndex={-1}
+      disabled={disabled}
       onClick={onSelect}
     >
       {icon}

@@ -83,3 +83,30 @@ export const pomodoroV2 = pomodoroV1
   show()
 </script>`,
   )
+
+export const tomatoSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="240" height="240">
+  <path d="M60 30c-25 0-44 17-44 42 0 24 19 38 44 38s44-14 44-38c0-25-19-42-44-42Z" fill="#e5533d"/>
+  <path d="M36 52c4-8 12-13 20-14" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="5" stroke-linecap="round"/>
+  <path d="M60 33c-3-6-10-9-17-8 5 3 8 6 9 10-6-1-12 1-16 5 8 1 16 1 24-2 8 3 16 3 24 2-4-4-10-6-16-5 1-4 4-7 9-10-7-1-14 2-17 8Z" fill="#3f8a4a"/>
+  <path d="M60 33c0-7 2-13 6-18" fill="none" stroke="#3f8a4a" stroke-width="4" stroke-linecap="round"/>
+</svg>`
+
+export const pomodoroGuide = `# 番茄鐘使用說明
+
+把工作切成一段一段，每段專心 25 分鐘，中間休息 5 分鐘。
+
+## 開始一輪
+
+1. 在上面選「專心 25 分」
+2. 按「開始」，倒數會出現在中間
+3. 想停一下就按「暫停」，再按一次會接著倒數
+
+## 休息
+
+一輪結束後切到「休息 5 分」，再按「開始」。每專心四輪，可以休息久一點。
+
+## 小提醒
+
+- 今天完成的輪數記在最下面，重新整理頁面會歸零
+- 倒數結束時會響一聲，記得打開聲音
+`

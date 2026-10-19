@@ -18,6 +18,7 @@ import {
   type WorkspaceInfo,
 } from '../shared/types'
 import { api } from './api'
+import { anyArtifacts, isArtifact, type ArtifactItem } from './artifacts'
 
 export interface ChatState {
   session: SessionData
@@ -48,6 +49,8 @@ export interface AppState {
   panelTab: 'changes' | 'files' | 'artifacts'
   /** The transcript item holding the artifact version open in the panel, or null for the list. */
   viewedArtifact: string | null
+  /** The panel as it was before an artifact took it over, so closing the artifact puts it back. */
+  panelBefore: { show: boolean; tab: 'changes' | 'files' } | null
   /** The file open in the files view, or null for the file list. */
   viewedFile: string | null
   /** Files and lines pointed at for the next message. */
@@ -92,6 +95,7 @@ let state: AppState = {
   selectedFile: null,
   panelTab: 'changes',
   viewedArtifact: null,
+  panelBefore: null,
   viewedFile: null,
   refs: [],
   draft: { model: DEFAULT_SETTINGS.model, permissionMode: DEFAULT_SETTINGS.permissionMode },
@@ -152,6 +156,20 @@ function updateChat(sessionId: string, fn: (chat: ChatState) => Partial<ChatStat
   set((s) => (s.chat && s.chat.session.id === sessionId ? { chat: { ...s.chat, ...fn(s.chat) } } : {}))
 }
 
+/**
+ * A version that never got finished leaves the panel for the newest one that did. A first version that
+ * was stopped stays, so the person can see what got written; one that failed has nothing to show.
+ */
+function leaveUnfinished(item: ArtifactItem) {
+  const items = state.chat?.session.items ?? []
+  const done = items.filter((i): i is ArtifactItem => isArtifact(i) && i.status === 'done' && i.artifact.id === item.artifact.id)
+  const newest = done.reduce<ArtifactItem | null>((best, i) => (!best || i.artifact.version >= best.artifact.version ? i : best), null)
+  if (newest) actions.viewArtifact(newest.id)
+  else if (item.status === 'stopped') return
+  else if (anyArtifacts(items)) actions.viewArtifact(null)
+  else actions.closeArtifacts()
+}
+
 function handleEvent(event: AgentEvent) {
   switch (event.type) {
     case 'item': {
@@ -160,6 +178,7 @@ function handleEvent(event: AgentEvent) {
       updateChat(event.sessionId, (chat) => ({ session: { ...chat.session, items: upsertItem(chat.session.items, item) } }))
       // A new artifact opens beside the chat as the agent starts writing it, as it does in Claude.
       if (isNew && item.kind === 'tool' && item.artifact && item.status === 'running') actions.viewArtifact(item.id)
+      if (isArtifact(item) && (item.status === 'error' || item.status === 'stopped') && state.viewedArtifact === item.id) leaveUnfinished(item)
       break
     }
     case 'remove':
@@ -262,10 +281,13 @@ export const actions = {
     }))
   },
 
-  async send(text: string) {
+  /** Sends a message. Pointed-at files go with it, unless the message comes from somewhere other than the composer. */
+  async send(text: string, opts: { withRefs?: boolean } = {}) {
     const trimmed = text.trim()
     if (!trimmed) return
-    const { chat, chatId, workspace, draft, refs } = state
+    const withRefs = opts.withRefs ?? true
+    const { chat, chatId, workspace, draft } = state
+    const refs = withRefs ? state.refs : []
     // A conversation is still loading; sending now would start a new one by mistake.
     if (!chat && chatId) return
     if (chat) {
@@ -278,7 +300,7 @@ export const actions = {
         sessions: placeMeta(s.sessions, metaOf(chat.session), true),
         activeAt: { ...s.activeAt, [chat.session.id]: Date.now() },
       }))
-      set({ refs: [] })
+      if (withRefs) set({ refs: [] })
       await api.agent.send(chat.session.id, trimmed, refs)
       return
     }
@@ -303,7 +325,7 @@ export const actions = {
       sessions: placeMeta(s.sessions, metaOf(session), true),
       activeAt: { ...s.activeAt, [id]: now },
     }))
-    set({ refs: [] })
+    if (withRefs) set({ refs: [] })
     await api.agent.start(workspace.path, trimmed, { id, model: draft.model, permissionMode: draft.permissionMode }, refs)
   },
 
@@ -369,16 +391,25 @@ export const actions = {
   },
 
   toggleChanges(show?: boolean) {
+    // The panel button always brings back changes and files; artifacts open from their own places.
+    if (state.showChanges && state.panelTab === 'artifacts' && show !== false) {
+      writePrefs({ showChanges: true })
+      set({ panelTab: 'changes', panelBefore: null })
+      return
+    }
     const next = show ?? !state.showChanges
     writePrefs({ showChanges: next })
-    // The panel button always brings back changes and files; artifacts open from their own places.
-    set((s) => ({ showChanges: next, panelTab: s.panelTab === 'artifacts' && next ? 'changes' : s.panelTab }))
+    set((s) => ({ showChanges: next, panelTab: s.panelTab === 'artifacts' && next ? 'changes' : s.panelTab, panelBefore: null }))
   },
 
-  /** Closes an artifact, or the list of them, along with the panel. */
+  /**
+   * Closes an artifact, or the list of them. The panel goes back to what it showed before, or closes
+   * if it was closed; while it closes it keeps showing the artifact, so nothing swaps as it fades.
+   */
   closeArtifacts() {
-    writePrefs({ showChanges: false })
-    set({ showChanges: false, panelTab: 'changes', viewedArtifact: null })
+    const before = state.panelBefore
+    if (before?.show) set({ panelTab: before.tab, panelBefore: null })
+    else set({ showChanges: false, panelBefore: null })
   },
 
   selectFile(path: string) {
@@ -392,8 +423,12 @@ export const actions = {
 
   /** Opens one artifact version in the panel by its transcript item, or the list with null. */
   viewArtifact(itemId: string | null) {
-    writePrefs({ showChanges: true })
-    set({ viewedArtifact: itemId, panelTab: 'artifacts', showChanges: true })
+    set((s) => ({
+      viewedArtifact: itemId,
+      panelTab: 'artifacts',
+      showChanges: true,
+      panelBefore: s.showChanges && s.panelTab === 'artifacts' ? s.panelBefore : { show: s.showChanges, tab: s.panelTab === 'artifacts' ? 'changes' : s.panelTab },
+    }))
   },
 
   viewFile(path: string | null) {

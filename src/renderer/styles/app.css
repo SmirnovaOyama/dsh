@@ -204,7 +204,6 @@ input, textarea, select { font: inherit; color: inherit; }
   font-size: 14px; line-height: 20px; color: var(--text-muted);
 }
 .hx-disclose:hover { color: var(--text); background: var(--surface-hover); }
-.hx-disclose .live { animation: hx-breathe-text 1200ms var(--ease-standard) infinite alternate; }
 @keyframes hx-breathe-text { from { opacity: 0.55; } to { opacity: 1; } }
 .hx-chev { transition: rotate var(--duration-base) var(--ease-out); }
 [aria-expanded="true"] > .hx-chev { rotate: 90deg; }
@@ -214,7 +213,15 @@ input, textarea, select { font: inherit; color: inherit; }
 
 .hx-steps { display: flex; flex-direction: column; min-width: 0; }
 .hx-steps .hx-disclose { max-width: calc(100% + 8px); }
-.hx-steps .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hx-steps .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* While the agent works, the thinking mark sits where the chevron goes, so the label never moves;
+   pointing at the row brings the chevron back. */
+.hx-lead { flex-shrink: 0; display: inline-grid; width: 16px; height: 16px; }
+.hx-lead > * { grid-area: 1 / 1; transition: opacity var(--duration-quick) var(--ease-standard); }
+.hx-lead[data-live] > .hx-chev, .hx-lead:not([data-live]) > .hx-think { opacity: 0; }
+:is(.hx-disclose:hover, .hx-disclose:focus-visible) > .hx-lead[data-live] > .hx-chev { opacity: 1; }
+:is(.hx-disclose:hover, .hx-disclose:focus-visible) > .hx-lead[data-live] > .hx-think { opacity: 0; }
+[aria-expanded="true"] > .hx-lead > .hx-chev { rotate: 90deg; }
 .hx-steps-body { display: flex; flex-direction: column; gap: 8px; padding: 4px 0 4px 24px; }
 .hx-step-thought { font-size: 14px; line-height: 22px; color: var(--text-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
 .hx-tools { display: flex; flex-direction: column; }
@@ -272,6 +279,7 @@ button.hx-tool:hover { background: var(--surface-hover); }
 /* ── composer ────────────────────────────────────────────────── */
 .hx-composer { position: sticky; bottom: 0; z-index: 4; flex-shrink: 0; padding: 8px var(--column-pad) 14px; background: linear-gradient(to bottom, transparent, var(--bg) 16px); }
 .hx-composer-inner { position: relative; max-width: calc(var(--column-width) - 2 * var(--column-pad)); margin-inline: auto; display: flex; flex-direction: column; gap: 8px; container-type: inline-size; }
+.hx-changes.is-artifacts { flex-basis: var(--artifacts-width); }
 .hx-field {
   border: 1px solid var(--border-strong); border-radius: var(--radius-xl); background: var(--field); box-shadow: var(--shadow-sm);
   transition: border-color var(--duration-quick) var(--ease-standard);
@@ -465,6 +473,7 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-menu .oy-menu-item .desc { display: block; font-size: 13px; line-height: 18px; font-weight: 400; color: var(--text-muted); }
 .hx-menu .oy-menu-item .sub { display: block; font-size: 12px; line-height: 16px; font-weight: 400; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hx-menu .oy-menu-item.is-danger { color: var(--danger); }
+.hx-menu .oy-menu-item:disabled { opacity: 0.45; cursor: default; background: none; }
 .hx-menu .oy-menu-item > .oy-icon:first-child { color: var(--text-muted); }
 .hx-menu .oy-menu-item.is-danger > .oy-icon:first-child { color: var(--danger); }
 .hx-menu .oy-menu-item:focus-visible { outline-offset: -2px; }
@@ -528,6 +537,7 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-changes[data-motion="in"] { animation: hx-pane-in var(--duration-slow) var(--ease-out); }
 .hx-changes[data-motion="out"] { animation: hx-pane-out var(--duration-base) var(--ease-standard) forwards; }
 .hx-changes:is([data-motion="in"], [data-motion="out"]) > * { min-width: min(var(--changes-width), calc(100vw - var(--sidebar-width) - 420px)); }
+.hx-changes.is-artifacts:is([data-motion="in"], [data-motion="out"]) > * { min-width: min(var(--artifacts-width), calc(100vw - var(--sidebar-width) - 420px)); }
 .hx-test-result { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; transition: opacity var(--duration-quick) var(--ease-standard); }
 .hx-test-result .st { animation: hx-fade-in var(--duration-base) var(--ease-standard) both; }
 .hx-test-result .st + .st { animation-delay: 60ms; }
@@ -546,26 +556,59 @@ button.hx-tool:hover { background: var(--surface-hover); }
 
 /* The streaming caret sits at the end of the last line of text. */
 .hx-prose.is-streaming > :last-child:not(ul, ol, .hx-code, .hx-table, blockquote)::after,
-.hx-prose.is-streaming > :is(ul, ol):last-child > li:last-child::after,
-.hx-pending::after {
+.hx-prose.is-streaming > :is(ul, ol):last-child > li:last-child::after {
   content: ""; display: inline-block; width: 2px; height: 1.05em; margin-inline-start: 2px; vertical-align: -0.15em;
   border-radius: 1px; background: var(--text); animation: hx-breathe 1200ms var(--ease-standard) infinite alternate;
 }
-.hx-pending { min-height: 22px; }
+
+/* ── thinking ────────────────────────────────────────────────── */
+/* The sparkle turns and breathes in place; the small one twinkles. Nothing glows and nothing travels. */
+.hx-think { flex-shrink: 0; overflow: visible; color: var(--accent); }
+.hx-think path { fill: currentColor; transform-box: view-box; }
+.hx-think .big { transform-origin: 11px 13px; animation: hx-think-turn 2600ms var(--ease-standard) infinite; }
+.hx-think .small { transform-origin: 19px 4.5px; color: var(--accent-ink); animation: hx-think-twinkle 2600ms var(--ease-standard) infinite; }
+@keyframes hx-think-turn {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(45deg) scale(0.78); }
+  100% { transform: rotate(90deg) scale(1); }
+}
+@keyframes hx-think-twinkle {
+  0%, 100% { opacity: 0.2; transform: scale(0.55); }
+  50% { opacity: 1; transform: scale(1); }
+}
+/* A soft band of light sweeps across a label while the work goes on. */
+.hx-shimmer {
+  color: var(--text-muted);
+  background: linear-gradient(90deg, var(--text-muted) 0%, var(--text-muted) 38%, var(--text) 50%, var(--text-muted) 62%, var(--text-muted) 100%);
+  background-size: 260% 100%; background-position: 100% 0;
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  animation: hx-shimmer 2400ms linear infinite;
+}
+@keyframes hx-shimmer { from { background-position: 100% 0; } to { background-position: -160% 0; } }
+.hx-thinking { display: flex; align-items: center; gap: 8px; min-height: 32px; font-size: 14px; line-height: 20px; animation: hx-fade-in var(--duration-base) var(--ease-standard) both; }
+@media (prefers-reduced-motion: reduce) {
+  .hx-shimmer { -webkit-text-fill-color: currentColor; background: none; }
+  .hx-think .small { opacity: 0.6; }
+}
 .hx-scroll-content { flex: 1 0 auto; display: flex; flex-direction: column; }
 .oy-icon.hx-fill { fill: currentColor; stroke: none; }
 .hx-version { margin-top: 32px; font-size: 13px; line-height: 18px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .hx-search input::-webkit-search-cancel-button { display: none; }
 
 /* ── artifacts ───────────────────────────────────────────────── */
-/* The card in the conversation: a tile with the kind of thing, its title, and what it is. */
+/* The card in the conversation: a tile with the kind of thing, its title and what it is, then quick actions. */
 .hx-artifact-card {
-  display: flex; align-items: center; gap: 12px; width: min(100%, 26rem); min-height: 64px; padding: 8px 14px 8px 8px;
-  border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--surface); text-align: start; color: var(--text);
+  display: flex; align-items: center; gap: 4px; width: min(100%, 28rem); min-height: 64px; padding-inline-end: 8px;
+  border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--surface);
   transition: background-color var(--duration-quick) var(--ease-standard), border-color var(--duration-quick) var(--ease-standard);
 }
-.hx-artifact-card:hover { background: var(--surface-hover); }
-.hx-artifact-card[aria-pressed="true"] { border-color: var(--border-strong); background: var(--surface-hover); }
+.hx-artifact-card:hover, .hx-artifact-card[data-open="true"] { background: var(--surface-hover); }
+.hx-artifact-card[data-open="true"] { border-color: var(--border-strong); }
+.hx-artifact-card .main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; align-self: stretch; padding: 8px 4px 8px 8px; border-radius: var(--radius-lg); text-align: start; color: var(--text); }
+.hx-artifact-card .acts { flex-shrink: 0; display: inline-flex; gap: 2px; transition: opacity var(--duration-quick) var(--ease-standard); }
+.hx-artifact-card .acts[data-hidden] { visibility: hidden; opacity: 0; }
+.hx-artifact-card .acts .hx-icon-btn { width: 30px; height: 30px; color: var(--text-muted); }
+.hx-artifact-card .acts .hx-icon-btn:hover { color: var(--text); background: var(--surface-pressed); }
 .hx-artifact-card .glyph, .hx-artifact-row .glyph {
   flex-shrink: 0; display: grid; place-items: center; width: 48px; height: 48px;
   border-radius: var(--radius-md); background: var(--surface-muted); color: var(--text-muted);
@@ -574,17 +617,19 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-artifact-card .title, .hx-artifact-row .title { font-size: 14px; line-height: 20px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Phrases sit apart with space, never a separator character. */
 .hx-artifact-card .sub, .hx-artifact-row .sub { display: flex; align-items: center; gap: 10px; font-size: 12px; line-height: 16px; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.hx-artifact-card .sub .hx-spin { margin-inline-end: -4px; }
+.hx-artifact-card .sub .hx-think { margin-inline-end: -4px; }
 
 /* The list in the panel. */
 .hx-artifact-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; padding: 8px 8px 24px; }
 .hx-artifact-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 6px 8px 6px 6px; border-radius: var(--radius-md); text-align: start; color: var(--text); }
 .hx-artifact-row:hover { background: var(--surface-hover); }
 .hx-artifact-row .glyph { width: 36px; height: 36px; border-radius: var(--radius-sm); }
+.hx-artifact-row .hx-row-chev { flex-shrink: 0; color: var(--text-disabled); }
+.hx-artifact-row:hover .hx-row-chev { color: var(--text-muted); }
 
 /* An open artifact: view switch, title, then versions and actions, all 28px tall so nothing moves. */
 .hx-artifact-head { gap: 6px; padding-inline-start: 12px; }
-.hx-artifact-head .title { min-width: 0; margin-inline-start: 4px; font-size: 14px; line-height: 20px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-artifact-head .title { flex: 0 1 auto; min-width: 5em; margin-inline-start: 4px; font-size: 14px; line-height: 20px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hx-artifact-head .hx-copy { width: 28px; height: 28px; color: var(--text-muted); }
 .hx-artifact-head .hx-copy:hover { color: var(--text); }
 .hx-iconseg { flex-shrink: 0; display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--radius-md); background: var(--surface-muted); }
@@ -598,14 +643,91 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-versions { flex-shrink: 0; display: inline-flex; align-items: center; gap: 0; margin-inline-end: 4px; font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .hx-versions .hx-icon-btn { width: 24px !important; height: 24px !important; }
 .hx-versions .hx-icon-btn:disabled { opacity: 0.35; }
-.hx-versions .n { min-width: 4em; text-align: center; white-space: nowrap; }
+.hx-version-pick { height: 28px; padding: 0 4px 0 8px; gap: 2px; font-size: 12px; color: var(--text-muted); }
+.hx-version-pick:hover, .hx-version-pick[aria-expanded="true"] { color: var(--text); }
+.hx-versions .n { white-space: nowrap; }
+.hx-version-pick .short { display: none; }
+/* A narrow panel keeps the title readable: stepping, copying and the way back to the list stay in
+   the version and more menus, and the version shortens to its number. */
+@container (max-width: 520px) { .hx-versions .step { display: none; } }
+@container (max-width: 460px) { .hx-artifact-head > :is(.hx-copy, .hx-to-list) { display: none; } }
+@container (max-width: 420px) {
+  .hx-version-pick .long { display: none; }
+  .hx-version-pick .short { display: inline-grid; }
+  .hx-artifact-head .title { min-width: 4em; }
+}
 .hx-code-lines .num.is-static { cursor: default; }
 .hx-code-lines .num.is-static:hover { color: var(--text-disabled); }
 .hx-artifact-writing { display: flex; align-items: center; gap: 6px; padding: 8px 0 0 52px; font-size: 12px; color: var(--text-muted); }
 
-/* Pages render on white, as they would in a browser; the frame fades in once it has loaded. */
-.hx-artifact-frame { flex: 1; min-height: 0; display: flex; background: #fff; }
-.hx-artifact-frame iframe { flex: 1; width: 100%; border: 0; background: #fff; opacity: 0; transition: opacity var(--duration-base) var(--ease-standard); }
+.hx-artifact-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.hx-artifact-diff { padding-top: 0; }
+
+/* Pages render on white, as they would in a browser, and fade in once their document is ready; until
+   then a quiet note says the preview is loading. A page that picks a dark scheme paints its own canvas.
+   A narrower device width centres the page on the panel colour with a hairline either side. */
+.hx-artifact-frame { position: relative; flex: 1; min-height: 0; display: flex; justify-content: center; background: var(--bg); }
+.hx-artifact-frame:not([data-device="desktop"]) { padding: 16px 0; background: var(--surface-muted); }
+.hx-artifact-frame iframe { flex: 1; width: 100%; border: 0; background: #fff; color-scheme: light; opacity: 0; transition: opacity var(--duration-base) var(--ease-standard), max-width var(--duration-base) var(--ease-out); }
+.hx-artifact-frame[data-device="tablet"] iframe { flex: 0 1 768px; max-width: 768px; border-radius: var(--radius-md); box-shadow: 0 0 0 1px var(--border); }
+.hx-artifact-frame[data-device="phone"] iframe { flex: 0 1 390px; max-width: 390px; border-radius: var(--radius-lg); box-shadow: 0 0 0 1px var(--border); }
 .hx-artifact-frame iframe[data-shown="true"] { opacity: 1; }
+.hx-artifact-loading {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0; padding: 24px;
+  font-size: 13px; line-height: 18px; color: var(--text-muted); text-align: center; pointer-events: none;
+  animation: hx-fade-in var(--duration-base) var(--ease-standard) 300ms both;
+}
+.hx-artifact-loading.is-failed { animation-delay: 0ms; overflow-wrap: anywhere; }
 .hx-artifact-doc { padding: 20px 28px 40px; }
+
+/* Expanded, the artifact covers the window from where it is, so the page in it keeps running; the
+   panel stops containing it meanwhile. It fades in like the panes. */
+.hx-artifact-full {
+  position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; background: var(--bg); container-type: inline-size;
+  animation: hx-fade-in var(--duration-base) var(--ease-standard) both;
+}
+.hx-changes:has(> .hx-artifact-full) { container-type: normal; overflow: visible; }
+:root[data-platform="darwin"] .hx-artifact-full .hx-artifact-head { padding-inline-start: 84px; min-height: var(--titlebar-height, 52px); }
+
+/* A version the agent never finished says so above its code. */
+.hx-artifact-unfinished {
+  flex-shrink: 0; display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 4px 10px 4px 20px;
+  border-bottom: 1px solid var(--border); font-size: 13px; line-height: 18px; color: var(--text-muted);
+}
+.hx-artifact-unfinished > .oy-icon { flex-shrink: 0; }
+.hx-artifact-unfinished .text { flex: 1; min-width: 0; }
+.hx-artifact-unfinished .btn-ghost { flex-shrink: 0; height: 28px; padding: 0 8px; font-size: 13px; color: var(--accent-ink); }
+
+/* Notes float over the foot of the artifact, one above the other. */
+.hx-artifact-notes {
+  position: absolute; inset: auto 12px 12px; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none;
+}
+.hx-artifact-notes > * { pointer-events: auto; }
+
+/* The page failed: say so plainly, and offer to hand it to the agent. */
+.hx-artifact-error {
+  align-self: stretch; display: flex; align-items: flex-start; gap: 10px; padding: 12px 8px 12px 14px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-md);
+  animation: hx-fade-in var(--duration-base) var(--ease-standard) both;
+}
+.hx-artifact-error > .oy-icon { flex-shrink: 0; margin-top: 2px; color: var(--danger); }
+.hx-artifact-error .text { flex: 1; min-width: 0; }
+.hx-artifact-error .title { font-size: 14px; line-height: 20px; font-weight: 600; }
+/* All of the error is readable here, since all of it goes to the agent; a long one scrolls. */
+.hx-artifact-error .detail {
+  margin-top: 2px; max-height: 72px; overflow-y: auto; font-family: var(--font-mono); font-size: 12px; line-height: 18px;
+  color: var(--text-muted); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.hx-artifact-error .more { margin-top: 2px; font-size: 12px; line-height: 16px; color: var(--text-muted); }
+.hx-artifact-error .hx-fix { flex-shrink: 0; height: 28px; padding: 0 10px; gap: 6px; font-size: 13px; }
+.hx-artifact-error .hx-icon-btn { width: 28px; height: 28px; color: var(--text-muted); }
+
+.hx-artifact-notice {
+  max-width: 100%; display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 4px 0 12px;
+  border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-md);
+  font-size: 13px; line-height: 18px; animation: hx-fade-in var(--duration-base) var(--ease-standard) both;
+}
+.hx-artifact-notice:not(:has(.btn-ghost)) { padding-inline-end: 12px; }
+.hx-artifact-notice .text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hx-artifact-notice .btn-ghost { height: 28px; font-size: 13px; color: var(--accent-ink); }
 .hx-artifact-doc .hx-prose { font-size: 15px; line-height: 24px; }

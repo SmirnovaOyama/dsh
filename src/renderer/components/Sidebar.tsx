@@ -24,7 +24,7 @@ function SessionRow({ meta, current, now }: { meta: SessionMeta; current: boolea
       title={meta.title}
     >
       <span className="t">{meta.title || t('header.newChat')}</span>
-      <span className={`s ${meta.status === 'waiting' ? 'is-waiting' : ''}`}>{trail}</span>
+      <span className={`s ${meta.status === 'waiting' ? 'is-waiting' : meta.status === 'running' ? 'hx-shimmer' : ''}`}>{trail}</span>
     </button>
   )
 }

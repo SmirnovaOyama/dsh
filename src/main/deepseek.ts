@@ -50,6 +50,8 @@ export interface ChatResult {
   content: string
   reasoning: string
   toolCalls: ToolCall[]
+  /** Where each of toolCalls sat in the stream, the index onToolCall and onToolArguments were given. */
+  toolCallIndexes?: number[]
   finishReason: string | null
   usage: ApiUsage | null
 }
@@ -218,13 +220,12 @@ export async function streamChat(request: ChatRequest, handlers: StreamHandlers 
     throw toNetworkError(error, request.signal)
   }
 
-  result.toolCalls = partial
-    .filter((call) => call && call.name)
-    .map((call, index) => ({
-      id: call.id || `call_${index}`,
-      type: 'function' as const,
-      function: { name: call.name, arguments: call.arguments || '{}' },
-    }))
+  result.toolCallIndexes = []
+  result.toolCalls = partial.flatMap((call, index) => {
+    if (!call?.name) return []
+    result.toolCallIndexes!.push(index)
+    return [{ id: call.id || `call_${index}`, type: 'function' as const, function: { name: call.name, arguments: call.arguments || '{}' } }]
+  })
   return result
 }
 

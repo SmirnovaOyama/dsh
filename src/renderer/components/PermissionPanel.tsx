@@ -94,6 +94,8 @@ export function PermissionPanel({ request }: { request: PermissionRequest }) {
 /** Enter allows and Esc declines, unless focus is somewhere that uses those keys itself. */
 export function permissionKey(event: KeyboardEvent, composerHasText: boolean): boolean {
   if (event.isComposing || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return false
+  // A dialog over the window, such as an expanded artifact, hides the prompt; its keys are its own.
+  if (document.querySelector('[aria-modal="true"]')) return false
   const target = event.target as HTMLElement | null
   const inComposer = target?.closest('.hx-field') !== null && target?.tagName === 'TEXTAREA'
   const inControl = !inComposer && !!target?.closest('button, input, textarea, select, a, [role="menu"]')

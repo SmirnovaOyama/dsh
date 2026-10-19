@@ -10,6 +10,8 @@ const CSP = [
   "img-src 'self' data:",
   "font-src 'self' data:",
   "connect-src 'self'",
+  // Artifact previews load from their own scheme, with a policy of their own (src/main/artifactPreview.ts).
+  "frame-src dsh-artifact:",
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",

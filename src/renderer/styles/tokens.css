@@ -65,6 +65,8 @@
   --column-width: 46rem;
   --column-pad: 32px;
   --changes-width: clamp(320px, 30vw, 460px);
+  /* Artifacts open wider than the changes panel, the way Claude gives them half the window. */
+  --artifacts-width: clamp(380px, 42vw, 780px);
   --titlebar-height: 0px;
 
   color-scheme: light;

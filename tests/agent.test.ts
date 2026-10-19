@@ -28,7 +28,7 @@ afterEach(async () => {
   await rm(ws, { recursive: true, force: true })
 })
 
-type Step = Partial<ChatResult> & { reasoningText?: string; error?: Error; tokens?: number }
+type Step = Partial<ChatResult> & { reasoningText?: string; error?: Error; tokens?: number; stream?: Array<[index: number, name: string, args: string]> }
 
 /** A fake DeepSeek that answers each request with the next scripted step. */
 function scripted(steps: Step[], seen: ChatRequest[] = []) {
@@ -39,11 +39,16 @@ function scripted(steps: Step[], seen: ChatRequest[] = []) {
     if (step.error) throw step.error
     if (step.reasoningText) handlers.onReasoning?.(step.reasoningText)
     if (step.content) handlers.onContent?.(step.content)
+    for (const [index, name, args] of step.stream ?? []) {
+      handlers.onToolCall?.(index, name)
+      handlers.onToolArguments?.(index, args)
+    }
     return {
       content: step.content ?? '',
       reasoning: step.reasoningText ?? '',
       toolCalls: step.toolCalls ?? [],
-      finishReason: step.toolCalls?.length ? 'tool_calls' : 'stop',
+      toolCallIndexes: step.toolCallIndexes,
+      finishReason: step.finishReason ?? (step.toolCalls?.length ? 'tool_calls' : 'stop'),
       usage: { prompt_tokens: step.tokens ?? 10, completion_tokens: 5, total_tokens: (step.tokens ?? 10) + 5 } satisfies ApiUsage,
     }
   }
@@ -260,5 +265,72 @@ describe('compacting', () => {
     expect(midTurn).toHaveLength(1)
     expect(midTurn[0].content).toMatch(/Continue the work/)
     expect(compactedMessages('S', history.slice(0, 1), user).map((m) => m.role)).toEqual(['user', 'assistant', 'user'])
+  })
+})
+
+describe('artifacts in the agent loop', () => {
+  const call = (id: string, args: Record<string, unknown> | string) => ({
+    id,
+    type: 'function' as const,
+    function: { name: 'artifact', arguments: typeof args === 'string' ? args : JSON.stringify(args) },
+  })
+  const create = { command: 'create', id: 'timer', title: '番茄鐘', type: 'html', content: '<b>25:00</b>' }
+
+  it('answers a call cut off at the output limit instead of running it, and keeps its half out of the history', async () => {
+    const seen: ChatRequest[] = []
+    const cut = call('c2', '{"command":"create","id":"big","title":"Big","type":"html","content":"<p>so much')
+    const { controller } = await setup([{ toolCalls: [call('c1', create), cut], finishReason: 'length' }, { content: '好' }], seen)
+    const meta = await controller.start(ws, 'make two', opts('ask'))
+    const snap = await idle(controller, meta.id)
+    const tools = snap.session.items.filter((i) => i.kind === 'tool')
+    expect(tools).toMatchObject([
+      { status: 'done', artifact: { id: 'timer', version: 1 } },
+      { status: 'error', error: expect.stringMatching(/output limit/) },
+    ])
+    const assistant = seen[1].messages.find((m) => m.role === 'assistant' && m.tool_calls) as Extract<ChatMessage, { role: 'assistant' }>
+    expect(assistant.tool_calls?.map((c) => c.function.arguments)).toEqual([JSON.stringify(create), '{}'])
+    expect(seen[1].messages.at(-1)).toMatchObject({ role: 'tool', tool_call_id: 'c2', content: expect.stringMatching(/output limit/) })
+  })
+
+  it('shows reading an artifact as its own step, not a new version', async () => {
+    const { controller } = await setup([{ toolCalls: [call('c1', create)] }, { toolCalls: [call('c2', { command: 'view', id: 'timer' })] }, { content: 'ok' }])
+    const meta = await controller.start(ws, 'look', opts('ask'))
+    const snap = await idle(controller, meta.id)
+    const view = snap.session.items.find((i) => i.kind === 'tool' && i.callId === 'c2')
+    expect(view).toMatchObject({ name: 'artifact_view', status: 'done', info: { lines: 1 } })
+    expect(view && 'artifact' in view ? view.artifact : undefined).toBeUndefined()
+  })
+
+  it('drafts artifacts in the order of their calls, after other tools and reads', async () => {
+    const second = { ...create, id: 'notes', title: 'Notes', type: 'markdown', content: '# hi' }
+    const { controller } = await setup([
+      {
+        stream: [
+          [0, 'read_file', '{"path":"a.txt"}'],
+          [1, 'artifact', '{"command":"view","id":"x"}'],
+          [2, 'artifact', JSON.stringify(create)],
+          [3, 'artifact', JSON.stringify(second)],
+        ],
+        toolCalls: [
+          { id: 'r', type: 'function', function: { name: 'read_file', arguments: '{"path":"a.txt"}' } },
+          call('v', { command: 'view', id: 'timer' }),
+          call('a', create),
+          call('b', second),
+        ],
+        toolCallIndexes: [0, 1, 2, 3],
+      },
+      { content: 'done' },
+    ])
+    const meta = await controller.start(ws, 'make', opts('ask'))
+    const snap = await idle(controller, meta.id)
+    const artifacts = snap.session.items.filter((i) => i.kind === 'tool' && i.artifact)
+    expect(artifacts.map((i) => (i.kind === 'tool' ? [i.callId, i.artifact?.id, i.status] : null))).toEqual([
+      ['a', 'timer', 'done'],
+      ['b', 'notes', 'done'],
+    ])
+    // Both were drafted while the reply streamed, so their cards came before the steps that ran after it.
+    const at = (callId: string) => snap.session.items.findIndex((i) => i.kind === 'tool' && i.callId === callId)
+    expect(at('a')).toBeLessThan(at('r'))
+    expect(at('b')).toBeLessThan(at('r'))
   })
 })

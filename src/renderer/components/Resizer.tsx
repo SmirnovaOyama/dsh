@@ -1,10 +1,10 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { t } from '../i18n'
 
-export type Pane = 'sidebar' | 'changes'
+export type Pane = 'sidebar' | 'changes' | 'artifacts'
 
 const KEY = 'dsh.layout'
-const LIMITS: Record<Pane, [number, number]> = { sidebar: [208, 420], changes: [320, 960] }
+const LIMITS: Record<Pane, [number, number]> = { sidebar: [208, 420], changes: [320, 960], artifacts: [360, 1200] }
 /** The conversation never gets narrower than this while a pane is dragged wider. */
 const MAIN_MIN = 420
 const STEP = 16
@@ -50,7 +50,7 @@ function clamp(pane: Pane, width: number, max = LIMITS[pane][1]): number {
 /**
  * A thin handle on a pane's edge, placed next to it in the app row. Drag or use the arrow keys to
  * resize, double-click to go back to the default width. The sidebar grows to the right and the
- * changes panel to the left.
+ * right panel to the left; it keeps one width for changes and another for artifacts.
  */
 export function Resizer({ pane }: { pane: Pane }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -98,7 +98,7 @@ export function Resizer({ pane }: { pane: Pane }) {
     if (!el || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return
     event.preventDefault()
     const rtl = getComputedStyle(el).direction === 'rtl'
-    const grow = (event.key === 'ArrowRight') !== (pane === 'changes') !== rtl
+    const grow = (event.key === 'ArrowRight') !== (pane !== 'sidebar') !== rtl
     const next = clamp(pane, el.getBoundingClientRect().width + (grow ? STEP : -STEP), maxWidth(el))
     set(next)
     save(pane, next)
@@ -115,7 +115,7 @@ export function Resizer({ pane }: { pane: Pane }) {
       className={`hx-resize is-${pane}`}
       role="separator"
       aria-orientation="vertical"
-      aria-label={t(pane === 'sidebar' ? 'resize.sidebar' : 'resize.changes')}
+      aria-label={t(`resize.${pane}`)}
       aria-valuemin={LIMITS[pane][0]}
       aria-valuemax={LIMITS[pane][1]}
       aria-valuenow={width ?? undefined}

@@ -21,7 +21,7 @@ export const CodeBlock = memo(function CodeBlock({ code, lang }: { code: string;
   )
 })
 
-export function CopyButton({ text, label = t('copy.label') }: { text: string; label?: string }) {
+export function CopyButton({ text, label = t('copy.label'), disabled }: { text: string; label?: string; disabled?: boolean }) {
   const [copied, setCopied] = useState(false)
   const timer = useRef<number>(undefined)
   useEffect(() => () => window.clearTimeout(timer.current), [])
@@ -29,6 +29,7 @@ export function CopyButton({ text, label = t('copy.label') }: { text: string; la
     <button
       type="button"
       className="btn-ghost hx-icon-btn hx-copy"
+      disabled={disabled}
       aria-label={copied ? t('copy.done') : label}
       title={copied ? t('copy.done') : label}
       onClick={() => {

@@ -18,7 +18,7 @@ import { DeepSeekError, streamChat, type ApiUsage, type ChatMessage, type ChatRe
 import { needsApproval } from './permissions'
 import { withRefs } from './refs'
 import { TOOL_SPECS, ToolError, prepareToolCall, type PermissionNeed, type PreparedCall } from './tools'
-import { draftArtifact } from './tools/artifact'
+import { draftArtifact, streamedCommand } from './tools/artifact'
 
 const MAX_TOOL_RESULT_CHARS = 60_000
 const STREAM_FLUSH_MS = 50
@@ -93,12 +93,33 @@ function errorCode(error: unknown): ErrorCode {
 /** The latest finished version of each artifact in the conversation. */
 export function latestArtifacts(items: TranscriptItem[]): (id: string) => ArtifactVersion | undefined {
   return (id) => {
-    for (let i = items.length - 1; i >= 0; i--) {
-      const item = items[i]
-      if (item.kind === 'tool' && item.status === 'done' && item.artifact?.id === id) return item.artifact
+    let latest: ArtifactVersion | undefined
+    for (const item of items) {
+      if (item.kind === 'tool' && item.status === 'done' && item.artifact?.id === id && (!latest || item.artifact.version >= latest.version)) latest = item.artifact
     }
-    return undefined
+    return latest
   }
+}
+
+/** A list of the artifacts made so far, kept with a summary so the model still knows what it can view and change. */
+export function artifactNote(items: TranscriptItem[]): string {
+  const latest = new Map<string, ArtifactVersion>()
+  for (const item of items) {
+    if (item.kind !== 'tool' || item.status !== 'done' || !item.artifact) continue
+    const known = latest.get(item.artifact.id)
+    if (!known || item.artifact.version >= known.version) latest.set(item.artifact.id, item.artifact)
+  }
+  if (!latest.size) return ''
+  const list = [...latest.values()].map((a) => `- ${a.id}: ${a.title} (${a.type}, version ${a.version})`).join('\n')
+  return `Artifacts in this conversation. Call the artifact tool's view command to read one before you change it.\n${list}`
+}
+
+const CUT_OFF =
+  'Your reply reached the output limit and this call was cut off before its arguments were complete, so it was not run. Make it smaller: for an artifact, create a working first version and add to it with update.'
+
+/** The name a tool row shows: reading an artifact is a different action from writing one. */
+function itemName(call: ToolCall): string {
+  return call.function.name === 'artifact' && streamedCommand(call.function.arguments) === 'view' ? 'artifact_view' : call.function.name
 }
 
 function clip(text: string): string {
@@ -211,7 +232,9 @@ export class Agent {
         }
         if (!result) break
         if (!result.toolCalls.length) break
-        const keepGoing = await this.runTools(state, result.toolCalls, signal, drafts)
+        // At the output limit the last call is cut off mid-arguments; it is answered, not run.
+        const cutOff = result.finishReason === 'length' ? result.toolCalls[result.toolCalls.length - 1].id : null
+        const keepGoing = await this.runTools(state, result.toolCalls, signal, drafts, cutOff)
         if (!keepGoing) break
       }
     })
@@ -243,7 +266,8 @@ export class Agent {
       })
       const summary = result.content.trim()
       if (!summary) throw new Error('The model returned an empty summary.')
-      state.messages = compactedMessages(summary, history, held)
+      const note = artifactNote(state.data.items)
+      state.messages = compactedMessages(note ? `${summary}\n\n${note}` : summary, history, held)
       // Until the next request reports it, the summary is the best measure of the new context.
       this.addUsage(state, result.usage, result.usage?.completion_tokens ?? 0)
       item.status = 'done'
@@ -286,8 +310,12 @@ export class Agent {
     let reasoning: ReasoningItem | null = null
     let text: TextItem | null = null
     // Artifacts show up while the model is still writing them, keyed by the call's place in the reply.
+    // A draft waits until every artifact call before it has its card, so the cards stay in the order of the calls.
     const streaming = new Map<number, ToolItem>()
+    const names = new Map<number, string>()
+    const settled = new Set<number>()
     const latest = latestArtifacts(state.data.items)
+    const draftable = (index: number) => [...names.keys()].every((j) => j >= index || settled.has(j))
     const endDrafts = (status: ToolItem['status']) => {
       for (const item of streaming.values()) {
         item.status = status
@@ -329,16 +357,25 @@ export class Agent {
           },
           onToolCall: (index, name) => {
             endReasoning()
-            if (name !== 'artifact') return
-            const artifact = draftArtifact('', latest)
-            streaming.set(index, this.add<ToolItem>(state, { kind: 'tool', id: randomUUID(), callId: '', name, target: '', status: 'running', startedAt: this.now(), artifact }))
+            names.set(index, name)
+            if (name !== 'artifact') settled.add(index)
           },
           onToolArguments: (index, args) => {
+            if (names.get(index) !== 'artifact') return
+            const artifact = draftArtifact(args, latest)
             const item = streaming.get(index)
-            if (!item) return
-            item.artifact = draftArtifact(args, latest)
-            item.target = item.artifact.title
-            this.schedule(state, item)
+            if (item) {
+              item.artifact = artifact
+              item.target = artifact.title
+              this.schedule(state, item)
+              return
+            }
+            const command = streamedCommand(args)
+            // Reading an artifact gets a plain row once it runs, not a card.
+            if (command === 'view') settled.add(index)
+            if (!command || command === 'view' || !draftable(index)) return
+            streaming.set(index, this.add<ToolItem>(state, { kind: 'tool', id: randomUUID(), callId: '', name: 'artifact', target: artifact.title, status: 'running', startedAt: this.now(), artifact }))
+            settled.add(index)
           },
         },
       )
@@ -374,7 +411,11 @@ export class Agent {
     const message: Extract<ChatMessage, { role: 'assistant' }> = { role: 'assistant', content: result.content }
     if (result.reasoning) message.reasoning_content = result.reasoning
     if (result.toolCalls.length) message.tool_calls = result.toolCalls
-    result.toolCalls.forEach((call, index) => {
+    // A call cut off at the output limit is kept out of the history, so its half-written arguments are not sent again.
+    const cut = result.finishReason === 'length' ? result.toolCalls[result.toolCalls.length - 1] : undefined
+    if (cut) message.tool_calls = result.toolCalls.map((c) => (c === cut ? { ...c, function: { ...c.function, arguments: '{}' } } : c))
+    result.toolCalls.forEach((call, i) => {
+      const index = result.toolCallIndexes?.[i] ?? i
       const item = streaming.get(index)
       if (!item) return
       item.callId = call.id
@@ -388,9 +429,18 @@ export class Agent {
   }
 
   /** Runs each tool call in order. Returns false when the turn should end here. */
-  private async runTools(state: SessionState, calls: ToolCall[], signal: AbortSignal, drafts: Map<string, ToolItem>): Promise<boolean> {
+  private async runTools(state: SessionState, calls: ToolCall[], signal: AbortSignal, drafts: Map<string, ToolItem>, cutOff: string | null): Promise<boolean> {
     let keepGoing = true
     for (const call of calls) {
+      if (call.id === cutOff && !signal.aborted && keepGoing) {
+        const item = drafts.get(call.id) ?? this.add<ToolItem>(state, { kind: 'tool', id: randomUUID(), callId: call.id, name: itemName(call), target: '', status: 'running', startedAt: this.now() })
+        item.status = 'error'
+        item.error = CUT_OFF
+        item.endedAt = this.now()
+        this.flush(state, item)
+        state.messages.push({ role: 'tool', tool_call_id: call.id, content: `Error: ${CUT_OFF}` })
+        continue
+      }
       if (signal.aborted || !keepGoing) {
         const draft = drafts.get(call.id)
         if (draft) {
@@ -414,7 +464,7 @@ export class Agent {
       kind: 'tool',
       id: randomUUID(),
       callId: call.id,
-      name: call.function.name,
+      name: itemName(call),
       target: '',
       status: 'running',
       startedAt: this.now(),

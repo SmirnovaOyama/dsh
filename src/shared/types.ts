@@ -80,7 +80,7 @@ export interface ToolInfo {
   truncated?: boolean
 }
 
-export type ArtifactType = 'html' | 'react' | 'svg' | 'markdown' | 'code'
+export type ArtifactType = 'html' | 'react' | 'svg' | 'mermaid' | 'markdown' | 'code'
 
 /** One version of a piece of standalone content the agent made for the person, shown beside the chat. */
 export interface ArtifactVersion {
@@ -202,6 +202,8 @@ export interface ConnectionResult {
   error?: ErrorCode
 }
 
+export type SaveResult = { ok: true; path: string } | { ok: false; error: string }
+
 export interface CommitResult {
   ok: boolean
   error?: string
@@ -252,8 +254,14 @@ export interface DshApi {
     configure(sessionId: string, opts: { model?: string; permissionMode?: PermissionMode }): Promise<SessionMeta | null>
   }
   artifacts: {
-    /** Asks where to save the artifact and writes it there. Resolves false when the person cancels. */
-    save(name: string, content: string): Promise<boolean>
+    /** Hands a page to the preview frame, served under a policy of its own, and returns the address to load. */
+    preview(html: string): Promise<string>
+    /** Asks where to save the artifact and writes it there. Resolves null when the person cancels. */
+    save(name: string, content: string): Promise<SaveResult | null>
+    /** Writes the artifact into the open folder under a name not taken yet. */
+    saveToProject(name: string, content: string): Promise<SaveResult>
+    /** Opens a page in the person's browser from a private temporary file. */
+    openInBrowser(name: string, html: string): Promise<SaveResult>
   }
   changes: {
     revertAll(sessionId: string): Promise<void>

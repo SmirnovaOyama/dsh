@@ -6,7 +6,7 @@ import type { ArtifactVersion, DiffLine, DiffStats, ToolInfo } from '../../share
 import type { ChangeTracker } from '../changes'
 import type { ToolSpec } from '../deepseek'
 import { countLines, diffText } from '../diff'
-import { ARTIFACT_SPEC, nextArtifact } from './artifact'
+import { ARTIFACT_SPEC, nextArtifact, viewArtifact } from './artifact'
 import {
   findFilesTool,
   listDirTool,
@@ -274,6 +274,10 @@ export async function prepareToolCall(name: string, rawArgs: string, workspace: 
       }
     }
     case 'artifact': {
+      if (args.command === 'view') {
+        const view = viewArtifact(args, artifacts)
+        return { target: view.artifact.title, approval: null, run: async () => ({ text: view.text, info: { lines: view.lines } }) }
+      }
       const artifact = nextArtifact(args, artifacts)
       const verb = artifact.version === 1 ? 'Created' : 'Updated'
       return {
