@@ -12,7 +12,7 @@ export function modelName(model: string): string {
   return modelInfo(model)?.name ?? model
 }
 
-/** "DeepSeek-V4.1-Flash-1017，上下文 1M" */
+/** "DeepSeek-V4.1-Flash-1017　上下文 1M": a wide space, not a comma, keeps the two facts apart at small sizes. */
 export function modelDesc(model: string): string | undefined {
   const info = modelInfo(model)
   return info ? t('model.desc', { version: info.version, window: formatTokens(info.contextWindow) }) : undefined

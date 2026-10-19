@@ -136,14 +136,20 @@ function count(key: string, n: number): string | null {
 /** "執行了 2 個指令，改了 1 個檔案" for finished steps; the current step while they run. */
 function stepsLabel(items: StepItem[]): string {
   const tools = items.filter((i): i is ToolItem => i.kind === 'tool')
-  const parts = [
-    count('steps.commands', tools.filter((i) => i.name === 'run_command').length),
-    count('steps.edits', new Set(tools.filter((i) => EDITS.has(i.name)).map((i) => i.path ?? i.target)).size),
-    count('steps.reads', tools.filter((i) => READS.has(i.name)).length),
-    count('steps.searches', tools.filter((i) => SEARCHES.has(i.name)).length),
-    count('steps.others', tools.filter((i) => !READS.has(i.name) && !SEARCHES.has(i.name) && !EDITS.has(i.name) && i.name !== 'run_command').length),
-    count('steps.failed', tools.filter((i) => i.status === 'error').length),
-  ].filter((p): p is string => p !== null)
+  const kindOf = (i: ToolItem) =>
+    i.name === 'run_command' ? 'commands' : EDITS.has(i.name) ? 'edits' : READS.has(i.name) ? 'reads' : SEARCHES.has(i.name) ? 'searches' : 'others'
+  const counts = {
+    commands: tools.filter((i) => kindOf(i) === 'commands').length,
+    edits: new Set(tools.filter((i) => kindOf(i) === 'edits').map((i) => i.path ?? i.target)).size,
+    reads: tools.filter((i) => kindOf(i) === 'reads').length,
+    searches: tools.filter((i) => kindOf(i) === 'searches').length,
+    others: tools.filter((i) => kindOf(i) === 'others').length,
+  }
+  // Listed in the order the agent did them, so the line reads like the rows it folds.
+  const order = [...new Set(tools.map(kindOf))]
+  const parts = [...order.map((k) => count(`steps.${k}`, counts[k])), count('steps.failed', tools.filter((i) => i.status === 'error').length)].filter(
+    (p): p is string => p !== null,
+  )
   const joined = parts.join(t('steps.sep'))
   if (joined) return joined.charAt(0).toUpperCase() + joined.slice(1)
   const thought = items.reduce((ms, i) => (i.kind === 'reasoning' && i.endedAt ? ms + i.endedAt - i.startedAt : ms), 0)

@@ -325,7 +325,7 @@ button.hx-tool:hover { background: var(--surface-hover); }
   padding: 16px; display: flex; flex-direction: column; gap: 12px;
   animation: hx-perm-in var(--duration-base) var(--ease-out);
 }
-@keyframes hx-perm-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes hx-perm-in { from { opacity: 0; } to { opacity: 1; } }
 .hx-perm .q { display: flex; align-items: flex-start; gap: 12px; }
 .hx-perm .q > .oy-icon { color: var(--accent-ink); margin-top: 2px; }
 .hx-perm .q .text { flex: 1; min-width: 0; }
@@ -342,7 +342,7 @@ button.hx-tool:hover { background: var(--surface-hover); }
 /* Both tabs keep the same weight, so switching never changes their width. */
 .hx-tabs { display: flex; gap: 2px; margin-inline: -8px 6px; }
 .hx-tabs button {
-  height: 28px; padding: 0 8px; border-radius: var(--radius-sm); font-size: 14px; line-height: 20px; font-weight: 600;
+  flex-shrink: 0; white-space: nowrap; height: 28px; padding: 0 8px; border-radius: var(--radius-sm); font-size: 14px; line-height: 20px; font-weight: 600;
   color: var(--text-muted); transition: background-color var(--duration-quick) var(--ease-standard), color var(--duration-quick) var(--ease-standard);
 }
 .hx-tabs button:hover { color: var(--text); background: var(--surface-hover); }
@@ -405,7 +405,9 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-changes { position: relative; flex: 0 0 var(--changes-width); min-width: 0; display: flex; flex-direction: column; background: var(--bg); border-inline-start: 1px solid var(--border); container-type: inline-size; }
 .hx-changes-head { flex-shrink: 0; display: flex; align-items: center; gap: 4px; min-height: 52px; padding: 8px 10px 8px 20px; border-bottom: 1px solid var(--border); }
 .hx-changes-head h2 { margin: 0 8px 0 0; font-size: 14px; line-height: 20px; font-weight: 600; white-space: nowrap; }
-.hx-changes-head .sum { display: inline-flex; gap: 10px; min-width: 0; font-size: 13px; line-height: 18px; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* Nothing in the title bar may wrap: a narrow panel drops the summary and the revert label instead. */
+.hx-changes-head > * { flex-shrink: 0; white-space: nowrap; }
+.hx-changes-head .sum { display: inline-flex; gap: 10px; flex-shrink: 1; min-width: 0; overflow: hidden; font-size: 13px; line-height: 18px; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .hx-changes-head .stats { display: inline-flex; gap: 6px; }
 .hx-changes-head .grow { flex: 1; }
 .hx-changes-head .hx-commit { height: 28px; padding: 0 10px; margin-inline: 4px 2px; font-size: 13px; }
@@ -413,8 +415,9 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-changes-head .hx-icon-btn:hover:not(:disabled) { color: var(--text); }
 .hx-changes-head .hx-revert { height: 28px; padding: 0 8px; gap: 6px; font-size: 13px; color: var(--text-muted); }
 .hx-changes-head .hx-revert:hover:not(:disabled) { color: var(--text); }
-@container (max-width: 420px) { .hx-changes-head .hx-revert .label { display: none; } }
-@container (max-width: 380px) { .hx-changes-head .sum { display: none; } }
+@container (max-width: 560px) { .hx-changes-head .sum .n { display: none; } }
+@container (max-width: 520px) { .hx-changes-head .hx-revert .label { display: none; } }
+@container (max-width: 360px) { .hx-changes-head .sum { display: none; } }
 .hx-changes-list { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; padding-bottom: 24px; }
 .hx-cfile + .hx-cfile { border-top: 1px solid var(--border); }
 .hx-cfile-head {
@@ -455,9 +458,7 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-changes-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 24px; text-align: center; font-size: 14px; line-height: 20px; color: var(--text-muted); }
 
 /* ── menus and dialogs ───────────────────────────────────────── */
-.hx-menu { position: fixed; max-height: min(480px, calc(100vh - 96px)); animation-name: menu-in; }
-.hx-menu[data-side="top"] { transform-origin: bottom; animation-name: hx-menu-up; }
-@keyframes hx-menu-up { from { opacity: 0; transform: translateY(4px) scale(0.97); } to { opacity: 1; transform: none; } }
+.hx-menu { position: fixed; max-height: min(480px, calc(100vh - 96px)); animation-name: hx-fade-in; }
 .hx-menu .oy-menu-item { text-align: start; }
 .hx-menu .oy-menu-item .check { width: 16px; height: 16px; color: var(--accent-ink); visibility: hidden; }
 .hx-menu .oy-menu-item[aria-checked="true"] .check { visibility: visible; }
@@ -558,3 +559,6 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .oy-icon.hx-fill { fill: currentColor; stroke: none; }
 .hx-version { margin-top: 32px; font-size: 13px; line-height: 18px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .hx-search input::-webkit-search-cancel-button { display: none; }
+
+/* Dialogs fade in where they sit; nothing floats up into place. */
+.modal-shell, .modal-shell-wide { animation-name: hx-fade-in; }

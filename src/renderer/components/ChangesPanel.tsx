@@ -68,7 +68,7 @@ export function ChangesPanel({ chat, motion }: { chat: ChatState | null; motion:
         </div>
         {tab === 'changes' && changes.length > 0 && (
           <span className="sum">
-            {t('changes.count', { n: changes.length })}
+            <span className="n">{t('changes.count', { n: changes.length })}</span>
             <span className="stats">
               <DiffStatsText added={added} removed={removed} showZero />
             </span>
