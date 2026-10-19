@@ -10,7 +10,7 @@ html, body, #root { height: 100%; margin: 0; }
 body { overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font-sans); font-size: 14px; line-height: 20px; -webkit-font-smoothing: antialiased; }
 p { margin: 0; }
 input, textarea, select { font: inherit; color: inherit; }
-::selection { background: color-mix(in oklch, var(--accent) 24%, transparent); }
+::selection { background: color-mix(in oklch, var(--text) 16%, transparent); }
 
 :root:not([data-platform="darwin"]) * { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
 
@@ -132,7 +132,7 @@ input, textarea, select { font: inherit; color: inherit; }
 .hx-session[aria-current="page"] { background: var(--surface-pressed); }
 .hx-session .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hx-session .s { flex-shrink: 0; font-size: 12px; color: var(--text-disabled); font-variant-numeric: tabular-nums; }
-.hx-session .s.is-waiting { color: var(--warning); }
+.hx-session .s.is-waiting { color: var(--text); font-weight: 500; }
 .hx-side-foot { margin-top: auto; padding-top: 6px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 2px; }
 
 /* ── conversation column ─────────────────────────────────────── */
@@ -235,7 +235,7 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-tool .name { flex-shrink: 0; font-weight: 500; }
 .hx-tool .arg { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hx-tool .stat { flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-variant-numeric: tabular-nums; }
-.hx-tool .stat.is-waiting { color: var(--warning); }
+.hx-tool .stat.is-waiting { color: var(--text); font-weight: 500; }
 .hx-tool .hx-chev { color: var(--text-muted); }
 .hx-tool .hx-chev-space { width: 16px; flex-shrink: 0; }
 .hx-tool-detail { padding: 4px 0 12px 24px; display: flex; flex-direction: column; gap: 8px; }
@@ -251,10 +251,10 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-code pre { margin: 0; padding: 4px 16px 12px; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; line-height: 20px; color: var(--text); white-space: pre; tab-size: 4; }
 .hx-code pre.is-plain { padding-top: 12px; }
 .hx-code pre.is-wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
-:is(.hx-code, .hx-viewer) .tok-k { color: var(--accent-ink); }
+:is(.hx-code, .hx-viewer) .tok-k { color: var(--code-keyword); }
 :is(.hx-code, .hx-viewer) .tok-c { color: var(--text-muted); }
-:is(.hx-code, .hx-viewer) .tok-s { color: var(--status-positive); }
-:is(.hx-code, .hx-viewer) .tok-n { color: var(--status-info); }
+:is(.hx-code, .hx-viewer) .tok-s { color: var(--code-string); }
+:is(.hx-code, .hx-viewer) .tok-n { color: var(--code-number); }
 .hx-copy { position: relative; }
 .hx-copy .tick-draw, .hx-copy .copy-glyph { position: absolute; inset: 0; margin: auto; }
 
