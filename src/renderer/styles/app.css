@@ -301,6 +301,7 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-field .bar .grow { flex: 1; }
 .hx-field .bar .btn-ghost { padding: 0 8px; font-size: 13px; }
 .hx-field .bar .btn-ghost .label { max-width: 12rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-field .bar .btn-ghost .hx-quiet { color: var(--text-muted); font-weight: 400; }
 /* Phrases sit apart with space, never a separator character. */
 .hx-hint { display: inline-flex; gap: 12px; font-size: 12px; line-height: 16px; color: var(--text-muted); white-space: nowrap; }
 .hx-send { width: 32px; height: 32px; padding: 0; flex-shrink: 0; border-radius: var(--radius-md); }
@@ -454,7 +455,7 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-changes-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 24px; text-align: center; font-size: 14px; line-height: 20px; color: var(--text-muted); }
 
 /* ── menus and dialogs ───────────────────────────────────────── */
-.hx-menu { position: fixed; animation-name: menu-in; }
+.hx-menu { position: fixed; max-height: min(480px, calc(100vh - 96px)); animation-name: menu-in; }
 .hx-menu[data-side="top"] { transform-origin: bottom; animation-name: hx-menu-up; }
 @keyframes hx-menu-up { from { opacity: 0; transform: translateY(4px) scale(0.97); } to { opacity: 1; transform: none; } }
 .hx-menu .oy-menu-item { text-align: start; }
@@ -468,6 +469,7 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-menu .oy-menu-item > .oy-icon:first-child { color: var(--text-muted); }
 .hx-menu .oy-menu-item.is-danger > .oy-icon:first-child { color: var(--danger); }
 .hx-menu .oy-menu-item:focus-visible { outline-offset: -2px; }
+.hx-menu-label { padding: 4px 10px 2px; font-size: 12px; line-height: 16px; color: var(--text-muted); }
 .modal-card .modal-body + .oy-field-label, .modal-card .modal-body + div { margin-top: 16px; }
 .modal-card .hx-modal-error { margin-top: 8px; font-size: 13px; line-height: 18px; color: var(--danger); white-space: pre-wrap; overflow-wrap: anywhere; }
 

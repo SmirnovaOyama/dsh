@@ -1,6 +1,6 @@
 // A streaming client for DeepSeek's OpenAI-compatible chat completions endpoint.
 
-import type { ErrorCode } from '../shared/types'
+import type { Effort, ErrorCode } from '../shared/types'
 
 export interface ToolCall {
   id: string
@@ -31,6 +31,8 @@ export interface ChatRequest {
   baseUrl: string
   apiKey: string
   model: string
+  /** Left out, the model's own default applies (thinking, at high effort). */
+  effort?: Effort
   messages: ChatMessage[]
   tools?: ToolSpec[]
   temperature?: number
@@ -140,6 +142,11 @@ export async function streamChat(request: ChatRequest, handlers: StreamHandlers 
   }
   if (request.tools?.length) body.tools = request.tools
   if (request.temperature !== undefined) body.temperature = request.temperature
+  if (request.effort === 'none') body.thinking = { type: 'disabled' }
+  else if (request.effort) {
+    body.thinking = { type: 'enabled' }
+    body.reasoning_effort = request.effort
+  }
 
   let response: Response
   try {

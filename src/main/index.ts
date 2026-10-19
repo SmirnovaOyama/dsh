@@ -3,7 +3,7 @@
 import { BrowserWindow, app, dialog, ipcMain, nativeTheme, safeStorage, shell } from 'electron'
 import path from 'node:path'
 import { Channels, EVENT_CHANNEL } from '../shared/ipc'
-import type { AgentEvent, FileRead, InitialState, PermissionDecision, PermissionMode, Settings, StartOptions } from '../shared/types'
+import type { AgentEvent, ConfigureOptions, FileRead, InitialState, PermissionDecision, Settings, StartOptions } from '../shared/types'
 import { Controller, readWorkspace } from './controller'
 import { DeepSeekError, checkConnection } from './deepseek'
 import { cleanRefs } from './refs'
@@ -185,7 +185,7 @@ function registerIpc() {
   handle('agentRetry', (id: string) => controller.retry(id))
   handle('agentCompact', (id: string, focus?: string) => controller.compact(id, focus))
   handle('agentRespond', (id: string, requestId: string, decision: PermissionDecision) => controller.respond(id, requestId, decision))
-  handle('agentConfigure', (id: string, opts: { model?: string; permissionMode?: PermissionMode }) => controller.configure(id, opts))
+  handle('agentConfigure', (id: string, opts: ConfigureOptions) => controller.configure(id, opts))
 
   handle('changesRevertAll', (id: string) => controller.revertAll(id))
   handle('changesCommit', (id: string, message: string) => controller.commit(id, message))

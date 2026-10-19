@@ -1,11 +1,13 @@
 // Compacting: when the context is nearly full, the model writes a summary of the session and the
 // summary replaces the messages it sees. The transcript on screen keeps everything.
 
-import { CONTEXT_WINDOW } from '../shared/types'
+import { contextWindow } from '../shared/types'
 import type { ChatMessage } from './deepseek'
 
 /** Compact before a request once the previous one used this much of the context window. */
-export const COMPACT_AT = Math.round(CONTEXT_WINDOW * 0.8)
+export function compactAt(model: string): number {
+  return Math.round(contextWindow(model) * 0.8)
+}
 
 const TOOL_RESULT_CHARS = 2_000
 const TOOL_ARGS_CHARS = 1_000

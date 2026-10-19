@@ -5,6 +5,8 @@ import {
   DEFAULT_SETTINGS,
   EMPTY_USAGE,
   type AgentEvent,
+  type ConfigureOptions,
+  type Effort,
   type AppInfo,
   type FileChange,
   type FileRef,
@@ -51,7 +53,7 @@ export interface AppState {
   /** Files and lines pointed at for the next message. */
   refs: FileRef[]
   /** Model and permissions for the next new conversation. */
-  draft: { model: string; permissionMode: PermissionMode }
+  draft: { model: string; effort: Effort; permissionMode: PermissionMode }
   /** Bumped to ask the composer to take focus. */
   focusTick: number
 }
@@ -91,7 +93,7 @@ let state: AppState = {
   panelTab: 'changes',
   viewedFile: null,
   refs: [],
-  draft: { model: DEFAULT_SETTINGS.model, permissionMode: DEFAULT_SETTINGS.permissionMode },
+  draft: { model: DEFAULT_SETTINGS.model, effort: DEFAULT_SETTINGS.effort, permissionMode: DEFAULT_SETTINGS.permissionMode },
   focusTick: 0,
 }
 
@@ -219,7 +221,7 @@ export const actions = {
       hasApiKey: initial.hasApiKey,
       app: initial.app,
       workspace: initial.workspace,
-      draft: { model: initial.settings.model, permissionMode: initial.settings.permissionMode },
+      draft: { model: initial.settings.model, effort: initial.settings.effort, permissionMode: initial.settings.permissionMode },
     })
     await loadSessions()
   },
@@ -230,7 +232,7 @@ export const actions = {
       chatId: null,
       chat: null,
       selectedFile: null,
-      draft: { model: s.settings.model, permissionMode: s.settings.permissionMode },
+      draft: { model: s.settings.model, effort: s.settings.effort, permissionMode: s.settings.permissionMode },
       focusTick: s.focusTick + 1,
     }))
   },
@@ -282,6 +284,7 @@ export const actions = {
       createdAt: now,
       updatedAt: now,
       model: draft.model,
+      effort: draft.effort,
       permissionMode: draft.permissionMode,
       status: 'running',
       items: [],
@@ -294,7 +297,7 @@ export const actions = {
       activeAt: { ...s.activeAt, [id]: now },
     }))
     set({ refs: [] })
-    await api.agent.start(workspace.path, trimmed, { id, model: draft.model, permissionMode: draft.permissionMode }, refs)
+    await api.agent.start(workspace.path, trimmed, { id, model: draft.model, effort: draft.effort, permissionMode: draft.permissionMode }, refs)
   },
 
   stop() {
@@ -318,7 +321,7 @@ export const actions = {
     await api.agent.respond(chat.session.id, request.id, decision)
   },
 
-  async configure(opts: { model?: string; permissionMode?: PermissionMode }) {
+  async configure(opts: ConfigureOptions) {
     const chat = state.chat
     if (!chat) {
       set((s) => ({ draft: { ...s.draft, ...opts } }))

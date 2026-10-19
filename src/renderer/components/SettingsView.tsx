@@ -1,9 +1,10 @@
 import { ChevronLeft, Cpu, KeyRound, LoaderCircle, Shield, Sun, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { MAX_STEPS_OPTIONS, MODELS, type ConnectionResult, type Locale, type PermissionMode, type ReplyStyle, type ThemePref } from '../../shared/types'
+import { EFFORTS, MAX_STEPS_OPTIONS, MODELS, type ConnectionResult, type Effort, type Locale, type PermissionMode, type ReplyStyle, type ThemePref } from '../../shared/types'
 import { api } from '../api'
 import { LOCALE_NAMES, t, type MessageKey } from '../i18n'
 import { actions, useApp, type SettingsSection } from '../store'
+import { modelDesc, modelName } from '../models'
 import { Icon } from './Icon'
 import { Reserve } from './Reserve'
 import { Segmented } from './Segmented'
@@ -321,8 +322,16 @@ function ModelGroup() {
             className="hx-row-control"
             label={t('settings.defaultModel')}
             value={settings.model}
-            options={MODELS.map((m) => ({ value: m, label: m, desc: t(`model.${m}` as MessageKey) }))}
+            options={MODELS.map((m) => ({ value: m, label: modelName(m), desc: modelDesc(m) }))}
             onChange={(model) => update({ model })}
+          />
+        </Row>
+        <Row title={t('settings.defaultEffort')}>
+          <Segmented<Effort>
+            label={t('settings.defaultEffort')}
+            value={settings.effort}
+            options={EFFORTS.map((e) => ({ value: e, label: t(`effort.${e}`) }))}
+            onChange={(effort) => update({ effort })}
           />
         </Row>
         <Row title={t('settings.style')}>

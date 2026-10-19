@@ -2,7 +2,7 @@
 
 import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { DEFAULT_SETTINGS, type SessionData, type SessionMeta, type Settings } from '../shared/types'
+import { currentModel, DEFAULT_SETTINGS, type SessionData, type SessionMeta, type Settings } from '../shared/types'
 import type { Snapshots } from './changes'
 import type { ChatMessage } from './deepseek'
 
@@ -47,6 +47,8 @@ export class SettingsStore {
   async load(): Promise<void> {
     const stored = await readJson<Partial<StoredSettings>>(this.file)
     this.data = { ...DEFAULT_SETTINGS, ...stored }
+    // Settings saved before the V4 models carry a retired model name and no effort.
+    Object.assign(this.data, currentModel(this.data.model, stored?.effort))
   }
 
   get(): Settings {
@@ -181,5 +183,5 @@ export class SessionStore {
 
 export function metaOf(data: SessionData): SessionMeta {
   const { items: _items, usage: _usage, ...meta } = data
-  return meta
+  return { ...meta, ...currentModel(meta.model, meta.effort) }
 }

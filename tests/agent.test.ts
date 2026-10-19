@@ -59,7 +59,7 @@ async function setup(steps: Step[], seen: ChatRequest[] = [], withKey = true) {
   return { controller, settings, sessions }
 }
 
-const opts = (permissionMode: 'ask' | 'acceptEdits') => ({ id: randomUUID(), model: 'deepseek-chat', permissionMode })
+const opts = (permissionMode: 'ask' | 'acceptEdits') => ({ id: randomUUID(), model: 'deepseek-flash', effort: 'none' as const, permissionMode })
 
 const editCall = {
   id: 'call_1',
@@ -191,14 +191,14 @@ describe('apiHistory', () => {
     { role: 'tool', tool_call_id: 'call_1', content: 'ok' },
   ]
 
-  it('keeps only the current turn reasoning for thinking models', () => {
-    const out = apiHistory(history, 'deepseek-reasoner')
+  it('keeps only the current turn reasoning while thinking', () => {
+    const out = apiHistory(history, true)
     expect(out[1]).not.toHaveProperty('reasoning_content')
     expect(out[3]).toHaveProperty('reasoning_content', 'current thoughts')
   })
 
-  it('drops reasoning for other models', () => {
-    const out = apiHistory(history, 'deepseek-chat')
+  it('drops reasoning when thinking is off', () => {
+    const out = apiHistory(history, false)
     expect(out.some((m) => 'reasoning_content' in m)).toBe(false)
   })
 })
@@ -206,7 +206,7 @@ describe('apiHistory', () => {
 describe('compacting', () => {
   it('summarises the history before a request once the context is nearly full', async () => {
     const seen: ChatRequest[] = []
-    const { controller } = await setup([{ content: 'first', tokens: 110_000 }, { content: 'SUMMARY' }, { content: 'second' }], seen)
+    const { controller } = await setup([{ content: 'first', tokens: 900_000 }, { content: 'SUMMARY' }, { content: 'second' }], seen)
     const meta = await controller.start(ws, 'one', opts('ask'))
     await idle(controller, meta.id)
     events = []
@@ -220,7 +220,7 @@ describe('compacting', () => {
     expect(after[1].content).toContain('SUMMARY')
     expect(after[3].content).toBe('two')
     expect(snap.session.items.map((i) => i.kind)).toEqual(['user', 'text', 'user', 'compact', 'text'])
-    expect(snap.session.items[3]).toMatchObject({ kind: 'compact', auto: true, status: 'done', summary: 'SUMMARY', before: 110_005 })
+    expect(snap.session.items[3]).toMatchObject({ kind: 'compact', auto: true, status: 'done', summary: 'SUMMARY', before: 900_005 })
   })
 
   it('compacts on request with the focus the person gave', async () => {
