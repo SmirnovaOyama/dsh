@@ -23,6 +23,22 @@ export function RefLabel({ fileRef: ref }: { fileRef: FileRef }) {
   )
 }
 
+/** How full the context is, as a small ring beside the model, like Claude Code's usage ring. Numbers on hover. */
+function UsageRing({ used, total, spent }: { used: number; total: number; spent: number }) {
+  const r = 6
+  const length = 2 * Math.PI * r
+  const share = total > 0 ? Math.min(1, used / total) : 0
+  const label = `${t('composer.context')} ${formatTokens(used)} / ${formatTokens(total)} ${t('composer.tokens')}\n${t('composer.total')} ${formatTokens(spent)} ${t('composer.tokens')}`
+  return (
+    <span className="hx-usage" role="img" aria-label={label} title={label}>
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+        <circle cx="8" cy="8" r={r} className="track" />
+        <circle cx="8" cy="8" r={r} className="fill" strokeDasharray={`${share * length} ${length}`} transform="rotate(-90 8 8)" />
+      </svg>
+    </span>
+  )
+}
+
 /** Unsent text per conversation, so switching away and back keeps it. */
 const drafts = new Map<string, string>()
 
@@ -150,19 +166,6 @@ export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
           />
           <div className="bar">
             <button
-              ref={modelRef}
-              type="button"
-              className="btn-ghost"
-              aria-haspopup="menu"
-              aria-expanded={menu === 'model'}
-              aria-label={t('composer.model', { model: `${modelName(model)}, ${effortShort(effort)}` })}
-              onClick={() => setMenu(menu === 'model' ? null : 'model')}
-            >
-              <span className="label">{modelShort(model)}</span>
-              <span className="label hx-quiet">{effortShort(effort)}</span>
-              <Icon icon={ChevronDown} size={14} />
-            </button>
-            <button
               ref={modeRef}
               type="button"
               className="btn-ghost"
@@ -176,14 +179,20 @@ export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
               <Icon icon={ChevronDown} size={14} />
             </button>
             <span className="grow" />
-            {chat && (
-              <span
-                className="hx-context"
-                title={`${t('composer.context')} ${formatTokens(usage?.contextTokens ?? 0)} / ${formatTokens(contextWindow(model))} ${t('composer.tokens')}\n${t('composer.total')} ${formatTokens((usage?.promptTokens ?? 0) + (usage?.completionTokens ?? 0))} ${t('composer.tokens')}`}
-              >
-                {formatTokens(usage?.contextTokens ?? 0)} / {formatTokens(contextWindow(model))}
-              </span>
-            )}
+            <button
+              ref={modelRef}
+              type="button"
+              className="btn-ghost"
+              aria-haspopup="menu"
+              aria-expanded={menu === 'model'}
+              aria-label={t('composer.model', { model: `${modelName(model)}, ${effortShort(effort)}` })}
+              onClick={() => setMenu(menu === 'model' ? null : 'model')}
+            >
+              <span className="label">{modelShort(model)}</span>
+              <span className="label hx-quiet">{effortShort(effort)}</span>
+              <Icon icon={ChevronDown} size={14} />
+            </button>
+            {chat && <UsageRing used={usage?.contextTokens ?? 0} total={contextWindow(model)} spent={(usage?.promptTokens ?? 0) + (usage?.completionTokens ?? 0)} />}
             <button
               type="button"
               className={`hx-send ${showStop && permission ? 'btn-secondary' : 'btn-primary'}`}

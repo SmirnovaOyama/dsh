@@ -1,10 +1,11 @@
-import { Ellipsis, Folder, GitBranch, PanelRight, Trash2 } from 'lucide-react'
+import { ChevronDown, Folder, GitBranch, PanelRight, Trash2 } from 'lucide-react'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { tildify } from '../format'
 import { t } from '../i18n'
 import { HoldScroll } from '../scroll'
 import { actions, useApp } from '../store'
 import { Composer } from './Composer'
+import { DiffStatsText } from './DiffView'
 import { Icon } from './Icon'
 import { Menu, MenuItem } from './Menu'
 import { Modal } from './Modal'
@@ -29,10 +30,27 @@ function Header() {
   const title = chat?.session.title || loadingTitle || t('header.newChat')
   const path = chat?.session.workspace ?? workspace?.path
 
+  const changes = chat?.changes ?? []
+  const added = changes.reduce((n, c) => n + c.stats.added, 0)
+  const removed = changes.reduce((n, c) => n + c.stats.removed, 0)
+
   return (
     <header className="hx-header">
       <div className="heading">
-        <h1 className="title">{title}</h1>
+        {/* The title opens the conversation's menu, the way Claude Code's caret beside the title does. */}
+        <button
+          ref={moreRef}
+          type="button"
+          className="hx-title"
+          aria-haspopup="menu"
+          aria-expanded={menu}
+          title={t('header.more')}
+          disabled={!chatId}
+          onClick={() => setMenu((o) => !o)}
+        >
+          <h1>{title}</h1>
+          {chatId && <Icon icon={ChevronDown} size={14} />}
+        </button>
         {path && (
           <span className="sub" title={path}>
             <Icon icon={Folder} size={14} />
@@ -49,29 +67,22 @@ function Header() {
       <div className="actions">
         <button
           type="button"
-          className="btn-ghost hx-icon-btn"
+          className="btn-ghost hx-pane-btn"
           aria-pressed={showChanges}
           aria-label={t(showChanges ? 'header.hideChanges' : 'header.showChanges')}
           title={t(showChanges ? 'header.hideChanges' : 'header.showChanges')}
           onClick={() => actions.toggleChanges()}
         >
           <Icon icon={PanelRight} />
-        </button>
-        <button
-          ref={moreRef}
-          type="button"
-          className="btn-ghost hx-icon-btn"
-          aria-haspopup="menu"
-          aria-expanded={menu}
-          aria-label={t('header.more')}
-          title={t('header.more')}
-          disabled={!chatId}
-          onClick={() => setMenu((o) => !o)}
-        >
-          <Icon icon={Ellipsis} />
+          <span>{t('panel.changes')}</span>
+          {changes.length > 0 && (
+            <span className="stats">
+              <DiffStatsText added={added} removed={removed} />
+            </span>
+          )}
         </button>
       </div>
-      <Menu anchor={moreRef.current} open={menu} onClose={() => setMenu(false)} label={t('header.more')} align="end" minWidth={200}>
+      <Menu anchor={moreRef.current} open={menu} onClose={() => setMenu(false)} label={t('header.more')} minWidth={200}>
         <MenuItem
           danger
           icon={<Icon icon={Trash2} />}
