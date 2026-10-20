@@ -47,6 +47,10 @@
   --shadow-sm: 0 1px 2px rgba(20, 20, 20, 0.04), 0 2px 6px rgba(20, 20, 20, 0.04);
   --shadow-md: 0 1px 3px rgba(20, 20, 20, 0.05), 0 8px 24px rgba(20, 20, 20, 0.08);
   --shadow-lg: 0 2px 6px rgba(20, 20, 20, 0.05), 0 20px 48px rgba(20, 20, 20, 0.14);
+  /* Floating menus: a crisp edge and a short drop, so they read as above the page. */
+  --shadow-menu: 0 1px 2px rgba(20, 20, 20, 0.06), 0 6px 20px rgba(20, 20, 20, 0.1);
+  /* The message field sits on the page with only a hint of lift. */
+  --shadow-field: 0 1px 2px rgba(20, 20, 20, 0.04), 0 4px 14px rgba(20, 20, 20, 0.035);
 
   /* Small, even corners. Nothing here is round enough to read as a pill. */
   --radius-xs: 5px;
@@ -59,6 +63,8 @@
   --blur-scrim: 4px;
 
   /* Code keeps its colours. */
+  --code-bg: oklch(97.2% 0 0);
+  --code-inline: oklch(22% 0 0 / 0.055);
   --code-keyword: oklch(50% 0.17 330);
   --code-string: oklch(50% 0.12 155);
   --code-number: oklch(52% 0.15 255);
@@ -112,6 +118,10 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.2);
   --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.4), 0 20px 48px rgba(0, 0, 0, 0.5);
+  --shadow-menu: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-field: 0 1px 2px rgba(0, 0, 0, 0.2), 0 4px 14px rgba(0, 0, 0, 0.15);
+  --code-bg: oklch(23.5% 0 0);
+  --code-inline: oklch(100% 0 0 / 0.08);
   --code-keyword: oklch(78% 0.12 330);
   --code-string: oklch(78% 0.12 155);
   --code-number: oklch(78% 0.1 250);

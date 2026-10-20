@@ -88,7 +88,7 @@ function ErrorBlock({ item, active }: { item: Extract<TranscriptItem, { kind: 'e
   const code = item.code
   return (
     <div className="hx-error" role="alert">
-      <Icon icon={CircleAlert} size={18} />
+      <Icon icon={CircleAlert} />
       <div className="text">
         <p className="title">{t(`error.${code}.title` as MessageKey)}</p>
         <p className="body">{t(`error.${code}.body` as MessageKey)}</p>

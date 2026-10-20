@@ -57,13 +57,12 @@ export function PermissionPanel({ request }: { request: PermissionRequest }) {
         <Icon icon={request.created ? FilePlus : FilePen} />
         <div className="text">
           <h3 id={titleId}>{t(request.created ? 'perm.createTitle' : 'perm.editTitle')}</h3>
-          <p className="why">
+          <p className="why hx-perm-file">
             <span className="hx-mono">{request.path}</span>
-            {t('perm.sep')}
-            <span style={{ display: 'inline-flex', gap: 4 }}>
+            <span className="stats">
               <DiffStatsText added={stats.added} removed={stats.removed} />
-            </span>{' '}
-            {t('perm.lines')}
+              <span>{t('perm.lines')}</span>
+            </span>
           </p>
         </div>
       </div>

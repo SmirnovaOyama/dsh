@@ -97,7 +97,7 @@ export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
     <div className="hx-composer">
       <div className="hx-composer-inner">
         <button type="button" className="hx-jump" data-hidden={!showJump} tabIndex={showJump ? 0 : -1} onClick={onJump}>
-          <Icon icon={ArrowDown} size={16} />
+          <Icon icon={ArrowDown} size={14} />
           {t('jump.latest')}
         </button>
 
@@ -160,7 +160,7 @@ export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
             >
               <span className="label">{modelShort(model)}</span>
               <span className="label hx-quiet">{effortShort(effort)}</span>
-              <Icon icon={ChevronDown} size={16} />
+              <Icon icon={ChevronDown} size={14} />
             </button>
             <button
               ref={modeRef}
@@ -171,11 +171,19 @@ export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
               aria-label={t('composer.mode', { mode: t(`mode.${mode}`) })}
               onClick={() => setMenu(menu === 'mode' ? null : 'mode')}
             >
-              <Icon icon={Shield} size={16} />
+              <Icon icon={Shield} size={14} />
               <span className="label">{t(`mode.${mode}`)}</span>
-              <Icon icon={ChevronDown} size={16} />
+              <Icon icon={ChevronDown} size={14} />
             </button>
             <span className="grow" />
+            {chat && (
+              <span
+                className="hx-context"
+                title={`${t('composer.context')} ${formatTokens(usage?.contextTokens ?? 0)} / ${formatTokens(contextWindow(model))} ${t('composer.tokens')}\n${t('composer.total')} ${formatTokens((usage?.promptTokens ?? 0) + (usage?.completionTokens ?? 0))} ${t('composer.tokens')}`}
+              >
+                {formatTokens(usage?.contextTokens ?? 0)} / {formatTokens(contextWindow(model))}
+              </span>
+            )}
             <button
               type="button"
               className={`hx-send ${showStop && permission ? 'btn-secondary' : 'btn-primary'}`}
@@ -184,19 +192,10 @@ export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
               title={t(showStop ? 'composer.stop' : 'composer.send')}
               onClick={showStop ? () => actions.stop() : submit}
             >
-              {showStop ? <Icon icon={Square} size={14} className="hx-fill" /> : <Icon icon={ArrowUp} size={18} />}
+              {showStop ? <Icon icon={Square} size={14} className="hx-fill" /> : <Icon icon={ArrowUp} />}
             </button>
           </div>
         </div>
-
-        <p className="hx-meta">
-          <span>
-            {t('composer.context')} <b>{formatTokens(usage?.contextTokens ?? 0)}</b> / {formatTokens(contextWindow(model))} {t('composer.tokens')}
-          </span>
-          <span>
-            {t('composer.total')} <b>{formatTokens((usage?.promptTokens ?? 0) + (usage?.completionTokens ?? 0))}</b> {t('composer.tokens')}
-          </span>
-        </p>
       </div>
 
       <Menu anchor={modelRef.current} open={menu === 'model'} onClose={() => setMenu(null)} label={t('settings.model')} side="top" minWidth={280}>

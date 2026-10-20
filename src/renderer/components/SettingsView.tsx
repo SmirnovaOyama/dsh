@@ -67,7 +67,7 @@ export function SettingsView() {
       <nav className="oy-sidebar hx-sidebar" aria-label={t('settings.title')}>
         <div className="hx-drag" />
         <button type="button" className="hx-back" onClick={() => actions.closeSettings()}>
-          <Icon icon={ChevronLeft} size={18} />
+          <Icon icon={ChevronLeft} />
           {t('settings.back')}
         </button>
         <div className="hx-settings-nav">
@@ -367,50 +367,52 @@ function Permissions() {
   }
   return (
     <Group id="permissions" title={t('settings.permissions')}>
-      <div className="oy-section is-plain">
-        <Row title={t('settings.defaultMode')}>
-          <Select<PermissionMode>
-            className="hx-row-control"
-            label={t('settings.defaultMode')}
-            value={settings.permissionMode}
-            options={(['ask', 'acceptEdits', 'auto'] as const).map((m) => ({ value: m, label: t(`mode.${m}`), desc: t(`mode.${m}.desc`) }))}
-            onChange={(permissionMode) => update({ permissionMode })}
-          />
-        </Row>
-        <Row title={t('settings.allowed')} />
-      </div>
-      <div className="hx-allowed">
-        <div className="hx-allowed-list">
-          {settings.allowedCommands.map((prefix) => (
-            <div key={prefix} className="hx-allowed-item">
-              <span className="hx-mono">{prefix}</span>
-              <button
-                type="button"
-                className="btn-ghost hx-icon-btn"
-                aria-label={t('settings.allowedRemove', { prefix })}
-                title={t('settings.allowedRemove', { prefix })}
-                onClick={() => update({ allowedCommands: settings.allowedCommands.filter((p) => p !== prefix) })}
-              >
-                <Icon icon={X} size={16} />
-              </button>
-            </div>
-          ))}
+      <div className="hx-card">
+        <div className="oy-section is-plain">
+          <Row title={t('settings.defaultMode')}>
+            <Select<PermissionMode>
+              className="hx-row-control"
+              label={t('settings.defaultMode')}
+              value={settings.permissionMode}
+              options={(['ask', 'acceptEdits', 'auto'] as const).map((m) => ({ value: m, label: t(`mode.${m}`), desc: t(`mode.${m}.desc`) }))}
+              onChange={(permissionMode) => update({ permissionMode })}
+            />
+          </Row>
+          <Row title={t('settings.allowed')} />
         </div>
-        <div className="hx-allowed-add">
-          <input
-            className="input-base"
-            value={adding}
-            spellCheck={false}
-            placeholder={t('settings.allowedPlaceholder')}
-            aria-label={t('settings.allowed')}
-            onChange={(event) => setAdding(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') add()
-            }}
-          />
-          <button type="button" className="btn-secondary" disabled={!adding.trim()} onClick={add}>
-            {t('settings.allowedAdd')}
-          </button>
+        <div className="hx-allowed">
+          <div className="hx-allowed-list">
+            {settings.allowedCommands.map((prefix) => (
+              <div key={prefix} className="hx-allowed-item">
+                <span className="hx-mono">{prefix}</span>
+                <button
+                  type="button"
+                  className="btn-ghost hx-icon-btn"
+                  aria-label={t('settings.allowedRemove', { prefix })}
+                  title={t('settings.allowedRemove', { prefix })}
+                  onClick={() => update({ allowedCommands: settings.allowedCommands.filter((p) => p !== prefix) })}
+                >
+                  <Icon icon={X} size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="hx-allowed-add">
+            <input
+              className="input-base"
+              value={adding}
+              spellCheck={false}
+              placeholder={t('settings.allowedPlaceholder')}
+              aria-label={t('settings.allowed')}
+              onChange={(event) => setAdding(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') add()
+              }}
+            />
+            <button type="button" className="btn-secondary" disabled={!adding.trim()} onClick={add}>
+              {t('settings.allowedAdd')}
+            </button>
+          </div>
         </div>
       </div>
     </Group>
