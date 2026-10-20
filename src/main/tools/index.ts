@@ -2,7 +2,7 @@
 
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import type { DiffLine, DiffStats, ToolInfo } from '../../shared/types'
+import type { DiffLine, DiffStats, Todo, ToolInfo } from '../../shared/types'
 import type { ChangeTracker } from '../changes'
 import type { ToolSpec } from '../deepseek'
 import { countLines, diffText } from '../diff'
@@ -135,7 +135,66 @@ export const TOOL_SPECS: ToolSpec[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'todo_write',
+      description:
+        'Keep a to-do list for the current task, shown to the user as you work. Use it for tasks with three or more steps: write the whole list each time, mark one item in_progress before you start it, and mark it completed as soon as it is done. Skip it for small, single-step requests.',
+      parameters: {
+        type: 'object',
+        properties: {
+          todos: {
+            type: 'array',
+            description: 'The complete list, in order.',
+            items: {
+              type: 'object',
+              properties: {
+                content: { type: 'string', description: 'What to do, as a short imperative sentence.' },
+                status: { type: 'string', enum: ['pending', 'in_progress', 'completed'] },
+              },
+              required: ['content', 'status'],
+            },
+          },
+        },
+        required: ['todos'],
+      },
+    },
+  },
 ]
+
+/** Offered only in plan mode, where the agent reads first and asks before changing anything. */
+export const PLAN_TOOL: ToolSpec = {
+  type: 'function',
+  function: {
+    name: 'exit_plan_mode',
+    description:
+      'Call this when your plan is ready. The user sees the plan and decides whether you may start. Write the plan in Markdown: what you found, the files you will change and how, and how you will check the result. Do not call it for questions that need no changes; just answer them.',
+    parameters: {
+      type: 'object',
+      properties: {
+        plan: { type: 'string', description: 'The plan, in Markdown.' },
+      },
+      required: ['plan'],
+    },
+  },
+}
+
+export function toolSpecs(planMode: boolean): ToolSpec[] {
+  return planMode ? [...TOOL_SPECS, PLAN_TOOL] : TOOL_SPECS
+}
+
+const TODO_STATUSES = new Set<Todo['status']>(['pending', 'in_progress', 'completed'])
+
+export function parseTodos(input: unknown): Todo[] {
+  if (!Array.isArray(input)) throw new ToolError('"todos" must be an array of { content, status }.')
+  return input.slice(0, 50).map((entry, i) => {
+    const { content, status } = (entry ?? {}) as Record<string, unknown>
+    if (typeof content !== 'string' || !content.trim()) throw new ToolError(`Item ${i + 1} needs a non-empty "content".`)
+    if (!TODO_STATUSES.has(status as Todo['status'])) throw new ToolError(`Item ${i + 1} needs a "status" of pending, in_progress or completed.`)
+    return { content: content.trim(), status: status as Todo['status'] }
+  })
+}
 
 export interface ToolRunContext {
   workspace: string
@@ -151,11 +210,14 @@ export interface ToolRunResult {
   display?: string
   info?: ToolInfo
   isError?: boolean
+  /** Set by todo_write: the agent's new list. */
+  todos?: Todo[]
 }
 
 export type PermissionNeed =
   | { kind: 'edit'; path: string; created: boolean; stats: DiffStats; lines: DiffLine[] }
   | { kind: 'command'; command: string; cwd: string; prefix: string }
+  | { kind: 'plan'; plan: string }
 
 export interface PreparedCall {
   target: string
@@ -265,6 +327,27 @@ export async function prepareToolCall(name: string, rawArgs: string, workspace: 
             isError: result.aborted || result.timedOut || result.exitCode !== 0,
           }
         },
+      }
+    }
+    case 'todo_write': {
+      const todos = parseTodos(args.todos)
+      const done = todos.filter((t) => t.status === 'completed').length
+      return {
+        target: `${done}/${todos.length}`,
+        approval: null,
+        run: async () => ({
+          text: `To-do list updated (${done} of ${todos.length} done). Keep working on the task.`,
+          todos,
+        }),
+      }
+    }
+    case 'exit_plan_mode': {
+      const plan = typeof args.plan === 'string' ? args.plan.trim() : ''
+      if (!plan) throw new ToolError('"plan" must not be empty.')
+      return {
+        target: plan.split('\n').find((line) => line.trim())?.replace(/^#+\s*/, '').slice(0, 80) ?? '',
+        approval: { kind: 'plan', plan },
+        run: async () => ({ text: 'The user approved the plan. Start working on it now, following it step by step.', display: plan }),
       }
     }
     default:

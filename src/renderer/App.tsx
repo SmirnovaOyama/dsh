@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import { LibraryView } from './components/LibraryView'
 import { ChangesPanel } from './components/ChangesPanel'
 import { Resizer } from './components/Resizer'
+import { ScheduledView } from './components/ScheduledView'
 import { ChatView } from './components/ChatView'
 import { SettingsView } from './components/SettingsView'
 import { Sidebar } from './components/Sidebar'
@@ -39,6 +41,9 @@ function useShortcuts(onSearch: () => void) {
         event.preventDefault()
         if (getState().view === 'settings') actions.closeSettings()
         onSearch()
+      } else if (key === 'b') {
+        event.preventDefault()
+        actions.toggleSidebar()
       } else if (key === ',') {
         event.preventDefault()
         actions.openSettings()
@@ -83,6 +88,7 @@ export function App() {
   const panel = useApp((s) => s.showChanges && (s.chatId !== null || (s.hasApiKey && s.workspace !== null)))
   const chat = useApp((s) => s.chat)
   const panelMotion = usePresence(panel, 220)
+  const showSidebar = useApp((s) => s.showSidebar)
   const [searchTick, setSearchTick] = useState(0)
 
   setLocale(locale)
@@ -92,6 +98,9 @@ export function App() {
   useEffect(() => {
     document.documentElement.dataset.platform = platform
   }, [platform])
+  useEffect(() => {
+    document.documentElement.dataset.sidebar = showSidebar ? 'shown' : 'hidden'
+  }, [showSidebar])
   useEffect(() => {
     document.title = title ? `${title} - ${t('app.name')}` : t('app.name')
   }, [title, locale])
@@ -108,11 +117,11 @@ export function App() {
   }
   return (
     <div className="hx-app">
-      <Sidebar searchTick={searchTick} />
-      <Resizer pane="sidebar" />
-      <ChatView />
-      {panelMotion && panelMotion !== 'out' && <Resizer pane="changes" />}
-      {panelMotion && <ChangesPanel chat={chat} motion={panelMotion} />}
+      {showSidebar && <Sidebar searchTick={searchTick} />}
+      {showSidebar && <Resizer pane="sidebar" />}
+      {view === 'scheduled' ? <ScheduledView /> : view === 'artifacts' ? <LibraryView /> : <ChatView />}
+      {view === 'chat' && panelMotion && panelMotion !== 'out' && <Resizer pane="changes" />}
+      {view === 'chat' && panelMotion && <ChangesPanel chat={chat} motion={panelMotion} />}
     </div>
   )
 }

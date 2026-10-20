@@ -23,6 +23,7 @@ const api: DshApi = {
     open: invoke(Channels.workspaceOpen) as DshApi['workspace']['open'],
     files: invoke(Channels.workspaceFiles) as DshApi['workspace']['files'],
     read: invoke(Channels.workspaceRead) as DshApi['workspace']['read'],
+    commands: invoke(Channels.workspaceCommands) as DshApi['workspace']['commands'],
   },
   sessions: {
     list: invoke(Channels.sessionsList) as DshApi['sessions']['list'],
@@ -32,11 +33,19 @@ const api: DshApi = {
   agent: {
     start: invoke(Channels.agentStart) as DshApi['agent']['start'],
     send: invoke(Channels.agentSend) as DshApi['agent']['send'],
+    unqueue: invoke(Channels.agentUnqueue) as DshApi['agent']['unqueue'],
+    rewind: invoke(Channels.agentRewind) as DshApi['agent']['rewind'],
     stop: invoke(Channels.agentStop) as DshApi['agent']['stop'],
     retry: invoke(Channels.agentRetry) as DshApi['agent']['retry'],
     compact: invoke(Channels.agentCompact) as DshApi['agent']['compact'],
     respond: invoke(Channels.agentRespond) as DshApi['agent']['respond'],
     configure: invoke(Channels.agentConfigure) as DshApi['agent']['configure'],
+  },
+  schedules: {
+    list: invoke(Channels.schedulesList) as DshApi['schedules']['list'],
+    save: invoke(Channels.schedulesSave) as DshApi['schedules']['save'],
+    remove: invoke(Channels.schedulesRemove) as DshApi['schedules']['remove'],
+    runNow: invoke(Channels.schedulesRunNow) as DshApi['schedules']['runNow'],
   },
   changes: {
     revertAll: invoke(Channels.changesRevertAll) as DshApi['changes']['revertAll'],

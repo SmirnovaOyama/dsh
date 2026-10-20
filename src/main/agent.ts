@@ -7,6 +7,7 @@ import type {
   ErrorCode,
   FileRef,
   PermissionDecision,
+  QueuedMessage,
   SessionData,
   SessionStatus,
   Settings,
@@ -15,9 +16,9 @@ import type {
 import type { ChangeTracker } from './changes'
 import { compactAt, compactedMessages, isContextOverflow, splitForCompact, summaryRequest } from './compact'
 import { DeepSeekError, streamChat, type ApiUsage, type ChatMessage, type ChatResult, type ToolCall } from './deepseek'
-import { needsApproval } from './permissions'
+import { needsApproval, planModeRefusal } from './permissions'
 import { withRefs } from './refs'
-import { TOOL_SPECS, ToolError, prepareToolCall, type PermissionNeed, type PreparedCall } from './tools'
+import { ToolError, prepareToolCall, toolSpecs, type PermissionNeed, type PreparedCall } from './tools'
 
 const MAX_TOOL_RESULT_CHARS = 60_000
 const STREAM_FLUSH_MS = 50
@@ -38,6 +39,10 @@ export interface SessionState {
   allowEdits: boolean
   allowedPrefixes: string[]
   controller: AbortController | null
+  /** Messages typed while the agent works, sent in at its next step. */
+  queue: QueuedMessage[]
+  /** Where each message of the person's starts in `messages`, for rewinding the conversation. */
+  marks: Record<string, number>
 }
 
 export interface AgentHost {
@@ -49,6 +54,8 @@ export interface AgentHost {
   askPermission(state: SessionState, need: PermissionNeed, toolItemId: string, signal: AbortSignal): Promise<PermissionDecision>
   allowCommandAlways(prefix: string): void
   changesUpdated(state: SessionState): void
+  /** A custom slash command's prompt for this text, or null when it is not one. */
+  expandCommand?(state: SessionState, text: string): Promise<{ name: string; prompt: string } | null>
   chat?: typeof streamChat
   now?: () => number
 }
@@ -110,16 +117,64 @@ export class Agent {
   }
 
   async send(state: SessionState, text: string, refs: FileRef[] = []): Promise<void> {
-    if (this.isRunning(state)) return
     const trimmed = text.trim()
     if (!trimmed) return
-    const content = await withRefs(state.data.workspace, trimmed, refs)
-    // Reading the files took a moment; another message may have started a run meanwhile.
-    if (this.isRunning(state)) return
-    if (!state.data.items.some((item) => item.kind === 'user')) state.data.title = titleFrom(trimmed)
-    this.add(state, { kind: 'user', id: randomUUID(), text: trimmed, at: this.now(), ...(refs.length ? { refs } : {}) })
-    state.messages.push({ role: 'user', content })
+    if (this.isRunning(state)) {
+      // Like Claude Code: what is typed meanwhile waits and goes in at the agent's next step.
+      state.queue.push({ id: randomUUID(), text: trimmed, ...(refs.length ? { refs } : {}) })
+      this.emitQueue(state)
+      return
+    }
+    // Claim the session now, so a second message sent while the files are read is queued, not lost.
+    state.controller = new AbortController()
+    try {
+      await this.drain(state)
+      await this.addUser(state, { id: randomUUID(), text: trimmed, refs })
+    } finally {
+      state.controller = null
+    }
     await this.run(state)
+  }
+
+  /** Takes queued messages back before they are sent: one of them, or all. */
+  unqueue(state: SessionState, messageId?: string): QueuedMessage[] {
+    const taken = messageId ? state.queue.filter((m) => m.id === messageId) : state.queue
+    state.queue = messageId ? state.queue.filter((m) => m.id !== messageId) : []
+    if (taken.length) this.emitQueue(state)
+    return taken
+  }
+
+  private async addUser(state: SessionState, message: { id: string; text: string; refs?: FileRef[] }): Promise<void> {
+    const refs = message.refs ?? []
+    const command = (await this.host.expandCommand?.(state, message.text)) ?? null
+    const content = await withRefs(state.data.workspace, command?.prompt ?? message.text, refs)
+    if (!state.data.items.some((item) => item.kind === 'user')) state.data.title = titleFrom(message.text)
+    state.marks[message.id] = state.messages.length
+    state.tracker.checkpoint(message.id)
+    this.add(state, {
+      kind: 'user',
+      id: message.id,
+      text: message.text,
+      at: this.now(),
+      ...(refs.length ? { refs } : {}),
+      ...(command ? { command: command.name } : {}),
+    })
+    state.messages.push({ role: 'user', content })
+  }
+
+  /** Sends in the messages that were queued. Returns whether there were any. */
+  private async drain(state: SessionState): Promise<boolean> {
+    if (!state.queue.length) return false
+    const queued = state.queue
+    state.queue = []
+    this.emitQueue(state)
+    for (const message of queued) await this.addUser(state, message)
+    this.host.persist(state)
+    return true
+  }
+
+  private emitQueue(state: SessionState): void {
+    this.host.emit({ type: 'queue', sessionId: state.data.id, queue: state.queue.map((m) => ({ ...m })) })
   }
 
   /** Runs the loop again from where it stopped: after an error, or after the step limit. */
@@ -197,9 +252,15 @@ export class Agent {
           break
         }
         if (!result) break
-        if (!result.toolCalls.length) break
+        if (!result.toolCalls.length) {
+          // Messages typed during the last step start the next one.
+          if (await this.drain(state)) continue
+          break
+        }
         const keepGoing = await this.runTools(state, result.toolCalls, signal)
-        if (!keepGoing) break
+        if (signal.aborted) break
+        const queued = await this.drain(state)
+        if (!keepGoing && !queued) break
       }
     })
   }
@@ -232,6 +293,14 @@ export class Agent {
       const summary = result.content.trim()
       if (!summary) throw new Error('The model returned an empty summary.')
       state.messages = compactedMessages(summary, history, held)
+      // The messages the conversation could be rewound to are gone from what the model sees.
+      state.marks = {}
+      for (const entry of state.data.items) {
+        if (entry.kind === 'user' && !entry.compacted) {
+          entry.compacted = true
+          this.flush(state, entry)
+        }
+      }
       // Until the next request reports it, the summary is the best measure of the new context.
       this.addUsage(state, result.usage, result.usage?.completion_tokens ?? 0)
       item.status = 'done'
@@ -284,7 +353,7 @@ export class Agent {
           model,
           effort,
           messages: [{ role: 'system', content: system }, ...apiHistory(state.messages, thinks(effort))],
-          tools: TOOL_SPECS,
+          tools: toolSpecs(state.data.permissionMode === 'plan'),
           temperature: thinks(effort) ? undefined : temperatureFor(settings.replyStyle),
           signal,
         },
@@ -386,16 +455,31 @@ export class Agent {
     item.path = prepared.path
     item.created = prepared.created
     item.stats = prepared.stats
+    // The plan stays in the transcript whatever the person decides.
+    if (prepared.approval?.kind === 'plan') item.output = prepared.approval.plan
     this.flush(state, item)
 
     if (prepared.approval) {
       const settings = this.host.settings()
-      const ask = needsApproval(prepared.approval, {
+      const context = {
         mode: state.data.permissionMode,
         allowedCommands: settings.allowedCommands,
         sessionAllowsEdits: state.allowEdits,
         sessionCommandPrefixes: state.allowedPrefixes,
-      })
+      }
+      if (prepared.approval.kind === 'plan' && state.data.permissionMode !== 'plan') {
+        fail('Plan mode is off, so there is no plan to approve. Go ahead with the task.')
+        return true
+      }
+      const refusal = planModeRefusal(prepared.approval, context)
+      if (refusal) {
+        item.status = 'denied'
+        item.endedAt = this.now()
+        this.flush(state, item)
+        reply(refusal)
+        return true
+      }
+      const ask = needsApproval(prepared.approval, context)
       if (ask) {
         item.status = 'waiting'
         this.flush(state, item)
@@ -410,6 +494,14 @@ export class Agent {
             reply('Not run: the user stopped the agent.')
             return false
           }
+          if (prepared.approval.kind === 'plan') {
+            reply(
+              decision.feedback?.trim()
+                ? `The user wants the plan changed: ${decision.feedback.trim()}\nStay in plan mode, revise the plan and call exit_plan_mode again.`
+                : 'The user did not approve the plan. Stay in plan mode and ask them what they would like changed.',
+            )
+            return !!decision.feedback?.trim()
+          }
           if (decision.feedback?.trim()) {
             reply(`The user declined this and said: ${decision.feedback.trim()}`)
             return true
@@ -417,9 +509,14 @@ export class Agent {
           reply('The user declined this. Do not try it again; ask them what they would like instead.')
           return false
         }
+        if (prepared.approval.kind === 'plan') {
+          // Approving the plan leaves plan mode for the mode the person picked.
+          state.data.permissionMode = decision.type === 'allow' && decision.mode && decision.mode !== 'plan' ? decision.mode : 'acceptEdits'
+          this.emitMeta(state)
+        }
         if (decision.type === 'allowSession') {
           if (prepared.approval.kind === 'edit') state.allowEdits = true
-          else state.allowedPrefixes.push(prepared.approval.prefix)
+          else if (prepared.approval.kind === 'command') state.allowedPrefixes.push(prepared.approval.prefix)
         }
         if (decision.type === 'allowAlways') this.host.allowCommandAlways(decision.prefix)
         item.status = 'running'
@@ -441,11 +538,16 @@ export class Agent {
         },
       })
       item.status = signal.aborted ? 'stopped' : result.isError ? 'error' : 'done'
-      item.output = result.display
+      item.output = result.display ?? item.output
       item.info = result.info
       item.endedAt = this.now()
       this.flush(state, item)
       reply(result.text)
+      if (result.todos) {
+        state.data.todos = result.todos
+        this.host.emit({ type: 'todos', sessionId: state.data.id, todos: result.todos })
+        this.host.persist(state)
+      }
     } catch (error) {
       fail(error instanceof ToolError ? error.message : (error as Error).message)
     }
@@ -486,7 +588,11 @@ export class Agent {
     if (state.data.status === status) return
     state.data.status = status
     state.data.updatedAt = this.now()
-    const { items: _items, usage: _usage, ...meta } = state.data
+    this.emitMeta(state)
+  }
+
+  private emitMeta(state: SessionState): void {
+    const { items: _items, usage: _usage, todos: _todos, ...meta } = state.data
     this.host.emit({ type: 'meta', meta })
   }
 }

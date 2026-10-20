@@ -14,6 +14,7 @@ export interface PromptContext {
   shell: string
   locale: Locale
   today: string
+  planMode?: boolean
 }
 
 async function projectInstructions(workspace: string): Promise<string> {
@@ -28,6 +29,13 @@ async function projectInstructions(workspace: string): Promise<string> {
   }
   return parts.join('\n\n')
 }
+
+const PLAN_MODE = `
+
+Plan mode is on. The user wants a plan before anything changes:
+- Only read and search. Do not edit files or run commands that change anything; those are refused.
+- Find out what you need, then call exit_plan_mode with a concrete plan in Markdown.
+- If the user only asked a question, answer it without a plan.`
 
 export async function buildSystemPrompt(ctx: PromptContext): Promise<string> {
   const language = ctx.locale === 'en' ? 'English' : 'Traditional Chinese'
@@ -47,6 +55,7 @@ How to answer:
 - Reply in the language the user writes in. The app is set to ${language}.
 - Keep replies short and concrete: what you found, what you changed, what is left. Use Markdown, and refer to code as path:line.
 - Before a group of tool calls, say in one short sentence what you are about to do.
+- For tasks with several steps, keep a to-do list with todo_write and update it as you go.
 - Never claim you ran, tested or checked something you did not.
 
 Environment:
@@ -55,5 +64,5 @@ Environment:
 - Operating system: ${ctx.platform}
 - Shell: ${ctx.shell}
 - Today: ${ctx.today}
-- All file paths are relative to the workspace root.${instructions ? `\n\nThe project's own instructions follow. Follow them unless they conflict with the user's request.\n\n${instructions}` : ''}`
+- All file paths are relative to the workspace root.${ctx.planMode ? PLAN_MODE : ''}${instructions ? `\n\nThe project's own instructions follow. Follow them unless they conflict with the user's request.\n\n${instructions}` : ''}`
 }

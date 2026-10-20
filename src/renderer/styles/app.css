@@ -97,8 +97,17 @@ input, textarea, select { font: inherit; color: inherit; }
   width: var(--sidebar-width);
   min-width: 0;
   min-height: 0;
-  padding: calc(8px + var(--titlebar-height)) 10px 10px;
+  padding: calc(4px + var(--titlebar-height)) 10px 10px;
 }
+/* The row beside the macOS window buttons: it drags the window and holds the sidebar toggle. */
+.hx-side-bar {
+  position: absolute; inset: 0 0 auto 0; height: var(--titlebar-height);
+  display: flex; align-items: center; padding-inline-start: 76px;
+  -webkit-app-region: drag;
+}
+.hx-side-bar button { -webkit-app-region: no-drag; width: 28px; height: 28px; color: var(--text-muted); }
+/* With the sidebar hidden, the header makes room for the window buttons. */
+:root[data-platform="darwin"][data-sidebar="hidden"] .hx-header { padding-inline-start: 76px; }
 .hx-sidebar-top { display: flex; flex-direction: column; gap: 4px; }
 .hx-nav { display: flex; flex-direction: column; gap: 2px; }
 .hx-project {
@@ -558,3 +567,188 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .oy-icon.hx-fill { fill: currentColor; stroke: none; }
 .hx-version { margin-top: 32px; font-size: 13px; line-height: 18px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .hx-search input::-webkit-search-cancel-button { display: none; }
+
+/* ── Claude Code parity: suggestions, queue, to-dos, plans, rewind ─ */
+.hx-field { position: relative; }
+/* The / and @ list floats over whatever sits above the field, so opening it moves nothing. */
+.hx-suggest {
+  position: absolute; z-index: 6; left: 0; right: 0; bottom: calc(100% + 6px);
+  max-height: 296px; overflow-y: auto; margin: 0; padding: 4px; list-style: none;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-md);
+  animation: hx-fade-in var(--duration-quick) var(--ease-standard) both;
+}
+.hx-suggest li {
+  display: flex; align-items: baseline; gap: 10px; min-height: 32px; padding: 6px 10px;
+  border-radius: var(--radius-sm); font-size: 14px; line-height: 20px; color: var(--text); cursor: default;
+}
+.hx-suggest li.is-file { align-items: center; gap: 8px; }
+.hx-suggest li[aria-selected="true"] { background: var(--surface-hover); }
+.hx-suggest li > .oy-icon { flex-shrink: 0; color: var(--text-muted); }
+.hx-suggest .label { flex-shrink: 0; font-weight: 500; white-space: nowrap; }
+/* Command names sit in a column so the descriptions line up. */
+.hx-suggest li:not(.is-file) .label { min-width: 8rem; }
+.hx-suggest .hint { flex-shrink: 0; font-size: 13px; color: var(--text-muted); white-space: nowrap; }
+.hx-suggest .detail { flex: 1; min-width: 0; font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-suggest .tag { flex-shrink: 0; font-size: 12px; color: var(--text-disabled); }
+
+/* Queued messages read like the person's own messages, waiting their turn. */
+.hx-queue { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.hx-queue li {
+  display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 4px 4px 4px 12px;
+  border-radius: var(--radius-md); background: var(--bubble); font-size: 14px; line-height: 20px;
+  animation: hx-fade-in var(--duration-base) var(--ease-standard) both;
+}
+.hx-queue .when { flex-shrink: 0; font-size: 12px; color: var(--text-muted); }
+.hx-queue .text { flex: 1; min-width: 0; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-queue .remove { display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0; border-radius: var(--radius-sm); color: var(--text-muted); }
+.hx-queue .remove:hover { color: var(--text); background: var(--surface-hover); }
+
+.hx-todos { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.hx-todos .head {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 0 10px 0 12px;
+  font-size: 13px; line-height: 18px; color: var(--text); text-align: start;
+}
+.hx-todos .head > .oy-icon { flex-shrink: 0; color: var(--text-muted); }
+.hx-todos .head .title { flex-shrink: 0; font-weight: 600; }
+.hx-todos .head .count { flex-shrink: 0; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.hx-todos .head .now { min-width: 0; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-todos .head .grow { flex: 1; }
+.hx-todos .list { display: flex; flex-direction: column; gap: 2px; max-height: 200px; overflow-y: auto; margin: 0; padding: 0 12px 10px; list-style: none; }
+.hx-todos .list li { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 20px; color: var(--text); }
+.hx-todos .list li > .oy-icon { flex-shrink: 0; margin-top: 2px; color: var(--text-muted); }
+.hx-todos .list li.is-in_progress { font-weight: 600; }
+.hx-todos .list li.is-in_progress > .oy-icon { color: var(--text); }
+.hx-todos .list li.is-completed { color: var(--text-muted); }
+.hx-todos .list li.is-completed > span { text-decoration: line-through; text-decoration-color: var(--text-disabled); }
+
+.hx-plan { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.hx-plan .head {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 0 12px 0 14px;
+  font-size: 14px; line-height: 20px; text-align: start; color: var(--text);
+}
+.hx-plan .head:hover { background: var(--surface-hover); }
+.hx-plan .head > .oy-icon { flex-shrink: 0; color: var(--text-muted); }
+.hx-plan .head .title { font-weight: 600; }
+.hx-plan .head .status { color: var(--text-muted); font-size: 13px; }
+.hx-plan .head .grow { flex: 1; }
+.hx-plan .head .hx-chev { color: var(--text-muted); }
+.hx-plan .body { padding: 4px 16px 16px; font-size: 14px; line-height: 22px; }
+.hx-plan-box { max-height: 320px; padding: 12px 16px; font-size: 14px; line-height: 22px; }
+
+/* The rewind button shows beside a message on hover, without moving it. */
+.hx-rewind {
+  position: absolute; top: 6px; right: calc(100% + 6px); height: 28px; width: 28px;
+  color: var(--text-muted); opacity: 0; transition: opacity var(--duration-quick) var(--ease-standard);
+}
+.hx-user .body { position: relative; }
+.hx-user:hover .hx-rewind, .hx-rewind:focus-visible { opacity: 1; }
+.hx-rewind:hover { color: var(--text); }
+.hx-rewind-list { display: flex; flex-direction: column; gap: 2px; max-height: 320px; overflow-y: auto; margin: 16px 0 0; padding: 0; list-style: none; }
+.hx-rewind-list button {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 40px; padding: 8px 10px;
+  border-radius: var(--radius-sm); font-size: 14px; line-height: 20px; text-align: start; color: var(--text);
+}
+.hx-rewind-list button:hover { background: var(--surface-hover); }
+.hx-rewind-list .text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-rewind-list .time { flex-shrink: 0; font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.hx-rewind-quote {
+  margin: 12px 0 0; padding: 10px 14px; border-radius: var(--radius-md); background: var(--bubble);
+  font-size: 14px; line-height: 20px; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.hx-rewind-modes { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; }
+.hx-rewind-modes label { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer; }
+.hx-rewind-modes label:hover { background: var(--surface-hover); }
+.hx-rewind-modes label.is-disabled { opacity: 0.45; cursor: default; }
+.hx-rewind-modes label.is-disabled:hover { background: none; }
+.hx-rewind-modes input { margin: 3px 0 0; accent-color: var(--text); }
+.hx-rewind-modes .text { display: flex; flex-direction: column; min-width: 0; }
+.hx-rewind-modes .name { font-size: 14px; line-height: 20px; font-weight: 500; color: var(--text); }
+.hx-rewind-modes .desc { font-size: 13px; line-height: 18px; color: var(--text-muted); }
+.hx-rewind-note { margin-top: 10px; font-size: 12px; line-height: 16px; color: var(--text-muted); }
+
+/* ── projects in the sidebar ─────────────────────────────────── */
+.hx-projects-head { display: flex; align-items: center; justify-content: space-between; margin-inline-end: 4px; }
+.hx-projects-head h2 { margin: 0; font: inherit; }
+.hx-projects-head .btn-ghost, .hx-proj-row .acts .btn-ghost { width: 24px; height: 24px; padding: 0; border-radius: var(--radius-xs); color: var(--text-muted); }
+.hx-projects-head .btn-ghost:hover, .hx-proj-row .acts .btn-ghost:hover { color: var(--text); }
+.hx-proj + .hx-proj { margin-top: 6px; }
+.hx-proj-row { position: relative; display: flex; align-items: center; border-radius: var(--radius-sm); }
+.hx-proj-row:hover { background: var(--surface-hover); }
+.hx-proj-name {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px;
+  font-size: 14px; line-height: 20px; font-weight: 500; color: var(--text); text-align: start;
+}
+.hx-proj-name > .oy-icon { flex-shrink: 0; color: var(--text-muted); }
+.hx-proj-name .n { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-proj-name .hx-chev { flex-shrink: 0; color: var(--text-disabled); }
+.hx-proj[data-current] .hx-proj-name > .oy-icon:first-child { color: var(--text); }
+/* The actions take no room until the row is hovered, so the name never moves. */
+.hx-proj-row .acts { position: absolute; right: 4px; top: 4px; display: flex; gap: 2px; opacity: 0; transition: opacity var(--duration-quick) var(--ease-standard); }
+.hx-proj-row:hover .acts, .hx-proj-row:focus-within .acts { opacity: 1; }
+.hx-proj .hx-session { padding-inline-start: 34px; }
+.hx-proj .hx-session-list { padding-top: 2px; }
+.hx-proj-empty { padding: 6px 10px 6px 34px; font-size: 13px; line-height: 18px; color: var(--text-disabled); }
+.hx-proj-more { height: 28px; padding: 0 10px 0 34px; font-size: 13px; color: var(--text-muted); text-align: start; border-radius: var(--radius-sm); }
+.hx-proj-more:hover { color: var(--text); background: var(--surface-hover); }
+.hx-proj-add { display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; padding: 0 10px; border-radius: var(--radius-sm); font-size: 14px; color: var(--text-muted); }
+.hx-proj-add:hover { color: var(--text); background: var(--surface-hover); }
+.hx-session .p { flex-shrink: 0; max-width: 40%; font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* The demo in a browser draws stand-ins for the macOS window buttons, so its screenshots match the app. */
+:root[data-demo][data-platform="darwin"] body::after {
+  content: ""; position: fixed; z-index: 100; top: 14px; left: 18px; width: 12px; height: 12px; border-radius: 50%;
+  background: #ff5f57; box-shadow: 20px 0 0 #febc2e, 40px 0 0 #28c840; pointer-events: none;
+}
+
+/* ── pages the sidebar opens: scheduled tasks and artifacts ──── */
+.hx-page-head-row { display: flex; align-items: center; gap: 12px; }
+.hx-page-head-row h1 { flex: 1; min-width: 0; }
+.hx-page-toggle { position: absolute; top: calc(var(--titlebar-height) / 2 + 26px); inset-inline-start: 12px; }
+:root[data-platform="darwin"] .hx-page-toggle { top: 6px; inset-inline-start: 76px; }
+.hx-page-btn { height: 32px; padding: 0 12px 0 10px; gap: 6px; font-size: 13px; }
+.hx-page-intro { margin: -8px 0 12px; font-size: 14px; line-height: 20px; color: var(--text-muted); }
+.hx-page-empty { margin: 32px 0; font-size: 14px; line-height: 20px; color: var(--text-muted); }
+.hx-page-foot { margin: 16px 0 0; font-size: 12px; line-height: 16px; color: var(--text-muted); }
+
+.hx-sched-list { list-style: none; margin: 0 -8px; padding: 0; }
+.hx-sched { position: relative; display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 0 4px 0 0; border-radius: var(--radius-sm); }
+.hx-sched + .hx-sched::before { content: ""; position: absolute; top: 0; inset-inline: 8px; height: 1px; background: var(--border); }
+.hx-sched:hover, .hx-sched[data-menu] { background: var(--surface-hover); }
+.hx-sched:hover::before, .hx-sched:hover + .hx-sched::before, .hx-sched[data-menu]::before, .hx-sched[data-menu] + .hx-sched::before { opacity: 0; }
+.hx-sched .main { flex: 1; min-width: 0; align-self: stretch; display: flex; align-items: center; gap: 12px; padding: 8px 0 8px 8px; text-align: start; }
+.hx-sched .main > .oy-icon { flex-shrink: 0; color: var(--text-muted); }
+.hx-sched .text { display: flex; flex-direction: column; min-width: 0; }
+.hx-sched .name { font-size: 14px; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-sched .sub { display: flex; gap: 12px; font-size: 12px; line-height: 16px; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.hx-sched .side { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums; }
+.hx-sched .next { font-size: 13px; line-height: 20px; color: var(--text); }
+.hx-sched .last { color: var(--text-muted); }
+.hx-sched .last.is-error { color: var(--danger); }
+.hx-sched .last.is-waiting { color: var(--warning); }
+.hx-last-link { padding: 0; font: inherit; }
+.hx-last-link:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+.hx-sched .more { width: 28px; height: 28px; color: var(--text-muted); opacity: 0; }
+.hx-sched:hover .more, .hx-sched .more:focus-visible, .hx-sched[data-menu] .more { opacity: 1; }
+.hx-sched[data-off] :is(.name, .next) { color: var(--text-muted); }
+
+.hx-sched-form { display: flex; flex-direction: column; padding-top: 8px; }
+.hx-sched-form > .input-base { width: 100%; margin-bottom: 16px; font-size: 13px; }
+.hx-sched-form textarea.input-base { min-height: 96px; line-height: 20px; }
+.hx-sched-form .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 12px; }
+.hx-sched-form .grid .oy-select { width: 100%; font-size: 13px; }
+.hx-time { display: flex; gap: 6px; }
+.hx-time .oy-select { flex: 1; min-width: 0; }
+.hx-sched-form .note { margin: 16px 0 0; font-size: 12px; line-height: 18px; color: var(--text-muted); white-space: pre-line; }
+.hx-page-back {
+  display: inline-flex; align-items: center; gap: 2px; height: 24px; margin: 0 0 6px -6px; padding: 0 8px 0 4px;
+  border-radius: var(--radius-xs); font-size: 13px; color: var(--text-muted);
+}
+.hx-page-back:hover { background: var(--surface-hover); color: var(--text); }
+.hx-sched-actions { display: flex; align-items: center; gap: 8px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); }
+.hx-sched-actions .end { display: flex; gap: 8px; margin-inline-start: auto; }
+.hx-sched-actions .btn-ghost { height: 32px; gap: 6px; font-size: 13px; }
+.hx-sched-actions .btn-ghost.is-danger { color: var(--danger); }
+.hx-sched-actions .btn-ghost.is-danger:hover { background: var(--surface-hover); }
+.hx-confirm { display: flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text-muted); }
+.hx-confirm > span { margin-inline-end: 4px; }

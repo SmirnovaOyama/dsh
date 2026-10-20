@@ -1,10 +1,10 @@
-import { ChevronRight, CircleAlert, FileText, LoaderCircle } from 'lucide-react'
+import { ChevronRight, CircleAlert, ClipboardList, FileText, LoaderCircle, Undo2 } from 'lucide-react'
 import { memo, useContext, useMemo, useState } from 'react'
 import type { FileChange, SessionData, TranscriptItem } from '../../shared/types'
 import { clockTime } from '../format'
 import { t, type MessageKey } from '../i18n'
 import { HoldScroll } from '../scroll'
-import { actions, getState } from '../store'
+import { actions, getState, useApp } from '../store'
 import { RefLabel } from './Composer'
 import { Icon } from './Icon'
 import { Markdown } from './Markdown'
@@ -33,7 +33,8 @@ function group(items: TranscriptItem[]): Block[] {
       blocks.push(turn)
     }
     const last = turn.parts[turn.parts.length - 1]
-    if (item.kind === 'tool' || item.kind === 'reasoning') {
+    // A plan is something to read, like an answer, so it never folds away with the steps.
+    if ((item.kind === 'tool' && item.name !== PLAN_TOOL) || item.kind === 'reasoning') {
       if (last?.type === 'steps') last.items.push(item)
       else turn.parts.push({ type: 'steps', id: item.id, items: [item] })
     } else {
@@ -42,6 +43,8 @@ function group(items: TranscriptItem[]): Block[] {
   }
   return blocks
 }
+
+const PLAN_TOOL = 'exit_plan_mode'
 
 function isLive(item: StepItem): boolean {
   return item.kind === 'reasoning' ? item.endedAt === undefined : item.status === 'running' || item.status === 'waiting'
@@ -59,10 +62,21 @@ function needsPending(items: TranscriptItem[], status: SessionData['status']): b
   return last.kind === 'user'
 }
 
-const UserMessage = memo(function UserMessage({ item }: { item: Extract<TranscriptItem, { kind: 'user' }> }) {
+const UserMessage = memo(function UserMessage({ item, canRewind }: { item: Extract<TranscriptItem, { kind: 'user' }>; canRewind: boolean }) {
   return (
     <div className="hx-user">
       <div className="body">
+        {canRewind && (
+          <button
+            type="button"
+            className="btn-ghost hx-icon-btn hx-rewind"
+            aria-label={t('rewind.here')}
+            title={t('rewind.here')}
+            onClick={() => actions.openRewind(item.id)}
+          >
+            <Icon icon={Undo2} size={16} />
+          </button>
+        )}
         <p>{item.text}</p>
         {item.refs && item.refs.length > 0 && (
           <ul className="refs" aria-label={t('ref.label')}>
@@ -141,7 +155,11 @@ function stepsLabel(items: StepItem[]): string {
     count('steps.edits', new Set(tools.filter((i) => EDITS.has(i.name)).map((i) => i.path ?? i.target)).size),
     count('steps.reads', tools.filter((i) => READS.has(i.name)).length),
     count('steps.searches', tools.filter((i) => SEARCHES.has(i.name)).length),
-    count('steps.others', tools.filter((i) => !READS.has(i.name) && !SEARCHES.has(i.name) && !EDITS.has(i.name) && i.name !== 'run_command').length),
+    count('steps.todos', tools.some((i) => i.name === 'todo_write') ? 1 : 0),
+    count(
+      'steps.others',
+      tools.filter((i) => !READS.has(i.name) && !SEARCHES.has(i.name) && !EDITS.has(i.name) && i.name !== 'run_command' && i.name !== 'todo_write').length,
+    ),
     count('steps.failed', tools.filter((i) => i.status === 'error').length),
   ].filter((p): p is string => p !== null)
   const joined = parts.join(t('steps.sep'))
@@ -212,9 +230,52 @@ const Steps = memo(function Steps({ items, live, changed }: { items: StepItem[];
   )
 })
 
+const PLAN_STATUS: Partial<Record<ToolItem['status'], MessageKey>> = {
+  waiting: 'plan.waiting',
+  done: 'plan.approved',
+  denied: 'plan.declined',
+  stopped: 'plan.stopped',
+  error: 'plan.declined',
+}
+
+/** The plan the agent wrote in plan mode. While it waits, the prompt above the composer shows it in full. */
+function PlanCard({ item }: { item: ToolItem }) {
+  const [open, setOpen] = useState(item.status !== 'waiting')
+  const hold = useContext(HoldScroll)
+  const status = PLAN_STATUS[item.status]
+  return (
+    <div className="hx-plan">
+      <button
+        type="button"
+        className="head"
+        aria-expanded={open}
+        onClick={() => {
+          hold()
+          setOpen((o) => !o)
+        }}
+      >
+        <Icon icon={ClipboardList} size={16} />
+        <span className="title">{t('plan.title')}</span>
+        {status && <span className="status">{t(status)}</span>}
+        <span className="grow" />
+        <Icon icon={ChevronRight} size={16} className="hx-chev" />
+      </button>
+      <div className={`hx-disc ${open ? 'is-open' : ''}`}>
+        <div>
+          <div className="body">
+            <Markdown text={item.output ?? ''} streaming={false} />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ItemView({ item, isLast, session }: { item: TranscriptItem; isLast: boolean; session: SessionData }) {
   const idle = session.status === 'idle'
   switch (item.kind) {
+    case 'tool':
+      return item.name === PLAN_TOOL ? <PlanCard key={item.status === 'waiting' ? 'waiting' : 'decided'} item={item} /> : null
     case 'text':
       return item.text ? <Markdown text={item.text} streaming={item.streaming && !idle} /> : null
     case 'error':
@@ -232,12 +293,14 @@ export function Transcript({ session, changes }: { session: SessionData; changes
   const changed = useMemo(() => new Set(changes.map((c) => c.path)), [changes])
   const pending = needsPending(session.items, session.status)
   const lastIsUser = blocks[blocks.length - 1]?.type === 'user' || blocks.length === 0
+  const hasPermission = useApp((s) => s.chat?.permission != null)
+  const canRewind = session.status === 'idle' && !hasPermission
 
   return (
     <>
       {blocks.map((block, index) =>
         block.type === 'user' ? (
-          <UserMessage key={block.item.id} item={block.item} />
+          <UserMessage key={block.item.id} item={block.item} canRewind={canRewind} />
         ) : (
           <section key={block.id} className="hx-turn" aria-label={t('turn.label')}>
             {block.parts.map((part) =>

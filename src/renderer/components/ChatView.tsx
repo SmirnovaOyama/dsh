@@ -1,4 +1,4 @@
-import { Ellipsis, Folder, GitBranch, PanelRight, Trash2 } from 'lucide-react'
+import { Ellipsis, Folder, GitBranch, PanelLeft, PanelRight, Trash2 } from 'lucide-react'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { tildify } from '../format'
 import { t } from '../i18n'
@@ -10,6 +10,7 @@ import { NoteDoodle } from './Doodles'
 import { Icon } from './Icon'
 import { Menu, MenuItem } from './Menu'
 import { Modal } from './Modal'
+import { RewindDialog } from './Rewind'
 import { Transcript } from './Transcript'
 import { NoFolder, NoKey } from './Welcome'
 
@@ -25,6 +26,7 @@ function Header() {
   const home = useApp((s) => s.app.home)
   const draftModel = useApp((s) => s.draft.model)
   const showChanges = useApp((s) => s.showChanges)
+  const showSidebar = useApp((s) => s.showSidebar)
   const moreRef = useRef<HTMLButtonElement>(null)
   const [menu, setMenu] = useState(false)
   const [confirm, setConfirm] = useState(false)
@@ -35,6 +37,17 @@ function Header() {
 
   return (
     <header className="hx-header">
+      {!showSidebar && (
+        <button
+          type="button"
+          className="btn-ghost hx-icon-btn"
+          aria-label={t('sidebar.show')}
+          title={t('sidebar.show')}
+          onClick={() => actions.toggleSidebar()}
+        >
+          <Icon icon={PanelLeft} size={18} />
+        </button>
+      )}
       <div className="heading">
         <h1 className="title">{title}</h1>
         <p className="sub">
@@ -197,6 +210,7 @@ function Conversation() {
         </HoldScroll.Provider>
         <Composer chat={chat} showJump={showJump} onJump={() => toBottom(true)} onSent={() => toBottom()} />
       </div>
+      <RewindDialog />
     </div>
   )
 }
