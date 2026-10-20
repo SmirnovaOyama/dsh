@@ -1,6 +1,6 @@
 // A demo of the main process for the browser preview (npm run dev:web) and screenshots.
 // Nothing here touches files or the network. Query parameters pick a starting state:
-//   ?nokey  ?nofolder  ?perm=edit  ?perm=command  ?running  ?theme=dark  ?platform=win32  ?lang=en
+//   ?nokey  ?nofolder  ?perm=edit  ?perm=command  ?perm=plan  ?running  ?todos  ?queue  ?theme=dark  ?platform=win32  ?lang=en
 
 import {
   DEFAULT_SETTINGS,
@@ -12,9 +12,12 @@ import {
   type FileRef,
   type PermissionDecision,
   type PermissionRequest,
+  type QueuedMessage,
   type SessionData,
   type SessionMeta,
   type Settings,
+  type SlashCommand,
+  type Todo,
   type TranscriptItem,
   type WorkspaceInfo,
 } from '../shared/types'
@@ -195,10 +198,31 @@ export function needsRefresh(session: Session, now = clock.now()) {
 }
 \`\`\``
 
+const MOCK_COMMANDS: SlashCommand[] = [
+  { name: 'fix-lint', description: '跑 lint 並修好錯誤' },
+  { name: 'release-notes', description: '整理這一版的更新說明' },
+]
+
+const demoPlan = `登入一小時後被登出，是因為 \`needsRefresh()\` 要等 token 過期才更新
+
+1. 在 \`src/auth/session.ts\` 改成過期前 60 秒就更新
+2. 新增 \`src/auth/clock.ts\`，把時間來源抽出來，測試才能快轉時間
+3. 在 \`tests/auth/session.test.ts\` 補兩個測試：快過期時更新、過期那一刻仍然登入
+4. 跑 \`npm run test:auth\` 確認都通過`
+
+const demoTodos: Todo[] = [
+  { content: '找出被登出的原因', status: 'completed' },
+  { content: '改成過期前 60 秒更新 token', status: 'completed' },
+  { content: '把時間來源抽成 clock', status: 'completed' },
+  { content: '補上快過期和過期那一刻的測試', status: 'in_progress' },
+  { content: '跑 auth 測試確認都通過', status: 'pending' },
+]
+
 function mainSession(): SessionData {
   const t0 = now - 26 * MIN
-  const running = params.has('running')
+  const running = params.has('running') || params.has('todos') || params.has('queue')
   const perm = params.get('perm')
+  if (perm === 'plan') return planSession(t0)
   const items: TranscriptItem[] = [
     { kind: 'user', id: id(), text: '使用者登入大約一小時後常常被突然登出，幫我找出原因並修好，記得補上測試', at: t0 },
     {
@@ -276,6 +300,31 @@ function mainSession(): SessionData {
     status: perm ? 'waiting' : running ? 'running' : 'idle',
     items,
     usage: { promptTokens: 61_240, completionTokens: 3_180, cacheHitTokens: 40_960, contextTokens: 18_420 },
+    ...(running && (params.has('todos') || params.has('queue')) ? { todos: demoTodos } : {}),
+  }
+}
+
+function planSession(t0: number): SessionData {
+  return {
+    id: 'demo-main',
+    title: '修正登入後被登出的問題',
+    workspace: DSH,
+    createdAt: t0,
+    updatedAt: now - 2 * MIN,
+    model: 'deepseek-flash',
+    effort: 'high',
+    permissionMode: 'plan',
+    status: 'waiting',
+    items: [
+      { kind: 'user', id: id(), text: '使用者登入大約一小時後常常被突然登出，先幫我想好怎麼修，確認後再動手', at: t0 },
+      { kind: 'reasoning', id: id(), text: '一小時剛好是 access token 的有效期限，先讀 session.ts', startedAt: t0 + 1000, endedAt: t0 + 9000 },
+      { kind: 'text', id: id(), text: '我先看看登入狀態是在哪裡更新的', streaming: false },
+      { kind: 'tool', id: id(), callId: 'c1', name: 'read_file', target: 'src/auth/session.ts', status: 'done', startedAt: t0 + 10_000, endedAt: t0 + 10_100, info: { lines: 142 } },
+      { kind: 'tool', id: id(), callId: 'c2', name: 'search_files', target: 'needsRefresh', status: 'done', startedAt: t0 + 11_000, endedAt: t0 + 11_200, info: { matches: 6 } },
+      { kind: 'tool', id: id(), callId: 'c3', name: 'read_file', target: 'tests/auth/session.test.ts', status: 'done', startedAt: t0 + 12_000, endedAt: t0 + 12_100, info: { lines: 38 } },
+      { kind: 'tool', id: id(), callId: 'c4', name: 'exit_plan_mode', target: '計畫', status: 'waiting', output: demoPlan },
+    ],
+    usage: { promptTokens: 31_240, completionTokens: 1_180, cacheHitTokens: 20_960, contextTokens: 12_420 },
   }
 }
 
@@ -299,9 +348,10 @@ function shortSession(sid: string, title: string, updatedAt: number, status: Ses
 }
 
 const day = 24 * 60 * MIN
-const sessions = new Map<string, { data: SessionData; changes: FileChange[]; permission: PermissionRequest | null }>()
+type MockSession = { data: SessionData; changes: FileChange[]; permission: PermissionRequest | null; queue: QueuedMessage[] }
+const sessions = new Map<string, MockSession>()
 function addSession(data: SessionData, changes: FileChange[] = [], permission: PermissionRequest | null = null) {
-  sessions.set(data.id, { data, changes, permission })
+  sessions.set(data.id, { data, changes, permission, queue: [] })
 }
 
 const main = mainSession()
@@ -310,8 +360,11 @@ const mainPermission: PermissionRequest | null =
     ? { id: 'p1', sessionId: 'demo-main', toolItemId: main.items[main.items.length - 1].id, kind: 'edit', path: 'src/auth/session.ts', created: false, stats: { added: 8, removed: 3 }, lines: sessionDiff }
     : params.get('perm') === 'command'
       ? { id: 'p2', sessionId: 'demo-main', toolItemId: main.items[main.items.length - 1].id, kind: 'command', command: 'npm install zod', cwd: DSH, prefix: 'npm install' }
-      : null
-addSession(main, params.get('perm') === 'edit' ? [] : mainChanges, mainPermission)
+      : params.get('perm') === 'plan'
+        ? { id: 'p3', sessionId: 'demo-main', toolItemId: main.items[main.items.length - 1].id, kind: 'plan', plan: demoPlan }
+        : null
+addSession(main, params.get('perm') === 'edit' || params.get('perm') === 'plan' ? [] : mainChanges, mainPermission)
+if (params.has('queue')) sessions.get('demo-main')!.queue.push({ id: 'q1', text: '測試過了之後順便更新 README 裡登入的說明' })
 addSession(shortSession('s2', '把設定頁拆成小元件', now - 40 * MIN, 'idle'))
 addSession(shortSession('s3', '更新 README 的安裝步驟', now - 90 * MIN))
 addSession(shortSession('s4', '加上深色模式', now - day - 3 * 60 * MIN))
@@ -323,7 +376,7 @@ addSession(shortSession('s8', '整理 API 錯誤訊息的寫法', now - 12 * day
 const metaOf = ({ items: _i, usage: _u, ...meta }: SessionData): SessionMeta => meta
 const snapshot = (sid: string) => {
   const s = sessions.get(sid)
-  return s ? structuredClone({ session: s.data, changes: s.changes, permission: s.permission }) : null
+  return s ? structuredClone({ session: s.data, changes: s.changes, permission: s.permission, queue: s.queue }) : null
 }
 
 // ── a scripted agent for new messages ───────────────────────────
@@ -361,13 +414,67 @@ async function stream(data: SessionData, item: Extract<TranscriptItem, { kind: '
   }
 }
 
+function setTodos(data: SessionData, todos: Todo[]) {
+  data.todos = todos
+  emit({ type: 'todos', sessionId: data.id, todos })
+}
+
+const tool = (name: string, target: string, extra: Partial<Extract<TranscriptItem, { kind: 'tool' }>> = {}): Extract<TranscriptItem, { kind: 'tool' }> => ({
+  kind: 'tool',
+  id: id(),
+  callId: id(),
+  name,
+  target,
+  status: 'running',
+  startedAt: Date.now(),
+  ...extra,
+})
+
+function addUser(data: SessionData, message: { id?: string; text: string; refs?: FileRef[] }) {
+  const command = /^\/([\w.-]+)/.exec(message.text)?.[1]
+  put(data, { kind: 'user', id: message.id ?? id(), text: message.text, at: Date.now(), ...(message.refs?.length ? { refs: message.refs } : {}), ...(command ? { command } : {}) })
+}
+
+/** Sends in what was typed while the demo agent worked. */
+function drain(entry: MockSession): boolean {
+  if (!entry.queue.length) return false
+  const queued = entry.queue
+  entry.queue = []
+  emit({ type: 'queue', sessionId: entry.data.id, queue: [] })
+  for (const message of queued) addUser(entry.data, message)
+  return true
+}
+
+async function ask(entry: MockSession, request: PermissionRequest, signal: AbortSignal): Promise<PermissionDecision> {
+  const sid = entry.data.id
+  entry.permission = request
+  setStatus(entry.data, 'waiting')
+  emit({ type: 'permission', sessionId: sid, request })
+  const decision = await new Promise<PermissionDecision>((resolve) => {
+    waiting.set(sid, resolve)
+    signal.addEventListener('abort', () => resolve({ type: 'deny' }))
+  })
+  waiting.delete(sid)
+  entry.permission = null
+  emit({ type: 'permission', sessionId: sid, request: null })
+  setStatus(entry.data, 'running')
+  if (signal.aborted) throw new DOMException('stopped', 'AbortError')
+  return decision
+}
+
+async function say(data: SessionData, text: string, signal: AbortSignal) {
+  const item: Extract<TranscriptItem, { kind: 'text' }> = { kind: 'text', id: id(), text: '', streaming: true }
+  await stream(data, item, text, signal)
+  put(data, { ...item, streaming: false })
+}
+
 async function runAgent(sid: string, text: string, refs: FileRef[] = []) {
   const entry = sessions.get(sid)!
   const data = entry.data
   const controller = new AbortController()
   const { signal } = controller
   running.set(sid, controller)
-  put(data, { kind: 'user', id: id(), text, at: Date.now(), ...(refs.length ? { refs } : {}) })
+  addUser(data, { text, refs })
   setStatus(data, 'running')
   try {
     await sleep(700, signal)
@@ -376,59 +483,79 @@ async function runAgent(sid: string, text: string, refs: FileRef[] = []) {
       await stream(data, reasoning, '先看專案結構，找到 README，再決定要補哪些段落', signal)
       put(data, { ...reasoning, endedAt: Date.now() })
     }
-    const intro: Extract<TranscriptItem, { kind: 'text' }> = { kind: 'text', id: id(), text: '', streaming: true }
-    await stream(data, intro, '我先看一下專案的結構', signal)
-    put(data, { ...intro, streaming: false })
-
-    const list: Extract<TranscriptItem, { kind: 'tool' }> = { kind: 'tool', id: id(), callId: id(), name: 'list_dir', target: '.', status: 'running', startedAt: Date.now() }
-    put(data, list)
-    await sleep(600, signal)
-    put(data, { ...list, status: 'done', endedAt: Date.now(), info: { files: 12 }, output: 'README.md\npackage.json\nsrc/\ntests/\nvite.config.ts' })
-
-    const edit: Extract<TranscriptItem, { kind: 'tool' }> = {
-      kind: 'tool',
-      id: id(),
-      callId: id(),
-      name: 'edit_file',
-      target: 'README.md',
-      status: 'waiting',
-      path: 'README.md',
-      created: false,
-      stats: { added: 3, removed: 1 },
+    const steps: Todo[] = [
+      { content: '看專案的結構', status: 'in_progress' },
+      { content: '改寫 README 的開頭', status: 'pending' },
+      { content: '確認改動沒問題', status: 'pending' },
+    ]
+    const todoTool = (todos: Todo[]) => {
+      const done = todos.filter((t) => t.status === 'completed').length
+      put(data, tool('todo_write', `${done}/${todos.length}`, { status: 'done', endedAt: Date.now() }))
+      setTodos(data, todos.map((t) => ({ ...t })))
     }
-    put(data, edit)
-    const lines: DiffLine[] = [hunk('@@ -1,3 +1,5 @@'), ctx(1, 1, '# DeepSeek Harness'), del(2, 'TODO'), add(2, ''), add(3, '用 DeepSeek API 驅動的寫程式 Agent'), add(4, '')]
-    const request: PermissionRequest = { id: id(), sessionId: sid, toolItemId: edit.id, kind: 'edit', path: 'README.md', created: false, stats: edit.stats, lines }
-    entry.permission = request
-    setStatus(data, 'waiting')
-    emit({ type: 'permission', sessionId: sid, request })
-    const decision = await new Promise<PermissionDecision>((resolve) => {
-      waiting.set(sid, resolve)
-      signal.addEventListener('abort', () => resolve({ type: 'deny' }))
-    })
-    waiting.delete(sid)
-    entry.permission = null
-    emit({ type: 'permission', sessionId: sid, request: null })
-    setStatus(data, 'running')
-    if (signal.aborted) throw new DOMException('stopped', 'AbortError')
+    todoTool(steps)
+    await say(data, '我先看一下專案的結構', signal)
 
-    const reply: Extract<TranscriptItem, { kind: 'text' }> = { kind: 'text', id: id(), text: '', streaming: true }
+    const list = tool('list_dir', '.')
+    put(data, list)
+    await sleep(900, signal)
+    put(data, { ...list, status: 'done', endedAt: Date.now(), info: { files: 12 }, output: 'README.md\npackage.json\nsrc/\ntests/\nvite.config.ts' })
+    steps[0].status = 'completed'
+    steps[1].status = 'in_progress'
+    todoTool(steps)
+    if (drain(entry)) {
+      await sleep(400, signal)
+      await say(data, '收到，我會一起處理', signal)
+    }
+
+    const lines: DiffLine[] = [hunk('@@ -1,3 +1,5 @@'), ctx(1, 1, '# DeepSeek Harness'), del(2, 'TODO'), add(2, ''), add(3, '用 DeepSeek API 驅動的寫程式 Agent'), add(4, '')]
+
+    if (data.permissionMode === 'plan') {
+      const planText = '1. 把 README 開頭的 TODO 換成一句話說明這個專案\n2. 補上安裝和啟動的步驟\n3. 看一次預覽確認排版'
+      const plan = tool('exit_plan_mode', '計畫', { status: 'waiting', output: planText })
+      put(data, plan)
+      const decision = await ask(entry, { id: id(), sessionId: sid, toolItemId: plan.id, kind: 'plan', plan: planText }, signal)
+      if (decision.type === 'deny') {
+        put(data, { ...plan, status: 'denied', endedAt: Date.now() })
+        await sleep(400, signal)
+        await say(data, decision.feedback ? `好，我照「${decision.feedback}」改一下計畫` : '好，計畫先放著，想改哪裡跟我說', signal)
+        return
+      }
+      put(data, { ...plan, status: 'done', endedAt: Date.now() })
+      Object.assign(data, { permissionMode: decision.type === 'allow' && decision.mode ? decision.mode : 'acceptEdits' })
+      emit({ type: 'meta', meta: metaOf(data) })
+    }
+
+    const edit = tool('edit_file', 'README.md', { status: 'waiting', path: 'README.md', created: false, stats: { added: 3, removed: 1 } })
+    put(data, edit)
+    let decision: PermissionDecision = { type: 'allow' }
+    if (data.permissionMode === 'ask') {
+      decision = await ask(entry, { id: id(), sessionId: sid, toolItemId: edit.id, kind: 'edit', path: 'README.md', created: false, stats: edit.stats, lines }, signal)
+    }
     if (decision.type === 'deny') {
       put(data, { ...edit, status: 'denied', endedAt: Date.now() })
       await sleep(500, signal)
-      await stream(data, reply, decision.feedback ? `好，那我改成這樣做：${decision.feedback}` : '好，這個檔案我先不改，想換個做法可以直接告訴我', signal)
+      await say(data, decision.feedback ? `好，那我改成這樣做：${decision.feedback}` : '好，這個檔案我先不改，想換個做法可以直接告訴我', signal)
     } else {
       put(data, { ...edit, status: 'running', startedAt: Date.now() })
       await sleep(300, signal)
       put(data, { ...edit, status: 'done', endedAt: Date.now() })
       entry.changes = [{ path: 'README.md', status: 'modified', stats: { added: 3, removed: 1 }, lines }, ...entry.changes.filter((c) => c.path !== 'README.md')]
       emit({ type: 'changes', sessionId: sid, changes: entry.changes })
-      await sleep(400, signal)
-      await stream(data, reply, '改好了，README 開頭現在會說明這個專案是做什麼的', signal)
+      steps[1].status = 'completed'
+      steps[2].status = 'in_progress'
+      todoTool(steps)
+      await sleep(900, signal)
+      steps[2].status = 'completed'
+      todoTool(steps)
+      await say(data, '改好了，README 開頭現在會說明這個專案是做什麼的', signal)
     }
-    put(data, { ...reply, streaming: false })
     data.usage = { promptTokens: data.usage.promptTokens + 9800, completionTokens: data.usage.completionTokens + 420, cacheHitTokens: 0, contextTokens: data.usage.contextTokens + 3400 }
     emit({ type: 'usage', sessionId: sid, usage: data.usage })
+    if (drain(entry)) {
+      await sleep(500, signal)
+      await say(data, '剛剛補充的我也看了，目前這樣就可以', signal)
+    }
   } catch {
     for (const item of data.items) {
       if (item.kind === 'tool' && (item.status === 'running' || item.status === 'waiting')) put(data, { ...item, status: 'stopped' })
@@ -485,6 +612,7 @@ export function createMockApi(): DshApi {
         return info
       },
       files: async () => ({ files: MOCK_PATHS, truncated: false }),
+      commands: async () => MOCK_COMMANDS,
       read: async (file) =>
         later(
           MOCK_FILES[file] !== undefined
@@ -523,7 +651,39 @@ export function createMockApi(): DshApi {
         return metaOf(data)
       },
       async send(sid, text, refs) {
-        if (!running.has(sid)) void runAgent(sid, text, refs)
+        const entry = sessions.get(sid)
+        if (!entry) return
+        if (running.has(sid) || entry.data.status !== 'idle') {
+          entry.queue.push({ id: id(), text, ...(refs?.length ? { refs } : {}) })
+          emit({ type: 'queue', sessionId: sid, queue: structuredClone(entry.queue) })
+          return
+        }
+        void runAgent(sid, text, refs)
+      },
+      async unqueue(sid, messageId) {
+        const entry = sessions.get(sid)
+        if (!entry) return []
+        const taken = entry.queue.filter((m) => !messageId || m.id === messageId)
+        entry.queue = entry.queue.filter((m) => messageId && m.id !== messageId)
+        emit({ type: 'queue', sessionId: sid, queue: structuredClone(entry.queue) })
+        return taken
+      },
+      async rewind(sid, itemId, mode) {
+        const entry = sessions.get(sid)
+        const index = entry?.data.items.findIndex((i) => i.id === itemId) ?? -1
+        const item = entry?.data.items[index]
+        if (!entry || !item || item.kind !== 'user') return { ok: false as const, error: 'not-found' }
+        if (mode !== 'code') {
+          entry.data.items = entry.data.items.slice(0, index)
+          entry.data.todos = undefined
+        }
+        let restored = 0
+        if (mode !== 'conversation') {
+          restored = entry.changes.length
+          entry.changes = []
+          emit({ type: 'changes', sessionId: sid, changes: [] })
+        }
+        return { ok: true as const, text: item.text, ...(item.refs ? { refs: item.refs } : {}), restored }
       },
       async stop(sid) {
         running.get(sid)?.abort()
@@ -542,6 +702,10 @@ export function createMockApi(): DshApi {
           emit({ type: 'permission', sessionId: sid, request: null })
           const tool = entry.data.items.find((i) => i.id === toolId)
           if (tool?.kind === 'tool') put(entry.data, { ...tool, status: decision.type === 'deny' ? 'denied' : 'done' })
+          if (tool?.kind === 'tool' && tool.name === 'exit_plan_mode' && decision.type !== 'deny') {
+            entry.data.permissionMode = decision.type === 'allow' && decision.mode ? decision.mode : 'acceptEdits'
+            emit({ type: 'meta', meta: metaOf(entry.data) })
+          }
           setStatus(entry.data, 'idle')
         }
       },

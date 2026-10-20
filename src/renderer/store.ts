@@ -13,9 +13,12 @@ import {
   type PermissionDecision,
   type PermissionMode,
   type PermissionRequest,
+  type QueuedMessage,
+  type RewindMode,
   type SessionData,
   type SessionMeta,
   type Settings,
+  type SlashCommand,
   type TranscriptItem,
   type WorkspaceInfo,
 } from '../shared/types'
@@ -25,6 +28,8 @@ export interface ChatState {
   session: SessionData
   changes: FileChange[]
   permission: PermissionRequest | null
+  /** Messages typed while the agent works, waiting for its next step. */
+  queue: QueuedMessage[]
 }
 
 export type SettingsSection = 'connection' | 'model' | 'permissions' | 'appearance'
@@ -56,6 +61,14 @@ export interface AppState {
   draft: { model: string; effort: Effort; permissionMode: PermissionMode }
   /** Bumped to ask the composer to take focus. */
   focusTick: number
+  /** Text to put in the composer, such as a message taken back by rewinding; `tick` makes each one new. */
+  fill: { text: string; append: boolean; tick: number } | null
+  /** The project's own slash commands. */
+  commands: SlashCommand[]
+  /** Files in the open folder, for the @ picker; null until first asked for. */
+  files: string[] | null
+  /** The message the rewind dialog is open for, or '' to pick one. */
+  rewindFor: string | null
 }
 
 const PREFS_KEY = 'dsh.ui'
@@ -95,6 +108,10 @@ let state: AppState = {
   refs: [],
   draft: { model: DEFAULT_SETTINGS.model, effort: DEFAULT_SETTINGS.effort, permissionMode: DEFAULT_SETTINGS.permissionMode },
   focusTick: 0,
+  fill: null,
+  commands: [],
+  files: null,
+  rewindFor: null,
 }
 
 const listeners = new Set<() => void>()
@@ -180,6 +197,12 @@ function handleEvent(event: AgentEvent) {
         return selectedFile === s.selectedFile ? {} : { selectedFile }
       })
       break
+    case 'todos':
+      updateChat(event.sessionId, (chat) => ({ session: { ...chat.session, todos: event.todos.length ? event.todos : undefined } }))
+      break
+    case 'queue':
+      updateChat(event.sessionId, () => ({ queue: event.queue }))
+      break
     case 'usage':
       updateChat(event.sessionId, (chat) => ({ session: { ...chat.session, usage: event.usage } }))
       break
@@ -190,8 +213,9 @@ function handleEvent(event: AgentEvent) {
       const changed = event.workspace?.path !== state.workspace?.path
       set({ workspace: event.workspace })
       if (changed) {
-        set({ chatId: null, chat: null, sessions: [], activeAt: {}, selectedFile: null, viewedFile: null, refs: [] })
+        set({ chatId: null, chat: null, sessions: [], activeAt: {}, selectedFile: null, viewedFile: null, refs: [], commands: [], files: null })
         void loadSessions()
+        void loadCommands()
       }
       break
     }
@@ -209,6 +233,13 @@ async function loadSessions() {
   })
 }
 
+async function loadCommands() {
+  const workspace = state.workspace
+  if (!workspace) return
+  const commands = await api.workspace.commands()
+  if (state.workspace?.path === workspace.path) set({ commands })
+}
+
 // ── actions ────────────────────────────────────────────────────
 
 export const actions = {
@@ -223,7 +254,7 @@ export const actions = {
       workspace: initial.workspace,
       draft: { model: initial.settings.model, effort: initial.settings.effort, permissionMode: initial.settings.permissionMode },
     })
-    await loadSessions()
+    await Promise.all([loadSessions(), loadCommands()])
   },
 
   newChat() {
@@ -248,7 +279,7 @@ export const actions = {
       return
     }
     set((s) => ({
-      chat: { session: snapshot.session, changes: snapshot.changes, permission: snapshot.permission },
+      chat: { session: snapshot.session, changes: snapshot.changes, permission: snapshot.permission, queue: snapshot.queue ?? [] },
       selectedFile: snapshot.changes[0]?.path ?? null,
       focusTick: s.focusTick + 1,
     }))
@@ -292,7 +323,7 @@ export const actions = {
     }
     set((s) => ({
       chatId: id,
-      chat: { session, changes: [], permission: null },
+      chat: { session, changes: [], permission: null, queue: [] },
       sessions: placeMeta(s.sessions, metaOf(session), true),
       activeAt: { ...s.activeAt, [id]: now },
     }))
@@ -300,8 +331,65 @@ export const actions = {
     await api.agent.start(workspace.path, trimmed, { id, model: draft.model, effort: draft.effort, permissionMode: draft.permissionMode }, refs)
   },
 
-  stop() {
-    if (state.chat) void api.agent.stop(state.chat.session.id)
+  /** Stopping also takes back queued messages and puts them in the composer, as Claude Code does. */
+  async stop() {
+    const chat = state.chat
+    if (!chat) return
+    if (chat.queue.length) {
+      const taken = await api.agent.unqueue(chat.session.id)
+      if (taken.length) actions.fillComposer(taken.map((m) => m.text).join('\n\n'), true)
+    }
+    void api.agent.stop(chat.session.id)
+  },
+
+  async unqueue(messageId: string) {
+    const chat = state.chat
+    if (!chat) return
+    updateChat(chat.session.id, (c) => ({ queue: c.queue.filter((m) => m.id !== messageId) }))
+    await api.agent.unqueue(chat.session.id, messageId)
+  },
+
+  /** Puts text in the composer; `append` keeps what is already typed in front of it. */
+  fillComposer(text: string, append = false) {
+    set((s) => ({ fill: { text, append, tick: (s.fill?.tick ?? 0) + 1 }, focusTick: s.focusTick + 1 }))
+  },
+
+  openRewind(itemId = '') {
+    set({ rewindFor: itemId })
+  },
+
+  closeRewind() {
+    set((s) => ({ rewindFor: null, focusTick: s.focusTick + 1 }))
+  },
+
+  async rewind(itemId: string, mode: RewindMode) {
+    const chat = state.chat
+    if (!chat) return { ok: false as const, error: 'no-session' }
+    const result = await api.agent.rewind(chat.session.id, itemId, mode)
+    if (!result.ok) return result
+    if (mode !== 'code') {
+      const snapshot = await api.sessions.load(chat.session.id)
+      if (snapshot && state.chat?.session.id === chat.session.id) {
+        set({ chat: { session: snapshot.session, changes: snapshot.changes, permission: snapshot.permission, queue: snapshot.queue ?? [] } })
+      }
+      // The message goes back in the composer so it can be changed and sent again.
+      set({ refs: result.refs ?? [] })
+      actions.fillComposer(result.text)
+    }
+    return result
+  },
+
+  /** Loads the folder's files for the @ picker, once per folder. */
+  async loadFiles() {
+    if (state.files !== null || !state.workspace) return
+    const path = state.workspace.path
+    set({ files: [] })
+    const list = await api.workspace.files()
+    if (state.workspace?.path === path) set({ files: list.files })
+  },
+
+  reloadCommands() {
+    void loadCommands()
   },
 
   retry() {

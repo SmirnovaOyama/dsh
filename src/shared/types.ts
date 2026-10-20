@@ -1,6 +1,8 @@
 // Types shared by the main process, the preload bridge and the renderer.
 
-export type PermissionMode = 'ask' | 'acceptEdits' | 'auto'
+/** `plan` only reads and searches, then shows a plan to approve before anything changes. */
+export type PermissionMode = 'ask' | 'acceptEdits' | 'auto' | 'plan'
+export const PERMISSION_MODES: PermissionMode[] = ['ask', 'acceptEdits', 'auto', 'plan']
 export type ThemePref = 'system' | 'light' | 'dark'
 export type Locale = 'zh-Hant' | 'en'
 export type ReplyStyle = 'precise' | 'balanced' | 'varied'
@@ -142,7 +144,17 @@ export type FileList = { files: string[]; truncated: boolean }
 export type FileRead = { ok: true; text: string } | { ok: false; error: string }
 
 export type TranscriptItem =
-  | { kind: 'user'; id: string; text: string; at: number; refs?: FileRef[] }
+  | {
+      kind: 'user'
+      id: string
+      text: string
+      at: number
+      refs?: FileRef[]
+      /** The conversation was summarised after this message, so only code can be rewound to it. */
+      compacted?: boolean
+      /** The custom command it started with, such as `review`. */
+      command?: string
+    }
   | { kind: 'reasoning'; id: string; text: string; startedAt: number; endedAt?: number }
   | { kind: 'text'; id: string; text: string; streaming: boolean }
   | {
@@ -191,6 +203,31 @@ export interface Usage {
 export interface SessionData extends SessionMeta {
   items: TranscriptItem[]
   usage: Usage
+  /** The agent's own to-do list for the task, as it last wrote it. */
+  todos?: Todo[]
+}
+
+export interface Todo {
+  content: string
+  status: 'pending' | 'in_progress' | 'completed'
+}
+
+/** A message typed while the agent works. It goes to the agent at the next step. */
+export interface QueuedMessage {
+  id: string
+  text: string
+  refs?: FileRef[]
+}
+
+/** What to put back when rewinding to a message. */
+export type RewindMode = 'both' | 'conversation' | 'code'
+
+export type RewindResult = { ok: true; text: string; refs?: FileRef[]; restored: number } | { ok: false; error: string }
+
+/** A command from the project's .dsh/commands (or .claude/commands) folder. */
+export interface SlashCommand {
+  name: string
+  description: string
 }
 
 export interface FileChange {
@@ -204,7 +241,9 @@ export interface PermissionRequest {
   id: string
   sessionId: string
   toolItemId: string
-  kind: 'edit' | 'command'
+  kind: 'edit' | 'command' | 'plan'
+  /** The plan to approve, in Markdown. */
+  plan?: string
   path?: string
   created?: boolean
   stats?: DiffStats
@@ -216,7 +255,7 @@ export interface PermissionRequest {
 }
 
 export type PermissionDecision =
-  | { type: 'allow' }
+  | { type: 'allow'; mode?: PermissionMode }
   | { type: 'allowSession' }
   | { type: 'allowAlways'; prefix: string }
   | { type: 'deny'; feedback?: string }
@@ -230,6 +269,8 @@ export type AgentEvent =
   | { type: 'usage'; sessionId: string; usage: Usage }
   | { type: 'settings'; settings: Settings; hasApiKey: boolean }
   | { type: 'workspace'; workspace: WorkspaceInfo | null }
+  | { type: 'todos'; sessionId: string; todos: Todo[] }
+  | { type: 'queue'; sessionId: string; queue: QueuedMessage[] }
 
 export interface ConnectionResult {
   ok: boolean
@@ -246,6 +287,7 @@ export interface SessionSnapshot {
   session: SessionData
   changes: FileChange[]
   permission: PermissionRequest | null
+  queue: QueuedMessage[]
 }
 
 export interface StartOptions {
@@ -272,6 +314,8 @@ export interface DshApi {
     /** Files in the open folder, leaving out what .gitignore leaves out. */
     files(): Promise<FileList>
     read(path: string): Promise<FileRead>
+    /** Custom slash commands in the open folder. */
+    commands(): Promise<SlashCommand[]>
   }
   sessions: {
     list(workspace: string): Promise<SessionMeta[]>
@@ -281,7 +325,12 @@ export interface DshApi {
   agent: {
     /** The renderer picks the id, so it can show the conversation before the first event arrives. */
     start(workspace: string, text: string, opts: StartOptions, refs?: FileRef[]): Promise<SessionMeta>
+    /** While the agent works, the message waits in a queue and goes in at its next step. */
     send(sessionId: string, text: string, refs?: FileRef[]): Promise<void>
+    /** Takes queued messages back, all of them or one; returns what was taken. */
+    unqueue(sessionId: string, messageId?: string): Promise<QueuedMessage[]>
+    /** Goes back to just before a message of the person's, in the conversation, the files or both. */
+    rewind(sessionId: string, itemId: string, mode: RewindMode): Promise<RewindResult>
     stop(sessionId: string): Promise<void>
     retry(sessionId: string): Promise<void>
     /** Replaces the conversation the model sees with a summary, keeping the transcript on screen. */

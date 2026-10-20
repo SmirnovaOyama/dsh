@@ -6,6 +6,7 @@ import { Channels, EVENT_CHANNEL } from '../shared/ipc'
 import type { AgentEvent, ConfigureOptions, FileRead, InitialState, PermissionDecision, Settings, StartOptions } from '../shared/types'
 import { Controller, readWorkspace } from './controller'
 import { DeepSeekError, checkConnection } from './deepseek'
+import { listCommands } from './commands'
 import { cleanRefs } from './refs'
 import { listWorkspaceFiles, readTextFile } from './tools/files'
 import { resolveInWorkspace } from './tools/paths'
@@ -173,6 +174,11 @@ function registerIpc() {
     }
   })
 
+  handle('workspaceCommands', async () => {
+    const dir = settingsStore.get().lastWorkspace
+    return dir ? listCommands(dir) : []
+  })
+
   handle('sessionsList', (workspace: string) => sessionStore.list(workspace))
   handle('sessionsLoad', (id: string) => controller.snapshot(id))
   handle('sessionsRemove', (id: string) => controller.remove(id))
@@ -181,6 +187,10 @@ function registerIpc() {
     controller.start(workspace, text, opts, cleanRefs(refs)),
   )
   handle('agentSend', (id: string, text: string, refs?: unknown) => controller.send(id, text, cleanRefs(refs)))
+  handle('agentUnqueue', (id: string, messageId?: string) => controller.unqueue(id, typeof messageId === 'string' ? messageId : undefined))
+  handle('agentRewind', (id: string, itemId: string, mode: unknown) =>
+    controller.rewind(id, itemId, mode === 'conversation' || mode === 'code' ? mode : 'both'),
+  )
   handle('agentStop', (id: string) => controller.stop(id))
   handle('agentRetry', (id: string) => controller.retry(id))
   handle('agentCompact', (id: string, focus?: string) => controller.compact(id, focus))

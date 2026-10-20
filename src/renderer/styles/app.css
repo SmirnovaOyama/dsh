@@ -558,3 +558,102 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .oy-icon.hx-fill { fill: currentColor; stroke: none; }
 .hx-version { margin-top: 32px; font-size: 13px; line-height: 18px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .hx-search input::-webkit-search-cancel-button { display: none; }
+
+/* ── Claude Code parity: suggestions, queue, to-dos, plans, rewind ─ */
+.hx-field { position: relative; }
+/* The / and @ list floats over whatever sits above the field, so opening it moves nothing. */
+.hx-suggest {
+  position: absolute; z-index: 6; left: 0; right: 0; bottom: calc(100% + 6px);
+  max-height: 296px; overflow-y: auto; margin: 0; padding: 4px; list-style: none;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-md);
+  animation: hx-fade-in var(--duration-quick) var(--ease-standard) both;
+}
+.hx-suggest li {
+  display: flex; align-items: baseline; gap: 10px; min-height: 32px; padding: 6px 10px;
+  border-radius: var(--radius-sm); font-size: 14px; line-height: 20px; color: var(--text); cursor: default;
+}
+.hx-suggest li.is-file { align-items: center; gap: 8px; }
+.hx-suggest li[aria-selected="true"] { background: var(--surface-hover); }
+.hx-suggest li > .oy-icon { flex-shrink: 0; color: var(--text-muted); }
+.hx-suggest .label { flex-shrink: 0; font-weight: 500; white-space: nowrap; }
+/* Command names sit in a column so the descriptions line up. */
+.hx-suggest li:not(.is-file) .label { min-width: 8rem; }
+.hx-suggest .hint { flex-shrink: 0; font-size: 13px; color: var(--text-muted); white-space: nowrap; }
+.hx-suggest .detail { flex: 1; min-width: 0; font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-suggest .tag { flex-shrink: 0; font-size: 12px; color: var(--text-disabled); }
+
+/* Queued messages read like the person's own messages, waiting their turn. */
+.hx-queue { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.hx-queue li {
+  display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 4px 4px 4px 12px;
+  border-radius: var(--radius-md); background: var(--bubble); font-size: 14px; line-height: 20px;
+  animation: hx-fade-in var(--duration-base) var(--ease-standard) both;
+}
+.hx-queue .when { flex-shrink: 0; font-size: 12px; color: var(--text-muted); }
+.hx-queue .text { flex: 1; min-width: 0; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-queue .remove { display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0; border-radius: var(--radius-sm); color: var(--text-muted); }
+.hx-queue .remove:hover { color: var(--text); background: var(--surface-hover); }
+
+.hx-todos { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.hx-todos .head {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 0 10px 0 12px;
+  font-size: 13px; line-height: 18px; color: var(--text); text-align: start;
+}
+.hx-todos .head > .oy-icon { flex-shrink: 0; color: var(--text-muted); }
+.hx-todos .head .title { flex-shrink: 0; font-weight: 600; }
+.hx-todos .head .count { flex-shrink: 0; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.hx-todos .head .now { min-width: 0; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-todos .head .grow { flex: 1; }
+.hx-todos .list { display: flex; flex-direction: column; gap: 2px; max-height: 200px; overflow-y: auto; margin: 0; padding: 0 12px 10px; list-style: none; }
+.hx-todos .list li { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 20px; color: var(--text); }
+.hx-todos .list li > .oy-icon { flex-shrink: 0; margin-top: 2px; color: var(--text-muted); }
+.hx-todos .list li.is-in_progress { font-weight: 600; }
+.hx-todos .list li.is-in_progress > .oy-icon { color: var(--text); }
+.hx-todos .list li.is-completed { color: var(--text-muted); }
+.hx-todos .list li.is-completed > span { text-decoration: line-through; text-decoration-color: var(--text-disabled); }
+
+.hx-plan { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.hx-plan .head {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 0 12px 0 14px;
+  font-size: 14px; line-height: 20px; text-align: start; color: var(--text);
+}
+.hx-plan .head:hover { background: var(--surface-hover); }
+.hx-plan .head > .oy-icon { flex-shrink: 0; color: var(--text-muted); }
+.hx-plan .head .title { font-weight: 600; }
+.hx-plan .head .status { color: var(--text-muted); font-size: 13px; }
+.hx-plan .head .grow { flex: 1; }
+.hx-plan .head .hx-chev { color: var(--text-muted); }
+.hx-plan .body { padding: 4px 16px 16px; font-size: 14px; line-height: 22px; }
+.hx-plan-box { max-height: 320px; padding: 12px 16px; font-size: 14px; line-height: 22px; }
+
+/* The rewind button shows beside a message on hover, without moving it. */
+.hx-rewind {
+  position: absolute; top: 6px; right: calc(100% + 6px); height: 28px; width: 28px;
+  color: var(--text-muted); opacity: 0; transition: opacity var(--duration-quick) var(--ease-standard);
+}
+.hx-user .body { position: relative; }
+.hx-user:hover .hx-rewind, .hx-rewind:focus-visible { opacity: 1; }
+.hx-rewind:hover { color: var(--text); }
+.hx-rewind-list { display: flex; flex-direction: column; gap: 2px; max-height: 320px; overflow-y: auto; margin: 16px 0 0; padding: 0; list-style: none; }
+.hx-rewind-list button {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 40px; padding: 8px 10px;
+  border-radius: var(--radius-sm); font-size: 14px; line-height: 20px; text-align: start; color: var(--text);
+}
+.hx-rewind-list button:hover { background: var(--surface-hover); }
+.hx-rewind-list .text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-rewind-list .time { flex-shrink: 0; font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.hx-rewind-quote {
+  margin: 12px 0 0; padding: 10px 14px; border-radius: var(--radius-md); background: var(--bubble);
+  font-size: 14px; line-height: 20px; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.hx-rewind-modes { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; }
+.hx-rewind-modes label { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer; }
+.hx-rewind-modes label:hover { background: var(--surface-hover); }
+.hx-rewind-modes label.is-disabled { opacity: 0.45; cursor: default; }
+.hx-rewind-modes label.is-disabled:hover { background: none; }
+.hx-rewind-modes input { margin: 3px 0 0; accent-color: var(--text); }
+.hx-rewind-modes .text { display: flex; flex-direction: column; min-width: 0; }
+.hx-rewind-modes .name { font-size: 14px; line-height: 20px; font-weight: 500; color: var(--text); }
+.hx-rewind-modes .desc { font-size: 13px; line-height: 18px; color: var(--text-muted); }
+.hx-rewind-note { margin-top: 10px; font-size: 12px; line-height: 16px; color: var(--text-muted); }

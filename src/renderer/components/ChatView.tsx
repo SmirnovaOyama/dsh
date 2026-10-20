@@ -10,6 +10,7 @@ import { NoteDoodle } from './Doodles'
 import { Icon } from './Icon'
 import { Menu, MenuItem } from './Menu'
 import { Modal } from './Modal'
+import { RewindDialog } from './Rewind'
 import { Transcript } from './Transcript'
 import { NoFolder, NoKey } from './Welcome'
 
@@ -197,6 +198,7 @@ function Conversation() {
         </HoldScroll.Provider>
         <Composer chat={chat} showJump={showJump} onJump={() => toBottom(true)} onSent={() => toBottom()} />
       </div>
+      <RewindDialog />
     </div>
   )
 }

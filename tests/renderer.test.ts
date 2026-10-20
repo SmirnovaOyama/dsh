@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { dayGroup, formatSeconds, formatTokens, tildify } from '../src/renderer/format'
 import { highlight } from '../src/renderer/highlight'
+import { filterCommands, filterFiles, findTrigger } from '../src/renderer/suggest'
 
 describe('format', () => {
   it('shortens token counts', () => {
@@ -48,5 +49,30 @@ describe('highlight', () => {
   it('uses # comments for shell and leaves plain text alone', () => {
     expect(highlight('echo hi # done', 'bash').at(-1)).toEqual({ kind: 'c', text: '# done' })
     expect(highlight('const x', 'text')).toEqual([{ kind: null, text: 'const x' }])
+  })
+})
+
+describe('composer suggestions', () => {
+  it('finds / only at the start and @ at the start of a word', () => {
+    expect(findTrigger('/rev', 4)).toEqual({ kind: 'slash', query: 'rev', start: 0, end: 4 })
+    expect(findTrigger('/review now', 11)).toBeNull()
+    expect(findTrigger('look at @src/au please', 15)).toEqual({ kind: 'file', query: 'src/au', start: 8, end: 15 })
+    expect(findTrigger('mail a@b', 8)).toBeNull()
+    expect(findTrigger('@sess', 2)).toEqual({ kind: 'file', query: 's', start: 0, end: 5 })
+  })
+
+  it('ranks file names over folders and drops scattered matches', () => {
+    const files = ['src/styles/app.css', 'src/auth/session.ts', 'tests/auth/session.test.ts', 'docs/sessions.md']
+    expect(filterFiles(files, 'sess')).toEqual(['src/auth/session.ts', 'docs/sessions.md', 'tests/auth/session.test.ts'])
+    expect(filterFiles(files, 'sts')).toContain('src/auth/session.ts')
+  })
+
+  it('puts commands that start with the query first', () => {
+    const list = [
+      { name: 'compact', description: '', kind: 'action' as const },
+      { name: 'review', description: '', kind: 'prompt' as const },
+      { name: 'prerelease', description: '', kind: 'prompt' as const },
+    ]
+    expect(filterCommands(list, 're').map((c) => c.name)).toEqual(['review', 'prerelease'])
   })
 })

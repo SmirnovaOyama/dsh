@@ -1,6 +1,6 @@
 import { ChevronLeft, Cpu, KeyRound, LoaderCircle, Shield, Sun, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { EFFORTS, MAX_STEPS_OPTIONS, MODELS, type ConnectionResult, type Effort, type Locale, type PermissionMode, type ReplyStyle, type ThemePref } from '../../shared/types'
+import { EFFORTS, MAX_STEPS_OPTIONS, MODELS, PERMISSION_MODES, type ConnectionResult, type Effort, type Locale, type PermissionMode, type ReplyStyle, type ThemePref } from '../../shared/types'
 import { api } from '../api'
 import { LOCALE_NAMES, t, type MessageKey } from '../i18n'
 import { actions, useApp, type SettingsSection } from '../store'
@@ -373,7 +373,7 @@ function Permissions() {
             className="hx-row-control"
             label={t('settings.defaultMode')}
             value={settings.permissionMode}
-            options={(['ask', 'acceptEdits', 'auto'] as const).map((m) => ({ value: m, label: t(`mode.${m}`), desc: t(`mode.${m}.desc`) }))}
+            options={PERMISSION_MODES.map((m) => ({ value: m, label: t(`mode.${m}`), desc: t(`mode.${m}.desc`) }))}
             onChange={(permissionMode) => update({ permissionMode })}
           />
         </Row>

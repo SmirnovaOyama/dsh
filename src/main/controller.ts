@@ -14,6 +14,9 @@ import {
   type FileRef,
   type PermissionDecision,
   type PermissionRequest,
+  type QueuedMessage,
+  type RewindMode,
+  type RewindResult,
   type SessionMeta,
   type SessionSnapshot,
   type StartOptions,
@@ -21,6 +24,7 @@ import {
 } from '../shared/types'
 import { Agent, type AgentHost, type SessionState } from './agent'
 import { ChangeTracker } from './changes'
+import { expandCommand } from './commands'
 import type { streamChat } from './deepseek'
 import { buildSystemPrompt } from './prompt'
 import { metaOf, type SessionStore, type SettingsStore } from './store'
@@ -81,6 +85,7 @@ export class Controller {
       askPermission: (state, need, toolItemId, signal) => this.askPermission(state, need, toolItemId, signal),
       allowCommandAlways: (prefix) => void this.allowAlways(prefix),
       changesUpdated: (state) => void this.emitChanges(state),
+      expandCommand: (state, text) => expandCommand(state.data.workspace, text),
       chat: options.chat,
       now: this.now,
     }
@@ -103,10 +108,12 @@ export class Controller {
     const state: SessionState = {
       data: { ...stored.data, ...currentModel(stored.data.model, stored.data.effort), items, status: 'idle' },
       messages: stored.messages,
-      tracker: new ChangeTracker(stored.data.workspace, stored.snapshots),
+      tracker: new ChangeTracker(stored.data.workspace, stored.snapshots, stored.checkpoints),
       allowEdits: stored.allowEdits,
       allowedPrefixes: stored.allowedPrefixes,
       controller: null,
+      queue: [],
+      marks: stored.marks ?? {},
     }
     this.states.set(id, state)
     return state
@@ -121,6 +128,7 @@ export class Controller {
       session: { ...state.data, items: [...state.data.items], usage: { ...state.data.usage } },
       changes,
       permission: this.pending.get(id)?.request ?? null,
+      queue: state.queue.map((m) => ({ ...m })),
     }
   }
 
@@ -145,6 +153,8 @@ export class Controller {
       allowEdits: false,
       allowedPrefixes: [],
       controller: null,
+      queue: [],
+      marks: {},
     }
     this.states.set(state.data.id, state)
     void this.agent.send(state, text, refs)
@@ -154,6 +164,53 @@ export class Controller {
   async send(id: string, text: string, refs: FileRef[] = []): Promise<void> {
     const state = await this.open(id)
     if (state) void this.agent.send(state, text, refs)
+  }
+
+  async unqueue(id: string, messageId?: string): Promise<QueuedMessage[]> {
+    const state = await this.open(id)
+    return state ? this.agent.unqueue(state, messageId) : []
+  }
+
+  /**
+   * Goes back to just before one of the person's messages. The conversation drops that message and
+   * everything after it; the code puts back each file the agent changed since. The message's text is
+   * returned so it can be edited and sent again.
+   */
+  async rewind(id: string, itemId: string, mode: RewindMode): Promise<RewindResult> {
+    const state = await this.open(id)
+    if (!state) return { ok: false, error: 'not-found' }
+    if (this.agent.isRunning(state)) return { ok: false, error: 'running' }
+    const index = state.data.items.findIndex((item) => item.id === itemId)
+    const item = state.data.items[index]
+    if (!item || item.kind !== 'user') return { ok: false, error: 'not-found' }
+    const conversation = mode !== 'code'
+    const mark = state.marks[itemId]
+    if (conversation && (item.compacted || mark === undefined)) return { ok: false, error: 'compacted' }
+
+    let restored = 0
+    if (mode !== 'conversation') {
+      restored = await state.tracker.rewindTo(itemId, !conversation)
+      await this.emitChanges(state)
+    }
+    if (conversation) {
+      const removed = state.data.items.slice(index)
+      state.data.items = state.data.items.slice(0, index)
+      state.messages = state.messages.slice(0, mark)
+      for (const gone of removed) {
+        delete state.marks[gone.id]
+        this.options.emit({ type: 'remove', sessionId: id, itemId: gone.id })
+      }
+      // The list belonged to the work that was undone.
+      if (state.data.todos) {
+        state.data.todos = undefined
+        this.options.emit({ type: 'todos', sessionId: id, todos: [] })
+      }
+      // Rewinding the conversation alone leaves later checkpoints with nothing to point at.
+      if (mode === 'conversation') state.tracker.dropFrom(itemId)
+    }
+    state.data.updatedAt = this.now()
+    this.persist(state)
+    return { ok: true, text: item.text, ...(item.refs ? { refs: item.refs } : {}), restored }
   }
 
   async retry(id: string): Promise<void> {
@@ -236,6 +293,8 @@ export class Controller {
       snapshots: state.tracker.toJSON(),
       allowEdits: state.allowEdits,
       allowedPrefixes: state.allowedPrefixes,
+      checkpoints: state.tracker.checkpointsJSON(),
+      marks: state.marks,
     })
   }
 
@@ -249,6 +308,7 @@ export class Controller {
       shell: shellFor().file,
       locale: settings.locale,
       today: new Date(this.now()).toISOString().slice(0, 10),
+      planMode: state.data.permissionMode === 'plan',
     })
   }
 
@@ -262,7 +322,9 @@ export class Controller {
     const request: PermissionRequest =
       need.kind === 'edit'
         ? { id: randomUUID(), sessionId, toolItemId, kind: 'edit', path: need.path, created: need.created, stats: need.stats, lines: need.lines }
-        : { id: randomUUID(), sessionId, toolItemId, kind: 'command', command: need.command, cwd: need.cwd, prefix: need.prefix }
+        : need.kind === 'plan'
+          ? { id: randomUUID(), sessionId, toolItemId, kind: 'plan', plan: need.plan }
+          : { id: randomUUID(), sessionId, toolItemId, kind: 'command', command: need.command, cwd: need.cwd, prefix: need.prefix }
     return new Promise((resolve) => {
       const onAbort = () => this.respond(sessionId, request.id, { type: 'deny' })
       signal.addEventListener('abort', onAbort, { once: true })
