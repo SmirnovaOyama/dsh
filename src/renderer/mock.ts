@@ -6,6 +6,7 @@ import {
   DEFAULT_SETTINGS,
   EMPTY_USAGE,
   type AgentEvent,
+  type ArtifactVersion,
   type DiffLine,
   type DshApi,
   type FileChange,
@@ -18,6 +19,8 @@ import {
   type TranscriptItem,
   type WorkspaceInfo,
 } from '../shared/types'
+import { artifactsIn, byNewest } from '../shared/library'
+import { darkPalette, errorGuide, pnpmScript, pomodoroGuide, pomodoroV1, pomodoroV2, readingNotes, syncFlow, tomatoSvg, weeklyProgress } from './mockArtifacts'
 
 const params = new URLSearchParams(location.search)
 const HOME = '/Users/anya'
@@ -298,7 +301,77 @@ function shortSession(sid: string, title: string, updatedAt: number, status: Ses
   }
 }
 
+function artifactSession(): SessionData {
+  const t0 = now - 12 * MIN
+  const writing = params.has('writing')
+  // ?queued shows a second version written in full that waits for a command before it in the same reply.
+  const queued = params.has('queued')
+  const card = (version: number, content: string, status: 'done' | 'running' | 'stopped', callId: string, at: number): TranscriptItem => ({
+    kind: 'tool',
+    id: id(),
+    callId,
+    name: 'artifact',
+    target: '番茄鐘',
+    status,
+    startedAt: at,
+    ...(status === 'done' ? { endedAt: at + 9000 } : {}),
+    ...(queued && version === 2 ? { queued: true } : {}),
+    artifact: { id: 'pomodoro-timer', title: '番茄鐘', type: 'html', content, version },
+  })
+  // ?broken gives the second version a script error, to show the error bar.
+  const v2 = params.has('broken') ? pomodoroV2.replace('</body>', '<script>renderStats()</script></body>') : pomodoroV2
+  const items: TranscriptItem[] = [
+    { kind: 'user', id: id(), text: '做一個番茄鐘小網頁，我想放在桌面旁邊用', at: t0 },
+    { kind: 'reasoning', id: id(), text: '單一頁面就夠了，倒數、暫停、重來，再記一下今天完成幾個', startedAt: t0 + 1000, endedAt: t0 + 5000 },
+    { kind: 'text', id: id(), text: '好，我做成一個單頁的小網頁，打開就能用', streaming: false },
+    card(1, pomodoroV1, 'done', 'a1', t0 + 5000),
+    { kind: 'text', id: id(), text: '做好了，右邊可以直接試\n\n- 按開始會倒數 25 分鐘，可以暫停和重來\n- 每完成一輪，下面的數字會加一', streaming: false },
+    { kind: 'user', id: id(), text: '按鈕不要那麼圓，再加一個休息 5 分鐘的模式', at: t0 + 6 * MIN },
+    { kind: 'text', id: id(), text: '好，我把按鈕改成小圓角，上面加一個切換專心和休息的開關', streaming: false },
+    // ?stopped shows a second version that was stopped partway, and ?writing one still streaming in.
+    params.has('stopped') ? card(2, v2.slice(0, 1900), 'stopped', 'a2', t0 + 6 * MIN + 4000) : card(2, writing ? v2.slice(0, 1900) : v2, writing || queued ? 'running' : 'done', 'a2', t0 + 6 * MIN + 4000),
+  ]
+  if (queued) items.push({ kind: 'tool', id: id(), callId: 'r1', name: 'run_command', target: 'npx prettier --check index.html', status: 'running', startedAt: now - 20_000 })
+  if (!writing && !queued && !params.has('stopped')) {
+    items.push({ kind: 'text', id: id(), text: '改好了，這是第 2 版\n\n- 按鈕的圓角改小了\n- 上面可以切換「專心 25 分」和「休息 5 分」', streaming: false })
+    if (params.has('more')) {
+      const t1 = t0 + 9 * MIN
+      items.push(
+        { kind: 'user', id: id(), text: '再幫我畫一顆番茄當圖示，順便寫一份使用說明', at: t1 },
+        { kind: 'tool', id: id(), callId: 'a3', name: 'artifact', target: '番茄圖示', status: 'done', startedAt: t1 + 3000, endedAt: t1 + 7000, artifact: { id: 'tomato-icon', title: '番茄圖示', type: 'svg', content: tomatoSvg, version: 1 } },
+        { kind: 'tool', id: id(), callId: 'a4', name: 'artifact', target: '使用說明', status: 'done', startedAt: t1 + 8000, endedAt: t1 + 14000, artifact: { id: 'pomodoro-guide', title: '使用說明', type: 'markdown', content: pomodoroGuide, version: 1 } },
+        { kind: 'text', id: id(), text: '圖示和使用說明都放在右邊了', streaming: false },
+      )
+    }
+  }
+  return {
+    id: 'demo-artifact',
+    title: '做一個番茄鐘小網頁',
+    workspace: DSH,
+    createdAt: t0,
+    updatedAt: now - MIN,
+    model: 'deepseek-flash',
+    effort: 'high',
+    permissionMode: 'ask',
+    status: writing || queued ? 'running' : 'idle',
+    items,
+    usage: { promptTokens: 22_400, completionTokens: 4_900, cacheHitTokens: 12_800, contextTokens: 9_870 },
+  }
+}
+
 const day = 24 * 60 * MIN
+
+/** A short conversation that ends with the agent making one artifact, for the library page. */
+function madeSession(sid: string, workspace: string, title: string, updatedAt: number, artifact: ArtifactVersion): SessionData {
+  const data = shortSession(sid, title, updatedAt)
+  data.workspace = workspace
+  data.items.push(
+    { kind: 'tool', id: id(), callId: `${sid}-a`, name: 'artifact', target: artifact.title, status: 'done', startedAt: updatedAt - 60_000, endedAt: updatedAt - 50_000, artifact },
+    { kind: 'text', id: id(), text: `做好了，「${artifact.title}」放在右邊`, streaming: false },
+  )
+  return data
+}
+
 const sessions = new Map<string, { data: SessionData; changes: FileChange[]; permission: PermissionRequest | null }>()
 function addSession(data: SessionData, changes: FileChange[] = [], permission: PermissionRequest | null = null) {
   sessions.set(data.id, { data, changes, permission })
@@ -312,13 +385,17 @@ const mainPermission: PermissionRequest | null =
       ? { id: 'p2', sessionId: 'demo-main', toolItemId: main.items[main.items.length - 1].id, kind: 'command', command: 'npm install zod', cwd: DSH, prefix: 'npm install' }
       : null
 addSession(main, params.get('perm') === 'edit' ? [] : mainChanges, mainPermission)
+addSession(artifactSession())
 addSession(shortSession('s2', '把設定頁拆成小元件', now - 40 * MIN, 'idle'))
 addSession(shortSession('s3', '更新 README 的安裝步驟', now - 90 * MIN))
-addSession(shortSession('s4', '加上深色模式', now - day - 3 * 60 * MIN))
+addSession(madeSession('s4', DSH, '加上深色模式', now - day - 3 * 60 * MIN, { id: 'dark-palette', title: '深色模式色票', type: 'html', content: darkPalette, version: 1 }))
 addSession(shortSession('s5', '查打包後的白畫面', now - day - 6 * 60 * MIN))
-addSession(shortSession('s6', '改用 pnpm 管理套件', now - 3 * day))
+addSession(madeSession('s6', DSH, '改用 pnpm 管理套件', now - 3 * day, { id: 'pnpm-migrate', title: '換成 pnpm 的腳本', type: 'code', language: 'bash', content: pnpmScript, version: 1 }))
 addSession(shortSession('s7', '設定 ESLint 和 Prettier', now - 4 * day))
-addSession(shortSession('s8', '整理 API 錯誤訊息的寫法', now - 12 * day))
+addSession(madeSession('s8', DSH, '整理 API 錯誤訊息的寫法', now - 12 * day, { id: 'error-guide', title: 'API 錯誤訊息的寫法', type: 'markdown', content: errorGuide, version: 1 }))
+addSession(madeSession('t1', `${HOME}/Projects/oyama-tracker`, '畫出這週的任務進度', now - 3 * 60 * MIN, { id: 'weekly', title: '這週任務進度', type: 'html', content: weeklyProgress, version: 1 }))
+addSession(madeSession('t2', `${HOME}/Projects/oyama-tracker`, '說明離線同步怎麼運作', now - 5 * day, { id: 'sync-flow', title: '離線同步流程', type: 'svg', content: syncFlow, version: 1 }))
+addSession(madeSession('n1', `${HOME}/Documents/notes`, '把這個月的讀書筆記整理成一頁', now - day - 5 * 60 * MIN, { id: 'reading', title: '十月讀書筆記', type: 'markdown', content: readingNotes, version: 1 }))
 
 const metaOf = ({ items: _i, usage: _u, ...meta }: SessionData): SessionMeta => meta
 const snapshot = (sid: string) => {
@@ -552,6 +629,25 @@ export function createMockApi(): DshApi {
         emit({ type: 'meta', meta: metaOf(entry.data) })
         return metaOf(entry.data)
       },
+    },
+    artifacts: {
+      // The browser has no custom scheme, so the preview loads from a blob; the sandbox still keeps it apart.
+      preview: async (html) => URL.createObjectURL(new Blob([html], { type: 'text/html' })),
+      async save(name, content) {
+        const link = document.createElement('a')
+        link.href = URL.createObjectURL(new Blob([content], { type: 'text/plain' }))
+        link.download = name
+        link.click()
+        URL.revokeObjectURL(link.href)
+        return { ok: true as const, path: name }
+      },
+      saveToProject: async (name) => later({ ok: true as const, path: name }, 200),
+      async openInBrowser(name, html) {
+        window.open(URL.createObjectURL(new Blob([html], { type: 'text/html' })), '_blank', 'noopener')
+        return { ok: true as const, path: name }
+      },
+      // ?nolibrary shows the page before anything was made.
+      library: () => later(params.has('nolibrary') ? [] : structuredClone([...sessions.values()].flatMap((s) => artifactsIn(s.data)).sort(byNewest)), 80),
     },
     changes: {
       async revertAll(sid) {

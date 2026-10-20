@@ -1,9 +1,13 @@
 // Electron entry point: the window, the IPC handlers and app lifecycle.
 
-import { BrowserWindow, app, dialog, ipcMain, nativeTheme, safeStorage, shell } from 'electron'
+import { BrowserWindow, app, dialog, ipcMain, nativeTheme, protocol, safeStorage, session, shell } from 'electron'
+import { stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { Channels, EVENT_CHANNEL } from '../shared/ipc'
-import type { AgentEvent, ConfigureOptions, FileRead, InitialState, PermissionDecision, Settings, StartOptions } from '../shared/types'
+import type { AgentEvent, ConfigureOptions, FileRead, InitialState, PermissionDecision, SaveResult, Settings, StartOptions } from '../shared/types'
+import { saveToFolder, safeFileName, writeTempPage } from './artifactFiles'
+import { PREVIEW_SCHEME, PreviewPages, withPolicy } from './artifactPreview'
+import { PreviewGate, gateProxy } from './previewNetwork'
 import { Controller, readWorkspace } from './controller'
 import { DeepSeekError, checkConnection } from './deepseek'
 import { cleanRefs } from './refs'
@@ -29,6 +33,15 @@ function emit(event: AgentEvent) {
 }
 
 const controller = new Controller({ settings: settingsStore, sessions: sessionStore, emit })
+const previews = new PreviewPages()
+// The way out for preview pages (see previewNetwork); previews run only once the session goes through it.
+const gate = new PreviewGate((url) => session.fromPartition('dsh-system-proxy').resolveProxy(url))
+let fenced = false
+
+// The scheme artifact previews load from; registered before the app is ready, as Electron requires.
+protocol.registerSchemesAsPrivileged([{ scheme: PREVIEW_SCHEME, privileges: { standard: true, secure: true } }])
+
+const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
 function backgroundFor(theme: Settings['theme']) {
   const dark = theme === 'dark' || (theme === 'system' && nativeTheme.shouldUseDarkColors)
@@ -58,6 +71,9 @@ function createWindow() {
 
   window.once('ready-to-show', () => window?.show())
 
+  // WebRTC is outside a preview's content policy, so it may only go through the proxy (see previewNetwork).
+  window.webContents.setWebRTCIPHandlingPolicy('disable_non_proxied_udp')
+
   // Links in answers open in the person's browser, never inside the app.
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//.test(url)) void shell.openExternal(url)
@@ -68,6 +84,10 @@ function createWindow() {
     event.preventDefault()
     if (/^https?:\/\//.test(url)) void shell.openExternal(url)
   })
+  // A preview stays on its own page: links in it are offered to the person instead (see the artifact bridge).
+  window.webContents.on('will-frame-navigate', (event) => {
+    if (!event.isMainFrame && !event.url.startsWith(`${PREVIEW_SCHEME}:`)) event.preventDefault()
+  })
 
   if (devServerUrl) void window.loadURL(devServerUrl)
   else void window.loadFile(path.join(__dirname, '../renderer/index.html'))
@@ -77,8 +97,15 @@ function createWindow() {
   })
 }
 
+/** A folder that was moved or deleted fails to open, rather than opening as a place where nothing works. */
+async function readFolder(dir: string) {
+  const isFolder = await stat(dir).then((s) => s.isDirectory(), () => false)
+  if (!isFolder) throw new Error(`${dir} is not a folder`)
+  return readWorkspace(dir)
+}
+
 async function openWorkspace(dir: string) {
-  const info = await readWorkspace(dir)
+  const info = await readFolder(dir)
   const settings = settingsStore.get()
   const recent = [dir, ...settings.recentWorkspaces.filter((p) => p !== dir)].slice(0, 8)
   const next = await settingsStore.update({ lastWorkspace: dir, recentWorkspaces: recent })
@@ -98,7 +125,7 @@ function registerIpc() {
     let workspace = null
     if (settings.lastWorkspace) {
       try {
-        workspace = await readWorkspace(settings.lastWorkspace)
+        workspace = await readFolder(settings.lastWorkspace)
       } catch {
         workspace = null
       }
@@ -190,6 +217,36 @@ function registerIpc() {
   handle('changesRevertAll', (id: string) => controller.revertAll(id))
   handle('changesCommit', (id: string, message: string) => controller.commit(id, message))
 
+  // If the session could not be fenced in, the viewer shows this error instead of the page.
+  handle('artifactsPreview', (html: string) => {
+    if (!fenced) throw new Error('The preview network is not ready.')
+    return previews.add(html)
+  })
+  handle('artifactsSave', async (name: string, content: string): Promise<SaveResult | null> => {
+    const options: Electron.SaveDialogOptions = { defaultPath: safeFileName(name) }
+    const result = window ? await dialog.showSaveDialog(window, options) : await dialog.showSaveDialog(options)
+    if (result.canceled || !result.filePath) return null
+    try {
+      await writeFile(result.filePath, String(content), 'utf8')
+      return { ok: true, path: result.filePath }
+    } catch (error) {
+      return { ok: false, error: errorText(error) }
+    }
+  })
+  // Only ever the open folder's top level, under a name that is not taken.
+  handle('artifactsSaveToProject', (name: string, content: string) => saveToFolder(settingsStore.get().lastWorkspace, name, content))
+  // The page keeps the preview's policy in the browser too, so opening it there gives it no more reach.
+  handle('artifactsOpenInBrowser', async (name: string, html: string): Promise<SaveResult> => {
+    try {
+      const file = await writeTempPage(app.getPath('temp'), name, withPolicy(String(html ?? '')))
+      const error = await shell.openPath(file)
+      return error ? { ok: false, error } : { ok: true, path: file }
+    } catch (error) {
+      return { ok: false, error: errorText(error) }
+    }
+  })
+  handle('artifactsLibrary', () => controller.artifacts())
+
   handle('openExternal', async (url: string) => {
     if (/^https?:\/\//.test(url)) await shell.openExternal(url)
   })
@@ -207,6 +264,15 @@ app.on('second-instance', () => {
 for (const signal of ['SIGTERM', 'SIGINT'] as const) process.on(signal, () => app.quit())
 
 app.whenReady().then(async () => {
+  protocol.handle(PREVIEW_SCHEME, (request) => previews.respond(request.url))
+  // Nothing in the app downloads files; a page in a preview must not open save dialogs either.
+  session.defaultSession.on('will-download', (event) => event.preventDefault())
+  // The gate asks an in-memory session the app never changes, so it always gets the system's own routes.
+  // If the gate cannot start, the session still goes nowhere but the dev server.
+  const port = await gate.listen().catch(() => null)
+  await session.defaultSession
+    .setProxy(gateProxy(port, devServerUrl ? new URL(devServerUrl).hostname : undefined))
+    .then(() => (fenced = true), () => undefined)
   await Promise.all([settingsStore.load(), sessionStore.load()])
   registerIpc()
   createWindow()

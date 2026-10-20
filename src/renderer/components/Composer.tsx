@@ -87,14 +87,16 @@ export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
   const usage = chat?.session.usage
   const hasText = text.trim().length > 0
 
+  // Covered by a page such as the library, the prompt is out of sight, so Enter and Esc leave it alone.
+  const covered = useApp((s) => s.view !== 'chat')
   useEffect(() => {
-    if (!permission) return
+    if (!permission || covered) return
     const onKey = (event: KeyboardEvent) => {
       if (!event.defaultPrevented && permissionKey(event, textRef.current.trim().length > 0)) event.preventDefault()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [permission])
+  }, [permission, covered])
 
   const submit = () => {
     const value = text.trim()

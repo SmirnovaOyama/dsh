@@ -222,7 +222,7 @@ const FileRow = memo(function FileRow(props: { path: string; name: string; depth
 })
 
 /** Splits highlighted tokens into lines, so each line can carry its own number. */
-function tokenLines(text: string, ext: string): Token[][] {
+export function tokenLines(text: string, ext: string): Token[][] {
   const lines: Token[][] = [[]]
   for (const token of highlight(text, ext)) {
     const parts = token.text.split('\n')

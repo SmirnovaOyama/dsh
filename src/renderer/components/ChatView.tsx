@@ -22,7 +22,8 @@ function Header() {
   const loadingTitle = useApp((s) => s.sessions.find((m) => m.id === s.chatId)?.title)
   const workspace = useApp((s) => s.workspace)
   const home = useApp((s) => s.app.home)
-  const showChanges = useApp((s) => s.showChanges)
+  // While artifacts fill the panel, this button brings back changes and files rather than hiding it.
+  const showingChanges = useApp((s) => s.showChanges && s.panelTab !== 'artifacts')
   const moreRef = useRef<HTMLButtonElement>(null)
   const [menu, setMenu] = useState(false)
   const [confirm, setConfirm] = useState(false)
@@ -68,9 +69,9 @@ function Header() {
         <button
           type="button"
           className="btn-ghost hx-pane-btn"
-          aria-pressed={showChanges}
-          aria-label={t(showChanges ? 'header.hideChanges' : 'header.showChanges')}
-          title={t(showChanges ? 'header.hideChanges' : 'header.showChanges')}
+          aria-pressed={showingChanges}
+          aria-label={t(showingChanges ? 'header.hideChanges' : 'header.showChanges')}
+          title={t(showingChanges ? 'header.hideChanges' : 'header.showChanges')}
           onClick={() => actions.toggleChanges()}
         >
           <Icon icon={PanelRight} />
@@ -134,8 +135,9 @@ export function ChatView() {
   const hasChat = useApp((s) => s.chat !== null || s.chatId !== null)
   const hasApiKey = useApp((s) => s.hasApiKey)
   const hasWorkspace = useApp((s) => s.workspace !== null)
+  const covered = useApp((s) => s.view === 'artifacts')
   return (
-    <main className="hx-main">{!hasChat && !hasApiKey ? <NoKey /> : !hasChat && !hasWorkspace ? <NoFolder /> : <Conversation />}</main>
+    <main className="hx-main" inert={covered}>{!hasChat && !hasApiKey ? <NoKey /> : !hasChat && !hasWorkspace ? <NoFolder /> : <Conversation />}</main>
   )
 }
 

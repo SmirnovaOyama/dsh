@@ -16,7 +16,7 @@ interface MenuProps {
   children: ReactNode
 }
 
-const ITEMS = '[role="menuitem"], [role="menuitemradio"]'
+const ITEMS = '[role="menuitem"]:not(:disabled), [role="menuitemradio"]:not(:disabled)'
 
 /** A popover menu in a portal, placed against its anchor, so opening it never moves the layout. */
 export function Menu({ anchor, open, onClose, label, side = 'bottom', align = 'start', matchWidth, minWidth, children }: MenuProps) {
@@ -27,6 +27,16 @@ export function Menu({ anchor, open, onClose, label, side = 'bottom', align = 's
 
   useLayoutEffect(() => {
     if (open && anchor) setRect(anchor.getBoundingClientRect())
+  }, [open, anchor])
+
+  // A choice closes the menu and takes the focused item with it; focus goes back to what opened the menu,
+  // unless the choice already sent it somewhere, so the next key never lands on the page itself.
+  useEffect(() => {
+    if (!open) return
+    return () => {
+      const lost = !document.activeElement || document.activeElement === document.body
+      if (lost && anchor?.isConnected) anchor.focus({ preventScroll: true })
+    }
   }, [open, anchor])
 
   // The menu renders once its anchor is measured; wire it up only then, so focus and outside clicks see it.
@@ -104,10 +114,11 @@ interface MenuItemProps {
   desc?: string
   sub?: string
   danger?: boolean
+  disabled?: boolean
   children: ReactNode
 }
 
-export function MenuItem({ onSelect, checked, icon, desc, sub, danger, children }: MenuItemProps) {
+export function MenuItem({ onSelect, checked, icon, desc, sub, danger, disabled, children }: MenuItemProps) {
   const isChoice = checked !== undefined
   const classes = ['oy-menu-item', desc || sub ? 'has-desc' : '', danger ? 'is-danger' : ''].filter(Boolean).join(' ')
   return (
@@ -117,6 +128,7 @@ export function MenuItem({ onSelect, checked, icon, desc, sub, danger, children 
       role={isChoice ? 'menuitemradio' : 'menuitem'}
       aria-checked={isChoice ? checked : undefined}
       tabIndex={-1}
+      disabled={disabled}
       onClick={onSelect}
     >
       {icon}

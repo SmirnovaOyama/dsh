@@ -3,6 +3,7 @@
 import { randomUUID } from 'node:crypto'
 import type {
   AgentEvent,
+  ArtifactVersion,
   Effort,
   ErrorCode,
   FileRef,
@@ -18,6 +19,7 @@ import { DeepSeekError, streamChat, type ApiUsage, type ChatMessage, type ChatRe
 import { needsApproval } from './permissions'
 import { withRefs } from './refs'
 import { TOOL_SPECS, ToolError, prepareToolCall, type PermissionNeed, type PreparedCall } from './tools'
+import { draftArtifact, nextArtifact, streamedCommand, streamedId } from './tools/artifact'
 
 const MAX_TOOL_RESULT_CHARS = 60_000
 const STREAM_FLUSH_MS = 50
@@ -87,6 +89,38 @@ export function titleFrom(text: string): string {
 function errorCode(error: unknown): ErrorCode {
   if (error instanceof DeepSeekError && error.code !== 'aborted') return error.code
   return 'unknown'
+}
+
+/** The latest finished version of each artifact in the conversation. */
+export function latestArtifacts(items: TranscriptItem[]): (id: string) => ArtifactVersion | undefined {
+  return (id) => {
+    let latest: ArtifactVersion | undefined
+    for (const item of items) {
+      if (item.kind === 'tool' && item.status === 'done' && item.artifact?.id === id && (!latest || item.artifact.version >= latest.version)) latest = item.artifact
+    }
+    return latest
+  }
+}
+
+/** A list of the artifacts made so far, kept with a summary so the model still knows what it can view and change. */
+export function artifactNote(items: TranscriptItem[]): string {
+  const latest = new Map<string, ArtifactVersion>()
+  for (const item of items) {
+    if (item.kind !== 'tool' || item.status !== 'done' || !item.artifact) continue
+    const known = latest.get(item.artifact.id)
+    if (!known || item.artifact.version >= known.version) latest.set(item.artifact.id, item.artifact)
+  }
+  if (!latest.size) return ''
+  const list = [...latest.values()].map((a) => `- ${a.id}: ${a.title} (${a.type}, version ${a.version})`).join('\n')
+  return `Artifacts in this conversation. Call the artifact tool's view command to read one before you change it.\n${list}`
+}
+
+const CUT_OFF =
+  'Your reply reached the output limit and this call was cut off before its arguments were complete, so it was not run. Make it smaller: for an artifact, create a working first version and add to it with update.'
+
+/** The name a tool row shows: reading an artifact is a different action from writing one. */
+function itemName(call: ToolCall): string {
+  return call.function.name === 'artifact' && streamedCommand(call.function.arguments) === 'view' ? 'artifact_view' : call.function.name
 }
 
 function clip(text: string): string {
@@ -187,7 +221,8 @@ export class Agent {
           }
         }
         steps++
-        const result = await this.request(state, settings, signal, !overflowRetried)
+        const drafts = new Map<string, ToolItem>()
+        const result = await this.request(state, settings, signal, !overflowRetried, drafts)
         if (result === OVERFLOW) {
           overflowRetried = true
           steps--
@@ -197,8 +232,14 @@ export class Agent {
           break
         }
         if (!result) break
-        if (!result.toolCalls.length) break
-        const keepGoing = await this.runTools(state, result.toolCalls, signal)
+        if (!result.toolCalls.length) {
+          // The reply stopped at the output limit; say so, with a way to go on.
+          if (result.finishReason === 'length') this.add(state, { kind: 'notice', id: randomUUID(), code: 'length' })
+          break
+        }
+        // At the output limit the last call is cut off mid-arguments; it is answered, not run.
+        const cutOff = result.finishReason === 'length' ? result.toolCalls[result.toolCalls.length - 1].id : null
+        const keepGoing = await this.runTools(state, result.toolCalls, signal, drafts, cutOff)
         if (!keepGoing) break
       }
     })
@@ -231,7 +272,8 @@ export class Agent {
       })
       const summary = result.content.trim()
       if (!summary) throw new Error('The model returned an empty summary.')
-      state.messages = compactedMessages(summary, history, held)
+      const note = artifactNote(state.data.items)
+      state.messages = compactedMessages(note ? `${summary}\n\n${note}` : summary, history, held)
       // Until the next request reports it, the summary is the best measure of the new context.
       this.addUsage(state, result.usage, result.usage?.completion_tokens ?? 0)
       item.status = 'done'
@@ -258,7 +300,13 @@ export class Agent {
   }
 
   /** One request to DeepSeek. Returns null when the turn should end. */
-  private async request(state: SessionState, settings: Settings, signal: AbortSignal, overflowable: boolean): Promise<ChatResult | typeof OVERFLOW | null> {
+  private async request(
+    state: SessionState,
+    settings: Settings,
+    signal: AbortSignal,
+    overflowable: boolean,
+    drafts: Map<string, ToolItem>,
+  ): Promise<ChatResult | typeof OVERFLOW | null> {
     const apiKey = this.host.apiKey()
     if (!apiKey) {
       this.add(state, { kind: 'error', id: randomUUID(), code: 'no-key', retryable: true })
@@ -267,6 +315,47 @@ export class Agent {
     const { model, effort } = state.data
     let reasoning: ReasoningItem | null = null
     let text: TextItem | null = null
+    // Artifacts show up while the model is still writing them, keyed by the call's place in the reply.
+    // A draft waits until every artifact call before it has its card, so the cards stay in the order of the
+    // calls, and until its id has arrived in full, so it never passes for another artifact on the way.
+    const streaming = new Map<number, ToolItem>()
+    const names = new Map<number, string>()
+    const argsOf = new Map<number, string>()
+    const settled = new Set<number>()
+    // Calls whose complete arguments already show they will fail, with why.
+    const failing = new Map<number, string>()
+    const latest = latestArtifacts(state.data.items)
+    // Versions that earlier calls in this reply will make, so an update right after a create builds on it.
+    const made = new Map<string, ArtifactVersion>()
+    const lookup = (id: string) => made.get(id) ?? latest(id)
+    const draftable = (index: number) => [...names.keys()].every((j) => j >= index || settled.has(j))
+    // A call's arguments are complete once the next call starts or the reply ends; its card then shows the
+    // version it will make. A call that would fail leaves nothing for later ones to build on.
+    const complete = (index: number) => {
+      const args = argsOf.get(index)
+      argsOf.delete(index)
+      settled.add(index)
+      if (args === undefined) return
+      try {
+        const version = nextArtifact(JSON.parse(args) as Record<string, unknown>, lookup)
+        made.set(version.id, version)
+        const item = streaming.get(index)
+        if (!item) return
+        item.artifact = version
+        item.target = version.title
+        this.schedule(state, item)
+      } catch (error) {
+        // Not a version: it is answered with the error when it runs.
+        failing.set(index, error instanceof Error ? error.message : String(error))
+      }
+    }
+    const endDrafts = (status: ToolItem['status']) => {
+      for (const item of streaming.values()) {
+        item.status = status
+        item.endedAt = this.now()
+        this.flush(state, item)
+      }
+    }
     const endReasoning = () => {
       if (reasoning && reasoning.endedAt === undefined) {
         reasoning.endedAt = this.now()
@@ -300,12 +389,40 @@ export class Agent {
             text.text += delta
             this.schedule(state, text)
           },
-          onToolCall: () => endReasoning(),
+          onToolCall: (index, name) => {
+            endReasoning()
+            for (const j of [...argsOf.keys()]) if (j < index) complete(j)
+            names.set(index, name)
+            if (name !== 'artifact') settled.add(index)
+          },
+          onToolArguments: (index, args) => {
+            if (names.get(index) !== 'artifact') return
+            argsOf.set(index, args)
+            const item = streaming.get(index)
+            if (item) {
+              const artifact = draftArtifact(args, lookup)
+              item.artifact = artifact
+              item.target = artifact.title
+              this.schedule(state, item)
+              return
+            }
+            if (settled.has(index)) return
+            const command = streamedCommand(args)
+            const id = streamedId(args)
+            // Reading an artifact gets a plain row once it runs, not a card; so does changing one that does
+            // not exist, which fails then.
+            if (command === 'view' || (command && id !== undefined && command !== 'create' && !lookup(id))) settled.add(index)
+            if (!command || id === undefined || settled.has(index) || !draftable(index)) return
+            const artifact = draftArtifact(args, lookup)
+            streaming.set(index, this.add<ToolItem>(state, { kind: 'tool', id: randomUUID(), callId: '', name: 'artifact', target: artifact.title, status: 'running', startedAt: this.now(), artifact }))
+            settled.add(index)
+          },
         },
       )
     } catch (error) {
-      if (overflowable && !reasoning && !text && error instanceof DeepSeekError && isContextOverflow(error.status, error.message)) return OVERFLOW
+      if (overflowable && !reasoning && !text && !streaming.size && error instanceof DeepSeekError && isContextOverflow(error.status, error.message)) return OVERFLOW
       endReasoning()
+      endDrafts(signal.aborted ? 'stopped' : 'error')
       const partial = text as TextItem | null
       if (partial) {
         partial.streaming = false
@@ -324,6 +441,7 @@ export class Agent {
     }
 
     endReasoning()
+    for (const j of [...argsOf.keys()]) complete(j)
     const finished = text as TextItem | null
     if (finished) {
       finished.streaming = false
@@ -334,20 +452,64 @@ export class Agent {
     const message: Extract<ChatMessage, { role: 'assistant' }> = { role: 'assistant', content: result.content }
     if (result.reasoning) message.reasoning_content = result.reasoning
     if (result.toolCalls.length) message.tool_calls = result.toolCalls
+    // A call cut off at the output limit is kept out of the history, so its half-written arguments are not sent again.
+    const cut = result.finishReason === 'length' ? result.toolCalls[result.toolCalls.length - 1] : undefined
+    if (cut) message.tool_calls = result.toolCalls.map((c) => (c === cut ? { ...c, function: { ...c.function, arguments: '{}' } } : c))
+    // A draft behind another kind of step is written in full but runs after it, maybe after a prompt; its
+    // card says it is waiting rather than still writing. One that was cut off, or that can only fail, ends
+    // now: nothing more will be written to it. Its answer still goes to the model in the order of the calls.
+    let behind = false
+    result.toolCalls.forEach((call, i) => {
+      const index = result.toolCallIndexes?.[i] ?? i
+      const item = streaming.get(index)
+      if (item) {
+        item.callId = call.id
+        const failure = call === cut ? CUT_OFF : failing.get(index)
+        if (failure !== undefined) {
+          item.status = 'error'
+          item.error = failure
+          item.endedAt = this.now()
+          this.flush(state, item)
+        } else if (behind) {
+          item.queued = true
+          this.flush(state, item)
+        }
+        drafts.set(call.id, item)
+        streaming.delete(index)
+      }
+      if (call.function.name !== 'artifact') behind = true
+    })
+    endDrafts('error')
     state.messages.push(message)
     this.host.persist(state)
     return result
   }
 
   /** Runs each tool call in order. Returns false when the turn should end here. */
-  private async runTools(state: SessionState, calls: ToolCall[], signal: AbortSignal): Promise<boolean> {
+  private async runTools(state: SessionState, calls: ToolCall[], signal: AbortSignal, drafts: Map<string, ToolItem>, cutOff: string | null): Promise<boolean> {
     let keepGoing = true
     for (const call of calls) {
+      if (call.id === cutOff && !signal.aborted && keepGoing) {
+        const item = drafts.get(call.id) ?? this.add<ToolItem>(state, { kind: 'tool', id: randomUUID(), callId: call.id, name: itemName(call), target: '', status: 'running', startedAt: this.now() })
+        delete item.queued
+        item.status = 'error'
+        item.error = CUT_OFF
+        item.endedAt = this.now()
+        this.flush(state, item)
+        state.messages.push({ role: 'tool', tool_call_id: call.id, content: `Error: ${CUT_OFF}` })
+        continue
+      }
       if (signal.aborted || !keepGoing) {
+        const draft = drafts.get(call.id)
+        if (draft?.status === 'running') {
+          delete draft.queued
+          draft.status = 'stopped'
+          this.flush(state, draft)
+        }
         state.messages.push({ role: 'tool', tool_call_id: call.id, content: 'Not run: the turn ended before this call.' })
         continue
       }
-      keepGoing = await this.runTool(state, call, signal)
+      keepGoing = await this.runTool(state, call, signal, drafts.get(call.id))
     }
     if (signal.aborted) {
       this.add(state, { kind: 'notice', id: randomUUID(), code: 'stopped' })
@@ -356,18 +518,20 @@ export class Agent {
     return keepGoing
   }
 
-  private async runTool(state: SessionState, call: ToolCall, signal: AbortSignal): Promise<boolean> {
-    const item = this.add<ToolItem>(state, {
+  private async runTool(state: SessionState, call: ToolCall, signal: AbortSignal, draft?: ToolItem): Promise<boolean> {
+    const item = draft ?? this.add<ToolItem>(state, {
       kind: 'tool',
       id: randomUUID(),
       callId: call.id,
-      name: call.function.name,
+      name: itemName(call),
       target: '',
       status: 'running',
       startedAt: this.now(),
     })
+    // A queued draft stays queued until its status changes, so it never reads as being written again.
     const reply = (content: string) => state.messages.push({ role: 'tool', tool_call_id: call.id, content: clip(content) })
     const fail = (message: string) => {
+      delete item.queued
       item.status = 'error'
       item.error = message
       item.endedAt = this.now()
@@ -377,7 +541,7 @@ export class Agent {
 
     let prepared: PreparedCall
     try {
-      prepared = await prepareToolCall(call.function.name, call.function.arguments, state.data.workspace)
+      prepared = await prepareToolCall(call.function.name, call.function.arguments, state.data.workspace, latestArtifacts(state.data.items))
     } catch (error) {
       fail(error instanceof ToolError ? error.message : `Could not run ${call.function.name}: ${(error as Error).message}`)
       return true
@@ -386,6 +550,7 @@ export class Agent {
     item.path = prepared.path
     item.created = prepared.created
     item.stats = prepared.stats
+    if (prepared.artifact) item.artifact = prepared.artifact
     this.flush(state, item)
 
     if (prepared.approval) {
@@ -397,6 +562,7 @@ export class Agent {
         sessionCommandPrefixes: state.allowedPrefixes,
       })
       if (ask) {
+        delete item.queued
         item.status = 'waiting'
         this.flush(state, item)
         this.setStatus(state, 'waiting')
@@ -440,6 +606,7 @@ export class Agent {
           this.schedule(state, item)
         },
       })
+      delete item.queued
       item.status = signal.aborted ? 'stopped' : result.isError ? 'error' : 'done'
       item.output = result.display
       item.info = result.info

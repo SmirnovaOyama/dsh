@@ -38,6 +38,13 @@ const api: DshApi = {
     respond: invoke(Channels.agentRespond) as DshApi['agent']['respond'],
     configure: invoke(Channels.agentConfigure) as DshApi['agent']['configure'],
   },
+  artifacts: {
+    preview: invoke(Channels.artifactsPreview) as DshApi['artifacts']['preview'],
+    save: invoke(Channels.artifactsSave) as DshApi['artifacts']['save'],
+    saveToProject: invoke(Channels.artifactsSaveToProject) as DshApi['artifacts']['saveToProject'],
+    openInBrowser: invoke(Channels.artifactsOpenInBrowser) as DshApi['artifacts']['openInBrowser'],
+    library: invoke(Channels.artifactsLibrary) as DshApi['artifacts']['library'],
+  },
   changes: {
     revertAll: invoke(Channels.changesRevertAll) as DshApi['changes']['revertAll'],
     commit: invoke(Channels.changesCommit) as DshApi['changes']['commit'],

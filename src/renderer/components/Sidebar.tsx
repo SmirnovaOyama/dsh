@@ -1,4 +1,4 @@
-import { ChevronsUpDown, Folder, FolderOpen, Search, Settings as SettingsIcon, SquarePen, X } from 'lucide-react'
+import { ChevronsUpDown, Folder, FolderOpen, Search, Settings as SettingsIcon, Shapes, SquarePen, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SessionMeta } from '../../shared/types'
 import { dayGroup, modKey, tildify, type DayGroup } from '../format'
@@ -22,7 +22,7 @@ function SessionRow({ meta, current }: { meta: SessionMeta; current: boolean }) 
       title={meta.title}
     >
       <span className="t">{meta.title || t('header.newChat')}</span>
-      {trail && <span className={`s ${meta.status === 'waiting' ? 'is-waiting' : ''}`}>{trail}</span>}
+      {trail && <span className={`s ${meta.status === 'waiting' ? 'is-waiting' : meta.status === 'running' ? 'hx-shimmer' : ''}`}>{trail}</span>}
     </button>
   )
 }
@@ -142,6 +142,10 @@ export function Sidebar({ searchTick }: { searchTick: number }) {
               <span className="hx-nav-trail">{t('shortcut.search', { mod })}</span>
             </button>
           )}
+          <button type="button" className="oy-nav-item" aria-current={view === 'artifacts' ? 'page' : undefined} onClick={() => actions.openLibrary()}>
+            <Icon icon={Shapes} />
+            <span>{t('library.title')}</span>
+          </button>
         </div>
       </div>
 
