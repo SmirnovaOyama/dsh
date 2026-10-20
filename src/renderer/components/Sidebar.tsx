@@ -1,7 +1,7 @@
 import { ChevronRight, Clock, Ellipsis, Folder, FolderOpen, FolderPlus, PanelLeft, Plus, Search, Settings as SettingsIcon, Shapes, SquarePen, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SessionMeta } from '../../shared/types'
-import { modKey, sessionTime, tildify } from '../format'
+import { modKey, tildify } from '../format'
 import { t } from '../i18n'
 import { actions, projectPaths, useApp } from '../store'
 import { Icon } from './Icon'
@@ -31,10 +31,8 @@ function writeFolded(paths: string[]) {
 
 const baseName = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path
 
-function SessionRow({ meta, current, now, project }: { meta: SessionMeta; current: boolean; now: number; project?: string }) {
-  const locale = useApp((s) => s.settings.locale)
-  const trail =
-    meta.status === 'running' ? t('status.running') : meta.status === 'waiting' ? t('status.waiting') : sessionTime(meta.updatedAt, now, locale)
+function SessionRow({ meta, current, project }: { meta: SessionMeta; current: boolean; project?: string }) {
+  const trail = meta.status === 'running' ? t('status.running') : meta.status === 'waiting' ? t('status.waiting') : null
   return (
     <button
       type="button"
@@ -45,20 +43,11 @@ function SessionRow({ meta, current, now, project }: { meta: SessionMeta; curren
     >
       <span className="t">{meta.title || t('header.newChat')}</span>
       {project && <span className="p">{project}</span>}
-      <span className={`s ${meta.status === 'waiting' ? 'is-waiting' : ''}`}>{trail}</span>
+      {trail && <span className={`s ${meta.status === 'waiting' ? 'is-waiting' : meta.status === 'running' ? 'hx-shimmer' : ''}`}>{trail}</span>}
     </button>
   )
 }
 
-/** Re-renders once a minute so the times beside conversations stay true. */
-function useMinute(): number {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 60_000)
-    return () => window.clearInterval(timer)
-  }, [])
-  return now
-}
 
 interface ProjectProps {
   path: string
@@ -66,12 +55,11 @@ interface ProjectProps {
   open: boolean
   current: boolean
   chatId: string | null
-  now: number
   onToggle(): void
 }
 
 /** One project: its name, then its conversations, most recent first. */
-function Project({ path, sessions, open, current, chatId, now, onToggle }: ProjectProps) {
+function Project({ path, sessions, open, current, chatId, onToggle }: ProjectProps) {
   const home = useApp((s) => s.app.home)
   const [all, setAll] = useState(false)
   const [menu, setMenu] = useState(false)
@@ -116,7 +104,7 @@ function Project({ path, sessions, open, current, chatId, now, onToggle }: Proje
           <div className="hx-session-list">
             {sessions.length === 0 && <p className="hx-proj-empty">{t('project.empty')}</p>}
             {shown.map((meta) => (
-              <SessionRow key={meta.id} meta={meta} current={meta.id === chatId} now={now} />
+              <SessionRow key={meta.id} meta={meta} current={meta.id === chatId} />
             ))}
             {sessions.length > SHOW && (
               <button type="button" className="hx-proj-more" onClick={() => setAll((a) => !a)}>
@@ -128,7 +116,7 @@ function Project({ path, sessions, open, current, chatId, now, onToggle }: Proje
       </div>
       <Menu anchor={moreRef.current} open={menu} onClose={() => setMenu(false)} label={name} minWidth={200}>
         <MenuItem
-          icon={<Icon icon={X} size={18} />}
+          icon={<Icon icon={X} />}
           onSelect={() => {
             setMenu(false)
             void actions.removeProject(path)
@@ -149,7 +137,6 @@ export function Sidebar({ searchTick }: { searchTick: number }) {
   const view = useApp((s) => s.view)
   const saved = useApp((s) => s.settings.projects)
   const platform = useApp((s) => s.app.platform)
-  const now = useMinute()
 
   const searchRef = useRef<HTMLInputElement>(null)
   const [searching, setSearching] = useState(false)
@@ -247,7 +234,7 @@ export function Sidebar({ searchTick }: { searchTick: number }) {
                 }}
               />
               <button type="button" className="btn-ghost" aria-label={t('common.cancel')} onMouseDown={(event) => event.preventDefault()} onClick={closeSearch}>
-                <Icon icon={X} size={16} />
+                <Icon icon={X} size={14} />
               </button>
             </div>
           ) : (
@@ -285,7 +272,7 @@ export function Sidebar({ searchTick }: { searchTick: number }) {
             {results.length === 0 && <p className="hx-side-note">{t('sidebar.noResults')}</p>}
             <div className="hx-session-list">
               {results.map((meta) => (
-                <SessionRow key={meta.id} meta={meta} current={meta.id === currentChat} now={now} project={baseName(meta.workspace)} />
+                <SessionRow key={meta.id} meta={meta} current={meta.id === currentChat} project={baseName(meta.workspace)} />
               ))}
             </div>
           </>
@@ -317,7 +304,6 @@ export function Sidebar({ searchTick }: { searchTick: number }) {
                 open={!folded.includes(path)}
                 current={path === workspace?.path}
                 chatId={currentChat}
-                now={now}
                 onToggle={() => toggle(path)}
               />
             ))}

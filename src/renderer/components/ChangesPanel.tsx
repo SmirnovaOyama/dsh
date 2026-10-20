@@ -5,8 +5,10 @@ import { t } from '../i18n'
 import { actions, useApp, type ChatState } from '../store'
 import type { Motion } from '../App'
 import { DiffStatsText, DiffView } from './DiffView'
+import { ArtifactsView } from './ArtifactsView'
 import { FilesView } from './FilesView'
 import { Icon } from './Icon'
+import { Sketch } from './Sketch'
 import { Modal } from './Modal'
 
 /** Every changed file stacked in one scroll, each with its own header that stays on top while you read it. */
@@ -15,6 +17,8 @@ export function ChangesPanel({ chat, motion }: { chat: ChatState | null; motion:
   const tab = useApp((s) => s.panelTab)
   const isGitRepo = useApp((s) => s.workspace?.isGitRepo ?? false)
   const changes = chat?.changes ?? []
+  const covered = useApp((s) => s.view === 'artifacts')
+
   const running = chat ? chat.session.status !== 'idle' : false
   const added = changes.reduce((n, c) => n + c.stats.added, 0)
   const removed = changes.reduce((n, c) => n + c.stats.removed, 0)
@@ -56,19 +60,29 @@ export function ChangesPanel({ chat, motion }: { chat: ChatState | null; motion:
     section?.scrollIntoView({ block: 'start' })
   }, [selected, setOpen])
 
+  // An artifact takes the whole panel, with its own title bar, as it does in Claude.
+  if (tab === 'artifacts') {
+    return (
+      <aside className="hx-changes is-artifacts" data-motion={motion} aria-label={t('artifact.label')} inert={motion === 'out' || covered}>
+        <ArtifactsView />
+      </aside>
+    )
+  }
+
   return (
-    <aside className="hx-changes" data-motion={motion} aria-label={t('changes.label')} inert={motion === 'out'}>
+    <aside className="hx-changes" data-motion={motion} aria-label={t('changes.label')} inert={motion === 'out' || covered}>
       <div className="hx-changes-head">
         <div className="hx-tabs" role="tablist" aria-label={t('changes.label')}>
           {(['changes', 'files'] as const).map((id) => (
             <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => actions.setPanelTab(id)}>
+              <Sketch name={id} />
               {t(`panel.${id}`)}
             </button>
           ))}
         </div>
         {tab === 'changes' && changes.length > 0 && (
           <span className="sum">
-            {t('changes.count', { n: changes.length })}
+            <span className="n">{t('changes.count', { n: changes.length })}</span>
             <span className="stats">
               <DiffStatsText added={added} removed={removed} showZero />
             </span>
@@ -129,6 +143,7 @@ export function ChangesPanel({ chat, motion }: { chat: ChatState | null; motion:
 
       {tab === 'files' ? (
         <FilesView />
+
       ) : changes.length === 0 ? (
         <div className="hx-changes-empty">{t('changes.empty')}</div>
       ) : (

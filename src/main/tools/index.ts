@@ -2,10 +2,11 @@
 
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import type { DiffLine, DiffStats, Todo, ToolInfo } from '../../shared/types'
+import type { ArtifactVersion, DiffLine, DiffStats, Todo, ToolInfo } from '../../shared/types'
 import type { ChangeTracker } from '../changes'
 import type { ToolSpec } from '../deepseek'
 import { countLines, diffText } from '../diff'
+import { ARTIFACT_SPEC, nextArtifact, viewArtifact } from './artifact'
 import {
   findFilesTool,
   listDirTool,
@@ -135,6 +136,7 @@ export const TOOL_SPECS: ToolSpec[] = [
       },
     },
   },
+  ARTIFACT_SPEC,
   {
     type: 'function',
     function: {
@@ -224,6 +226,8 @@ export interface PreparedCall {
   path?: string
   created?: boolean
   stats?: DiffStats
+  /** The version an artifact call makes. */
+  artifact?: ArtifactVersion
   /** Set for tools that change something, so the agent can ask before running them. */
   approval: PermissionNeed | null
   run(ctx: ToolRunContext): Promise<ToolRunResult>
@@ -276,7 +280,9 @@ function writeCall(
   }
 }
 
-export async function prepareToolCall(name: string, rawArgs: string, workspace: string): Promise<PreparedCall> {
+export type ArtifactLookup = (id: string) => ArtifactVersion | undefined
+
+export async function prepareToolCall(name: string, rawArgs: string, workspace: string, artifacts: ArtifactLookup = () => undefined): Promise<PreparedCall> {
   const args = parseArgs(rawArgs)
   switch (name) {
     case 'read_file':
@@ -327,6 +333,20 @@ export async function prepareToolCall(name: string, rawArgs: string, workspace: 
             isError: result.aborted || result.timedOut || result.exitCode !== 0,
           }
         },
+      }
+    }
+    case 'artifact': {
+      if (args.command === 'view') {
+        const view = viewArtifact(args, artifacts)
+        return { target: view.artifact.title, approval: null, run: async () => ({ text: view.text, info: { lines: view.lines } }) }
+      }
+      const artifact = nextArtifact(args, artifacts)
+      const verb = artifact.version === 1 ? 'Created' : 'Updated'
+      return {
+        target: artifact.title,
+        artifact,
+        approval: null,
+        run: async () => ({ text: `${verb} artifact "${artifact.id}", now at version ${artifact.version}. The user sees it in a panel beside the chat.` }),
       }
     }
     case 'todo_write': {

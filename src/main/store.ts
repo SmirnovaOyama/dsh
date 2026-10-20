@@ -135,6 +135,11 @@ export class SessionStore {
     }
   }
 
+  /** Every conversation in every folder. */
+  all(): SessionMeta[] {
+    return [...this.index.values()]
+  }
+
   list(workspace: string): SessionMeta[] {
     return [...this.index.values()].filter((meta) => meta.workspace === workspace).sort((a, b) => b.updatedAt - a.updatedAt)
   }

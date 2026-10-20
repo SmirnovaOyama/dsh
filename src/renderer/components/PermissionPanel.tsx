@@ -2,7 +2,7 @@ import { ClipboardList, FilePen, FilePlus, Terminal } from 'lucide-react'
 import type { PermissionRequest } from '../../shared/types'
 import { tildify } from '../format'
 import { t } from '../i18n'
-import { actions, useApp } from '../store'
+import { actions, getState, useApp } from '../store'
 import { DiffStatsText, DiffView } from './DiffView'
 import { Icon } from './Icon'
 import { Markdown } from './Markdown'
@@ -90,13 +90,12 @@ export function PermissionPanel({ request }: { request: PermissionRequest }) {
         <Icon icon={request.created ? FilePlus : FilePen} />
         <div className="text">
           <h3 id={titleId}>{t(request.created ? 'perm.createTitle' : 'perm.editTitle')}</h3>
-          <p className="why">
+          <p className="why hx-perm-file">
             <span className="hx-mono">{request.path}</span>
-            {t('perm.sep')}
-            <span style={{ display: 'inline-flex', gap: 4 }}>
+            <span className="stats">
               <DiffStatsText added={stats.added} removed={stats.removed} />
-            </span>{' '}
-            {t('perm.lines')}
+              <span>{t('perm.lines')}</span>
+            </span>
           </p>
         </div>
       </div>
@@ -127,6 +126,9 @@ export function PermissionPanel({ request }: { request: PermissionRequest }) {
 /** Enter allows and Esc declines, unless focus is somewhere that uses those keys itself. */
 export function permissionKey(event: KeyboardEvent, composerHasText: boolean): boolean {
   if (event.isComposing || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return false
+  if (getState().view !== 'chat') return false
+  // A dialog over the window, such as an expanded artifact, hides the prompt; its keys are its own.
+  if (document.querySelector('[aria-modal="true"]')) return false
   const target = event.target as HTMLElement | null
   const inComposer = target?.closest('.hx-field') !== null && target?.tagName === 'TEXTAREA'
   const inControl = !inComposer && !!target?.closest('button, input, textarea, select, a, [role="menu"]')

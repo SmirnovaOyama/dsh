@@ -44,12 +44,16 @@ export interface StreamHandlers {
   onReasoning?(delta: string): void
   onContent?(delta: string): void
   onToolCall?(index: number, name: string): void
+  /** The arguments of a tool call so far, as they stream in. */
+  onToolArguments?(index: number, args: string): void
 }
 
 export interface ChatResult {
   content: string
   reasoning: string
   toolCalls: ToolCall[]
+  /** Where each of toolCalls sat in the stream, the index onToolCall and onToolArguments were given. */
+  toolCallIndexes?: number[]
   finishReason: string | null
   usage: ApiUsage | null
 }
@@ -201,7 +205,10 @@ export async function streamChat(request: ChatRequest, handlers: StreamHandlers 
         slot.name += call.function.name
         if (isNew) handlers.onToolCall?.(call.index, slot.name)
       }
-      if (call.function?.arguments) slot.arguments += call.function.arguments
+      if (call.function?.arguments) {
+        slot.arguments += call.function.arguments
+        handlers.onToolArguments?.(call.index, slot.arguments)
+      }
     }
     if (choice.finish_reason) result.finishReason = choice.finish_reason
   })
@@ -220,13 +227,12 @@ export async function streamChat(request: ChatRequest, handlers: StreamHandlers 
     throw toNetworkError(error, request.signal)
   }
 
-  result.toolCalls = partial
-    .filter((call) => call && call.name)
-    .map((call, index) => ({
-      id: call.id || `call_${index}`,
-      type: 'function' as const,
-      function: { name: call.name, arguments: call.arguments || '{}' },
-    }))
+  result.toolCallIndexes = []
+  result.toolCalls = partial.flatMap((call, index) => {
+    if (!call?.name) return []
+    result.toolCallIndexes!.push(index)
+    return [{ id: call.id || `call_${index}`, type: 'function' as const, function: { name: call.name, arguments: call.arguments || '{}' } }]
+  })
   return result
 }
 

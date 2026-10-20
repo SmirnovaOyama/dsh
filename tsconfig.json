@@ -14,5 +14,5 @@
     "resolveJsonModule": true,
     "types": []
   },
-  "include": ["src/renderer", "src/shared"]
+  "include": ["src/renderer", "src/shared", "tests/artifacts.renderer.test.ts"]
 }

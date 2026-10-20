@@ -1,5 +1,7 @@
 import {
+  AppWindow,
   ChevronRight,
+  Eye,
   FilePen,
   FilePlus,
   FileText,
@@ -31,6 +33,8 @@ const ICONS: Record<string, LucideIcon> = {
   search_files: Search,
   edit_file: FilePen,
   run_command: Terminal,
+  artifact: AppWindow,
+  artifact_view: Eye,
   todo_write: ListTodo,
 }
 
@@ -53,6 +57,7 @@ function resultFor(item: ToolItem): ReactNode {
   if (changesFile(item) && item.stats) return <DiffStatsText added={item.stats.added} removed={item.stats.removed} />
   switch (item.name) {
     case 'read_file':
+    case 'artifact_view':
       return info.lines !== undefined ? <span className="hx-muted">{t('tool.v.lines', { n: info.lines })}</span> : null
     case 'list_dir':
       return info.files !== undefined ? <span className="hx-muted">{t('tool.v.entries', { n: info.files })}</span> : null
@@ -99,7 +104,8 @@ const STATUS_CLASS: Record<ToolItem['status'], string> = {
 function Detail({ item }: { item: ToolItem }) {
   const info = item.info ?? {}
   const took = item.startedAt && item.endedAt ? item.endedAt - item.startedAt : null
-  const output = item.name === 'read_file' ? '' : (item.output ?? '')
+  const reads = item.name === 'read_file' || item.name === 'artifact_view'
+  const output = reads ? '' : (item.output ?? '')
   return (
     <div className="hx-tool-detail">
       {item.error && <p className="hx-danger-line">{item.error}</p>}
@@ -108,7 +114,7 @@ function Detail({ item }: { item: ToolItem }) {
           <span className="k">{t('tool.k.status')}</span>
           <span className={STATUS_CLASS[item.status]}>{t(`tool.status.${item.status}` as MessageKey)}</span>
         </span>
-        {info.lines !== undefined && item.name === 'read_file' && (
+        {info.lines !== undefined && reads && (
           <span>
             <span className="k">{t('tool.k.lines')}</span>
             <span className="hx-tabular">{t('tool.v.lines', { n: info.lines })}</span>

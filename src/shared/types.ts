@@ -135,6 +135,31 @@ export interface ToolInfo {
   truncated?: boolean
 }
 
+export type ArtifactType = 'html' | 'react' | 'svg' | 'mermaid' | 'markdown' | 'code'
+
+/** One version of a piece of standalone content the agent made for the person, shown beside the chat. */
+export interface ArtifactVersion {
+  id: string
+  title: string
+  type: ArtifactType
+  /** The programming language, for code artifacts. */
+  language?: string
+  content: string
+  /** Counts from 1 for each artifact. */
+  version: number
+}
+
+/** The newest finished version of one artifact, with the conversation and folder it was made in. */
+export interface LibraryArtifact {
+  sessionId: string
+  sessionTitle: string
+  workspace: string
+  /** The transcript item holding this version, so the viewer can open it. */
+  itemId: string
+  artifact: ArtifactVersion
+  updatedAt: number
+}
+
 /** A file, or a range of its lines, that the person points the agent at. Lines count from 1. */
 export interface FileRef {
   path: string
@@ -176,9 +201,13 @@ export type TranscriptItem =
       path?: string
       created?: boolean
       stats?: DiffStats
+      /** The artifact tool carries the version it made, so the conversation holds every version. */
+      artifact?: ArtifactVersion
+      /** An artifact written in full that waits for earlier steps in the same reply before it is made. */
+      queued?: boolean
     }
   | { kind: 'error'; id: string; code: ErrorCode; detail?: string; retryable: boolean }
-  | { kind: 'notice'; id: string; code: 'max-steps' | 'stopped' }
+  | { kind: 'notice'; id: string; code: 'max-steps' | 'stopped' | 'length' }
   | {
       kind: 'compact'
       id: string
@@ -281,6 +310,8 @@ export interface ConnectionResult {
   error?: ErrorCode
 }
 
+export type SaveResult = { ok: true; path: string } | { ok: false; error: string }
+
 export interface CommitResult {
   ok: boolean
   error?: string
@@ -381,6 +412,18 @@ export interface DshApi {
     compact(sessionId: string, focus?: string): Promise<void>
     respond(sessionId: string, requestId: string, decision: PermissionDecision): Promise<void>
     configure(sessionId: string, opts: ConfigureOptions): Promise<SessionMeta | null>
+  }
+  artifacts: {
+    /** Hands a page to the preview frame, served under a policy of its own, and returns the address to load. */
+    preview(html: string): Promise<string>
+    /** Asks where to save the artifact and writes it there. Resolves null when the person cancels. */
+    save(name: string, content: string): Promise<SaveResult | null>
+    /** Writes the artifact into the open folder under a name not taken yet. */
+    saveToProject(name: string, content: string): Promise<SaveResult>
+    /** Opens a page in the person's browser from a private temporary file. */
+    openInBrowser(name: string, html: string): Promise<SaveResult>
+    /** Every finished artifact in every folder, newest first. */
+    library(): Promise<LibraryArtifact[]>
   }
   schedules: {
     list(): Promise<ScheduledTask[]>

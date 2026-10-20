@@ -11,10 +11,13 @@ interface PageHeadProps {
   /** A way back to the page this one was opened from, named by `backLabel`. */
   onBack?: () => void
   backLabel?: string
+  /** Sits on the title row, at its end. */
   children?: ReactNode
+  /** A row under the title, such as search and filters. */
+  below?: ReactNode
 }
 
-export function PageHead({ title, scrolled, onBack, backLabel, children }: PageHeadProps) {
+export function PageHead({ title, scrolled, onBack, backLabel, children, below }: PageHeadProps) {
   const showSidebar = useApp((s) => s.showSidebar)
   return (
     <header className={`hx-page-head ${scrolled ? 'is-scrolled' : ''}`}>
@@ -40,6 +43,7 @@ export function PageHead({ title, scrolled, onBack, backLabel, children }: PageH
           <h1>{title}</h1>
           {children}
         </div>
+        {below}
       </div>
     </header>
   )

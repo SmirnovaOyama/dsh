@@ -12,5 +12,6 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["src/main", "src/preload", "src/shared", "tests", "vite.config.ts", "vitest.config.ts"]
+  "include": ["src/main", "src/preload", "src/shared", "tests", "vite.config.ts", "vitest.config.ts"],
+  "exclude": ["tests/artifacts.renderer.test.ts"]
 }

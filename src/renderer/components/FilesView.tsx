@@ -1,4 +1,4 @@
-import { AtSign, ChevronLeft, ChevronRight, FileText, RefreshCw, Search, X } from 'lucide-react'
+import { AtSign, Check, ChevronLeft, ChevronRight, File, FileCode2, FileImage, FileJson, FileText, FileType, Folder as FolderIcon, FolderOpen, RotateCw, Search, X, type LucideIcon } from 'lucide-react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import type { FileList, FileRef } from '../../shared/types'
 import { api } from '../api'
@@ -26,6 +26,38 @@ type Folder = { dirs: Map<string, Folder>; files: string[] }
 const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
 const baseName = (p: string) => p.slice(p.lastIndexOf('/') + 1)
 const dirName = (p: string) => p.slice(0, Math.max(p.lastIndexOf('/'), 0))
+
+const CODE = new Set(['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'py', 'rb', 'go', 'rs', 'java', 'kt', 'swift', 'c', 'h', 'cpp', 'cs', 'php', 'sh', 'vue', 'svelte', 'html'])
+const DATA = new Set(['json', 'jsonc', 'yaml', 'yml', 'toml', 'lock'])
+const TEXT = new Set(['md', 'mdx', 'txt', 'rst'])
+const STYLE = new Set(['css', 'scss', 'sass', 'less'])
+const IMAGE = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico'])
+
+/** One quiet outline icon per kind of file, so a column of names is easy to scan without turning colourful. */
+function fileIcon(name: string): LucideIcon {
+  const ext = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : ''
+  if (CODE.has(ext)) return FileCode2
+  if (DATA.has(ext)) return FileJson
+  if (TEXT.has(ext)) return FileText
+  if (STYLE.has(ext)) return FileType
+  if (IMAGE.has(ext)) return FileImage
+  return File
+}
+
+/** Hairlines down the tree, one per level above the row, like an editor's indent guides. */
+function Guides({ depth }: { depth: number }) {
+  if (!depth) return null
+  return (
+    <span className="guides" aria-hidden="true">
+      {Array.from({ length: depth }, (_, i) => (
+        <span key={i} style={{ insetInlineStart: INDENT_START + i * INDENT + 7 }} />
+      ))}
+    </span>
+  )
+}
+
+const INDENT = 16
+const INDENT_START = 8
 
 function buildTree(files: string[]): Folder {
   const root: Folder = { dirs: new Map(), files: [] }
@@ -113,15 +145,16 @@ function FileTree() {
               } else if (event.key === 'Enter' && found[0]) actions.viewFile(found[0])
             }}
           />
-          {query && (
+          {query ? (
             <button type="button" className="hx-files-clear" aria-label={t('files.clear')} onClick={() => setQuery('')}>
               <Icon icon={X} size={14} />
             </button>
+          ) : (
+            <button type="button" className="hx-files-clear" aria-label={t('files.reload')} title={t('files.reload')} onClick={load}>
+              <Icon icon={RotateCw} size={14} />
+            </button>
           )}
         </label>
-        <button type="button" className="btn-ghost hx-icon-btn" aria-label={t('files.reload')} title={t('files.reload')} onClick={load}>
-          <Icon icon={RefreshCw} size={14} />
-        </button>
       </div>
 
       <div className="hx-tree" role="tree" aria-label={t('files.title')}>
@@ -144,10 +177,12 @@ function FileTree() {
                 role="treeitem"
                 aria-expanded={open.has(row.path)}
                 className="hx-tree-row is-dir"
-                style={{ paddingInlineStart: 8 + row.depth * 14 }}
+                style={{ paddingInlineStart: INDENT_START + row.depth * INDENT }}
                 onClick={() => toggle(row.path)}
               >
+                <Guides depth={row.depth} />
                 <Icon icon={ChevronRight} size={14} className="hx-chev" />
+                <Icon icon={open.has(row.path) ? FolderOpen : FolderIcon} size={16} className="kind" />
                 <span className="name">{row.name}</span>
               </button>
             ) : (
@@ -165,9 +200,12 @@ function FileTree() {
 const FileRow = memo(function FileRow(props: { path: string; name: string; depth: number; dir?: string; stats?: { added: number; removed: number } }) {
   const { path, name, depth, dir, stats } = props
   return (
-    <div className="hx-tree-row is-file" role="treeitem" style={{ paddingInlineStart: 8 + depth * 14 }}>
+    <div className={stats ? 'hx-tree-row is-file is-changed' : 'hx-tree-row is-file'} role="treeitem" style={{ paddingInlineStart: INDENT_START + depth * INDENT }}>
+      <Guides depth={depth} />
       <button type="button" className="open" title={path} onClick={() => actions.viewFile(path)}>
-        <Icon icon={FileText} size={14} />
+        {/* Files sit under their folder's name, past the chevron column. */}
+        {dir === undefined && <span className="gap" aria-hidden="true" />}
+        <Icon icon={fileIcon(name)} size={16} className="kind" />
         <span className="name">{name}</span>
         {dir && <span className="dir">{dir}</span>}
         {stats && (
@@ -184,7 +222,7 @@ const FileRow = memo(function FileRow(props: { path: string; name: string; depth
 })
 
 /** Splits highlighted tokens into lines, so each line can carry its own number. */
-function tokenLines(text: string, ext: string): Token[][] {
+export function tokenLines(text: string, ext: string): Token[][] {
   const lines: Token[][] = [[]]
   for (const token of highlight(text, ext)) {
     const parts = token.text.split('\n')
@@ -272,11 +310,24 @@ function FileViewer({ path }: { path: string }) {
           <bdi className="name">{baseName(path)}</bdi>
           {dirName(path) && <bdi className="dir">{dirName(path)}</bdi>}
         </span>
-        <button type="button" className="btn-secondary hx-point" disabled={!file || 'error' in file} onClick={add}>
-          <Icon icon={AtSign} size={14} />
+        <button type="button" className="btn-ghost hx-point" disabled={!file || 'error' in file} onClick={add}>
+          {/* The icon travels with each label, so a short label sits against the edge with no gap inside. */}
           <Reserve
             shown={added ? 2 : range ? 1 : 0}
-            forms={[t('files.pointFile'), t('files.pointLines', { lines: pickLabel || t('ref.lines', { a: 888, b: 888 }) }), t('files.pointed')]}
+            forms={[
+              <>
+                <Icon icon={AtSign} size={14} />
+                {t('files.pointFile')}
+              </>,
+              <>
+                <Icon icon={AtSign} size={14} />
+                {t('files.pointLines', { lines: pickLabel || t('ref.lines', { a: 888, b: 888 }) })}
+              </>,
+              <>
+                <Icon icon={Check} size={14} />
+                {t('files.pointed')}
+              </>,
+            ]}
           />
         </button>
       </div>
