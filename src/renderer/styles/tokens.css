@@ -1,70 +1,99 @@
-/* DeepSeek Harness tokens, light first and dark under data-theme="dark".
-   The component styles in ods.css read these names; the values are the harness's own,
-   tuned to sit next to the Claude desktop app: black and white with hairline borders. Colour is kept for
-   meaning only (diffs, errors, warnings) and for syntax in code. */
+/* DeepSeek Harness tokens, from the Oyama Design System (ODS v2): its neutral scale, type, 4px grid,
+   radii, shadows and motion. The one change is the accent: ODS's terracotta is replaced by black in light
+   and white in dark, so the app stays monochrome. Colour is kept for meaning only (diffs, errors, warnings)
+   and for syntax in code. */
 
 :root {
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang TC", "PingFang SC", "Hiragino Sans", "Microsoft JhengHei", "Apple SD Gothic Neo", "Segoe UI", system-ui, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", ui-sans-serif, system-ui, "PingFang TC", "PingFang SC", "Hiragino Sans", "Microsoft JhengHei", "Apple SD Gothic Neo", "Segoe UI", Helvetica, Arial, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* Plain greys: the window, the sidebar a shade darker, white for things you type into. */
-  --bg: oklch(98.4% 0 0);
-  --bg-subtle: oklch(96.4% 0 0);
-  --surface: oklch(100% 0 0);
-  --surface-muted: oklch(95.6% 0 0);
-  --surface-hover: oklch(22% 0 0 / 0.05);
-  --surface-pressed: oklch(22% 0 0 / 0.085);
-  --surface-glass: oklch(98.4% 0 0 / 0.82);
-  --bubble: oklch(94.2% 0 0);
-  --control-thumb: oklch(100% 0 0);
-  --field: oklch(100% 0 0);
-  --text: oklch(22% 0 0);
-  --text-muted: oklch(52% 0 0);
-  --text-disabled: oklch(72% 0 0);
-  --border: oklch(22% 0 0 / 0.1);
-  --border-strong: oklch(22% 0 0 / 0.2);
-  --accent: oklch(22% 0 0);
-  --accent-hover: oklch(34% 0 0);
-  --on-accent: oklch(100% 0 0);
-  --accent-ink: oklch(22% 0 0);
-  --accent-subtle: oklch(22% 0 0 / 0.06);
-  --accent-subtle-hover: oklch(22% 0 0 / 0.1);
-  --on-accent-subtle: oklch(22% 0 0);
-  --focus-ring: oklch(22% 0 0 / 0.55);
-  --brand: oklch(22% 0 0);
-  --scrim: rgba(20, 20, 20, 0.28);
-  --status-positive: oklch(52% 0.11 155);
-  --status-info: oklch(52% 0.15 255);
-  --warning: oklch(55% 0.13 60);
-  --danger: oklch(54% 0.18 27);
-  --danger-fill: oklch(55% 0.19 27);
-  --danger-fill-hover: oklch(49% 0.17 27);
-  --on-danger: oklch(100% 0 0);
+  /* ODS neutral scale; components use the semantic names below. */
+  --neutral-0: oklch(100% 0 0);
+  --neutral-25: oklch(98.7% 0.002 89);
+  --neutral-50: oklch(97.3% 0.004 90);
+  --neutral-100: oklch(94.5% 0.004 88);
+  --neutral-200: oklch(91% 0.007 89);
+  --neutral-300: oklch(85% 0.008 89);
+  --neutral-400: oklch(72% 0.01 88);
+  --neutral-500: oklch(60% 0.012 89);
+  --neutral-600: oklch(51.7% 0.013 90);
+  --neutral-700: oklch(42% 0.011 90);
+  --neutral-800: oklch(33% 0.009 88);
+  --neutral-850: oklch(28.5% 0.008 87);
+  --neutral-900: oklch(25% 0.007 88);
+  --neutral-950: oklch(20.5% 0.006 90);
+  --neutral-1000: oklch(16.5% 0.005 90);
+
+  --bg: var(--neutral-0);
+  --bg-subtle: var(--neutral-25);
+  --surface: var(--neutral-0);
+  --surface-muted: var(--neutral-50);
+  --surface-hover: var(--neutral-100);
+  --surface-pressed: var(--neutral-200);
+  --surface-glass: rgba(255, 255, 255, 0.72);
+  --bubble: var(--neutral-100);
+  --control-thumb: var(--neutral-0);
+  --field: var(--neutral-0);
+  --text: var(--neutral-950);
+  --text-muted: var(--neutral-600);
+  --text-disabled: var(--neutral-400);
+  --border: var(--neutral-200);
+  --border-strong: var(--neutral-500);
+  /* The accent is black: primary buttons, the on switch, the current item. */
+  --accent: var(--neutral-950);
+  --accent-hover: var(--neutral-800);
+  --on-accent: var(--neutral-0);
+  --accent-ink: var(--neutral-950);
+  --accent-subtle: var(--neutral-100);
+  --accent-subtle-hover: var(--neutral-200);
+  --on-accent-subtle: var(--neutral-950);
+  --focus-ring: var(--neutral-950);
+  --brand: var(--neutral-950);
+  --scrim: rgba(24, 23, 20, 0.32);
+  --status-positive: oklch(52% 0.11 162);
+  --status-info: oklch(52% 0.17 255);
+  --warning: oklch(53% 0.13 55);
+  --danger: oklch(53% 0.19 27);
+  --danger-fill: oklch(55% 0.2 27);
+  --danger-fill-hover: oklch(49% 0.18 27);
+  --on-danger: var(--neutral-0);
   --illustration-line: var(--text-muted);
   --illustration-wash: var(--surface-muted);
 
-  --shadow-xs: 0 1px 2px rgba(20, 20, 20, 0.05);
-  --shadow-sm: 0 1px 2px rgba(20, 20, 20, 0.04), 0 2px 6px rgba(20, 20, 20, 0.04);
-  --shadow-md: 0 1px 3px rgba(20, 20, 20, 0.05), 0 8px 24px rgba(20, 20, 20, 0.08);
-  --shadow-lg: 0 2px 6px rgba(20, 20, 20, 0.05), 0 20px 48px rgba(20, 20, 20, 0.14);
-  /* Floating menus: a crisp edge and a short drop, so they read as above the page. */
-  --shadow-menu: 0 1px 2px rgba(20, 20, 20, 0.06), 0 6px 20px rgba(20, 20, 20, 0.1);
-  /* The message field sits on the page with only a hint of lift. */
-  --shadow-field: 0 1px 2px rgba(20, 20, 20, 0.04), 0 4px 14px rgba(20, 20, 20, 0.035);
+  /* Only what floats gets a shadow. */
+  --shadow-xs: 0 1px 2px rgba(24, 23, 20, 0.06);
+  --shadow-sm: 0 1px 2px rgba(24, 23, 20, 0.04), 0 2px 8px rgba(24, 23, 20, 0.06);
+  --shadow-md: 0 2px 4px rgba(24, 23, 20, 0.04), 0 8px 24px rgba(24, 23, 20, 0.08);
+  --shadow-lg: 0 4px 8px rgba(24, 23, 20, 0.04), 0 24px 56px rgba(24, 23, 20, 0.14);
+  --shadow-menu: var(--shadow-md);
+  --shadow-field: var(--shadow-sm);
 
-  /* Small, even corners. Nothing here is round enough to read as a pill. */
-  --radius-xs: 5px;
-  --radius-sm: 7px;
-  --radius-md: 9px;
-  --radius-lg: 14px;
-  --radius-xl: 18px;
+  /* ODS radii. Pet peeve 5 wins over ODS's radius-full: only the Switch is round. */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
   --radius-full: 9999px;
-  --blur-glass: 16px;
-  --blur-scrim: 4px;
+  --blur-glass: 20px;
+  --blur-scrim: 6px;
+
+  /* ODS 4px grid. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --control-height: 40px;
+  --control-height-sm: 32px;
+  --field-height: 44px;
+  --row-min-height: 56px;
 
   /* Code keeps its colours. */
-  --code-bg: oklch(97.2% 0 0);
-  --code-inline: oklch(22% 0 0 / 0.055);
+  --code-bg: var(--neutral-50);
+  --code-inline: var(--neutral-100);
   --code-keyword: oklch(50% 0.17 330);
   --code-string: oklch(50% 0.12 155);
   --code-number: oklch(52% 0.15 255);
@@ -73,8 +102,9 @@
   --diff-del: color-mix(in oklch, var(--danger) 8%, transparent);
 
   /* Layout sizes the harness reuses in several places. */
-  --sidebar-width: 16rem;
+  --sidebar-width: 16.25rem;
   --column-width: 46rem;
+  --page-column: 42rem;
   --column-pad: 32px;
   --changes-width: clamp(320px, 30vw, 460px);
   /* Artifacts open wider than the changes panel, the way Claude gives them half the window. */
@@ -85,45 +115,43 @@
 }
 
 :root[data-theme="dark"] {
-  --bg: oklch(26.5% 0 0);
-  --bg-subtle: oklch(22.8% 0 0);
-  --surface: oklch(30.5% 0 0);
-  --surface-muted: oklch(22.5% 0 0);
-  --surface-hover: oklch(100% 0 0 / 0.06);
-  --surface-pressed: oklch(100% 0 0 / 0.1);
-  --surface-glass: oklch(26.5% 0 0 / 0.82);
-  --bubble: oklch(33.5% 0 0);
-  --control-thumb: oklch(38% 0 0);
-  --field: oklch(30.5% 0 0);
-  --text: oklch(95.5% 0 0);
-  --text-muted: oklch(71% 0 0);
-  --text-disabled: oklch(52% 0 0);
-  --border: oklch(100% 0 0 / 0.1);
-  --border-strong: oklch(100% 0 0 / 0.2);
-  --accent: oklch(95.5% 0 0);
-  --accent-hover: oklch(86% 0 0);
-  --on-accent: oklch(18% 0 0);
-  --accent-ink: oklch(95.5% 0 0);
-  --accent-subtle: oklch(100% 0 0 / 0.08);
-  --accent-subtle-hover: oklch(100% 0 0 / 0.13);
-  --on-accent-subtle: oklch(95.5% 0 0);
-  --focus-ring: oklch(100% 0 0 / 0.55);
-  --brand: oklch(95.5% 0 0);
-  --scrim: rgba(0, 0, 0, 0.55);
-  --status-positive: oklch(78% 0.12 155);
-  --status-info: oklch(76% 0.1 250);
-  --warning: oklch(80% 0.12 75);
-  --danger: oklch(72% 0.14 24);
+  --bg: var(--neutral-950);
+  --bg-subtle: var(--neutral-1000);
+  --surface: var(--neutral-900);
+  --surface-muted: var(--neutral-850);
+  --surface-hover: var(--neutral-850);
+  --surface-pressed: var(--neutral-800);
+  --surface-glass: rgba(35, 33, 30, 0.72);
+  --bubble: var(--neutral-850);
+  --control-thumb: var(--neutral-800);
+  --field: var(--neutral-900);
+  --text: var(--neutral-25);
+  --text-muted: var(--neutral-400);
+  --text-disabled: var(--neutral-600);
+  --border: var(--neutral-800);
+  --border-strong: var(--neutral-500);
+  --accent: var(--neutral-25);
+  --accent-hover: var(--neutral-200);
+  --on-accent: var(--neutral-1000);
+  --accent-ink: var(--neutral-25);
+  --accent-subtle: var(--neutral-850);
+  --accent-subtle-hover: var(--neutral-800);
+  --on-accent-subtle: var(--neutral-25);
+  --focus-ring: var(--neutral-25);
+  --brand: var(--neutral-25);
+  --scrim: rgba(0, 0, 0, 0.6);
+  --status-positive: oklch(80% 0.13 162);
+  --status-info: oklch(78% 0.11 250);
+  --warning: oklch(82% 0.13 75);
+  --danger: oklch(74% 0.15 22);
   --illustration-line: var(--text-muted);
   --illustration-wash: var(--surface);
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.4), 0 20px 48px rgba(0, 0, 0, 0.5);
-  --shadow-menu: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.4);
-  --shadow-field: 0 1px 2px rgba(0, 0, 0, 0.2), 0 4px 14px rgba(0, 0, 0, 0.15);
-  --code-bg: oklch(23.5% 0 0);
-  --code-inline: oklch(100% 0 0 / 0.08);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.45), 0 24px 56px rgba(0, 0, 0, 0.6);
+  --code-bg: var(--neutral-1000);
+  --code-inline: var(--neutral-850);
   --code-keyword: oklch(78% 0.12 330);
   --code-string: oklch(78% 0.12 155);
   --code-number: oklch(78% 0.1 250);

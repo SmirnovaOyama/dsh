@@ -1,6 +1,6 @@
-import { ChevronLeft, Cpu, KeyRound, LoaderCircle, Shield, Sun, X, type LucideIcon } from 'lucide-react'
+import { ArrowUpRight, ChevronLeft, Cpu, Eye, EyeOff, KeyRound, LoaderCircle, Shield, Sun, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
-import { EFFORTS, MAX_STEPS_OPTIONS, MODELS, PERMISSION_MODES, type ConnectionResult, type Effort, type Locale, type PermissionMode, type ReplyStyle, type ThemePref } from '../../shared/types'
+import { DEFAULT_SETTINGS, EFFORTS, MAX_STEPS_OPTIONS, MODELS, PERMISSION_MODES, type ConnectionResult, type Effort, type Locale, type PermissionMode, type ReplyStyle, type ThemePref } from '../../shared/types'
 import { api } from '../api'
 import { LOCALE_NAMES, t, type MessageKey } from '../i18n'
 import { actions, lastSettingsSection, useApp, type SettingsSection } from '../store'
@@ -16,6 +16,8 @@ const SECTIONS: { id: SettingsSection; icon: LucideIcon; label: MessageKey }[] =
   { id: 'permissions', icon: Shield, label: 'settings.nav.permissions' },
   { id: 'appearance', icon: Sun, label: 'settings.nav.appearance' },
 ]
+
+const KEYS_URL = 'https://platform.deepseek.com/api_keys'
 
 const update = (patch: Parameters<typeof api.settings.update>[0]) => void api.settings.update(patch)
 
@@ -101,7 +103,7 @@ export function SettingsView() {
             <h1 id="settings-title">{t(TITLES[current])}</h1>
           </div>
         </header>
-        <section className="hx-page-body hx-group" aria-labelledby="settings-title">
+        <section className="hx-page-body" aria-labelledby="settings-title">
           {current === 'connection' && <Connection focusKey={asked === 'connection'} />}
           {current === 'model' && <ModelGroup />}
           {current === 'permissions' && <Permissions />}
@@ -112,11 +114,12 @@ export function SettingsView() {
   )
 }
 
-function Row({ title, children }: { title: string; children?: ReactNode }) {
+function Row({ title, desc, children }: { title: string; desc?: string; children?: ReactNode }) {
   return (
     <div className="oy-row">
       <div className="text">
         <p className="title">{title}</p>
+        {desc && <p className="desc">{desc}</p>}
       </div>
       {children}
     </div>
@@ -133,6 +136,7 @@ function Connection({ focusKey }: { focusKey: boolean }) {
   const [revealed, setRevealed] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
   const [baseUrl, setBaseUrl] = useState(settings.baseUrl)
+  const [urlInvalid, setUrlInvalid] = useState(false)
   const [testing, setTesting] = useState(false)
   const [result, setResult] = useState<ConnectionResult | null>(null)
   const [round, setRound] = useState(0)
@@ -168,10 +172,26 @@ function Connection({ focusKey }: { focusKey: boolean }) {
     }
     setRevealed(true)
   }
-  const commitBaseUrl = () => {
-    const value = baseUrl.trim().replace(/\/+$/, '')
-    if (/^https?:\/\/\S+$/.test(value) && value !== settings.baseUrl) update({ baseUrl: value })
-    else setBaseUrl(settings.baseUrl)
+  const remove = () => {
+    void api.settings.clearApiKey()
+    setKey('')
+    setSavedKey('')
+    setRevealed(false)
+    setResult(null)
+  }
+  const commitBaseUrl = (value = baseUrl) => {
+    const next = value.trim().replace(/\/+$/, '')
+    if (!/^https?:\/\/\S+$/.test(next)) {
+      setUrlInvalid(next.length > 0)
+      if (!next) setBaseUrl(settings.baseUrl)
+      return
+    }
+    setUrlInvalid(false)
+    setBaseUrl(next)
+    if (next !== settings.baseUrl) {
+      update({ baseUrl: next })
+      setResult(null)
+    }
   }
   const test = async () => {
     setTesting(true)
@@ -185,103 +205,135 @@ function Connection({ focusKey }: { focusKey: boolean }) {
     setRound((n) => n + 1)
   }
 
+  const keyState = !hasApiKey ? t('settings.keyMissing') : encrypted ? t('settings.keyStored') : t('settings.keyPlain')
+  const isDefaultUrl = settings.baseUrl === DEFAULT_SETTINGS.baseUrl
+
   return (
     <>
-      <div className="hx-fieldset">
-        <div>
-          <label className="oy-field-label" htmlFor="api-key">
-            {t('settings.apiKey')}
-          </label>
-          <div className="hx-field-row">
-            <input
-              ref={keyRef}
-              className="input-base"
-              id="api-key"
-              type={revealed ? 'text' : 'password'}
-              value={key}
-              spellCheck={false}
-              autoComplete="off"
-              placeholder={hasApiKey ? t('settings.apiKeySet') : t('settings.apiKeyPlaceholder')}
-              onChange={(event) => setKey(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') void save()
-              }}
-            />
-            <button type="button" className="btn-secondary" disabled={!hasApiKey && !key} onClick={() => void toggleReveal()}>
-              <Reserve shown={revealed ? 1 : 0} forms={[t('settings.show'), t('settings.hide')]} />
+      <p className="hx-page-intro">{t('settings.connectionIntro')}</p>
+      <div className="hx-form">
+        <div className="hx-form-field">
+          <div className="hx-form-label">
+            <label className="oy-field-label" htmlFor="api-key">
+              {t('settings.apiKey')}
+            </label>
+            <button type="button" className="hx-link" onClick={() => void api.openExternal(KEYS_URL)}>
+              {t('settings.getKey')}
+              <Icon icon={ArrowUpRight} size={14} />
             </button>
+          </div>
+          <div className="hx-form-line">
+            <div className="hx-underline">
+              <input
+                ref={keyRef}
+                id="api-key"
+                type={revealed ? 'text' : 'password'}
+                value={key}
+                spellCheck={false}
+                autoComplete="off"
+                placeholder={hasApiKey ? t('settings.apiKeySet') : t('settings.apiKeyPlaceholder')}
+                onChange={(event) => setKey(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') void save()
+                }}
+              />
+              <button
+                type="button"
+                className="btn-ghost hx-icon-btn"
+                disabled={!hasApiKey && !key}
+                aria-label={revealed ? t('settings.hide') : t('settings.show')}
+                title={revealed ? t('settings.hide') : t('settings.show')}
+                onClick={() => void toggleReveal()}
+              >
+                <Icon icon={revealed ? EyeOff : Eye} size={18} />
+              </button>
+            </div>
             <button type="button" className="btn-primary" disabled={!dirty} onClick={() => void save()}>
               <Reserve shown={justSaved && !dirty ? 1 : 0} forms={[t('settings.save'), t('settings.saved')]} />
             </button>
           </div>
-          <div className="hx-field-hint-row">
-            {/* Only said when the key is not encrypted, since that is worth knowing. */}
-            {!encrypted && <p className="oy-field-hint">{t('settings.keyPlain')}</p>}
+          <div className="hx-form-hint">
+            <p className="oy-field-hint">{keyState}</p>
             {hasApiKey && (
-              <button
-                type="button"
-                className="hx-text-btn"
-                onClick={() => {
-                  void api.settings.clearApiKey()
-                  setKey('')
-                  setSavedKey('')
-                  setRevealed(false)
-                  setResult(null)
-                }}
-              >
+              <button type="button" className="hx-link is-danger" onClick={remove}>
                 {t('settings.remove')}
               </button>
             )}
           </div>
         </div>
-        <div>
-          <label className="oy-field-label" htmlFor="base-url">
-            {t('settings.baseUrl')}
-          </label>
-          <input
-            className="input-base"
-            id="base-url"
-            type="url"
-            value={baseUrl}
-            spellCheck={false}
-            onChange={(event) => setBaseUrl(event.target.value)}
-            onBlur={commitBaseUrl}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') commitBaseUrl()
-            }}
-          />
+
+        <div className="hx-form-field">
+          <div className="hx-form-label">
+            <label className="oy-field-label" htmlFor="base-url">
+              {t('settings.baseUrl')}
+            </label>
+          </div>
+          <div className="hx-underline">
+            <input
+              id="base-url"
+              type="url"
+              value={baseUrl}
+              spellCheck={false}
+              aria-invalid={urlInvalid || undefined}
+              onChange={(event) => {
+                setBaseUrl(event.target.value)
+                setUrlInvalid(false)
+              }}
+              onBlur={() => commitBaseUrl()}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') commitBaseUrl()
+              }}
+            />
+          </div>
+          <div className="hx-form-hint">
+            <p className={`oy-field-hint ${urlInvalid ? 'hx-danger' : ''}`}>
+              {urlInvalid ? t('settings.baseUrlInvalid') : t('settings.baseUrlHint')}
+            </p>
+            {!isDefaultUrl && (
+              <button type="button" className="hx-link" onClick={() => commitBaseUrl(DEFAULT_SETTINGS.baseUrl)}>
+                {t('settings.baseUrlReset')}
+              </button>
+            )}
+          </div>
         </div>
-        <div className="hx-test-line" aria-live="polite">
+      </div>
+
+      <div className="oy-section is-plain hx-settings-rows">
+        <div className="oy-row">
+          <div className="text">
+            <p className="title">{t('settings.test')}</p>
+            <p className="desc" aria-live="polite">
+              {result ? (
+                <span key={round} className={`hx-test-result ${testing ? 'is-stale' : ''}`}>
+                  <span className={result.ok ? 'hx-positive' : 'hx-danger'}>
+                    {result.ok ? t('settings.ok') : t(`error.${result.error ?? 'unknown'}.title` as MessageKey)}
+                  </span>
+                  {result.ok && result.latencyMs !== undefined && (
+                    <span className="st">
+                      <span>{t('settings.latency')}</span>
+                      <span className="hx-tabular">
+                        <CountUp value={result.latencyMs} /> ms
+                      </span>
+                    </span>
+                  )}
+                </span>
+              ) : (
+                t('settings.testDesc')
+              )}
+            </p>
+          </div>
           <button type="button" className="btn-secondary" disabled={testing || !hasApiKey} onClick={() => void test()}>
             <Reserve
               shown={testing ? 1 : 0}
               forms={[
-                t('settings.test'),
+                t('settings.testShort'),
                 <>
-                  <Icon icon={LoaderCircle} size={14} className="hx-spin" />
+                  <Icon icon={LoaderCircle} size={16} className="hx-spin" />
                   {t('settings.testing')}
                 </>,
               ]}
             />
           </button>
-          {result && (
-            <span key={round} className={`hx-test-result ${testing ? 'is-stale' : ''}`}>
-              <span className="st">
-                <span className="hx-muted">{t('settings.status')}</span>
-                <span className={result.ok ? 'hx-positive' : 'hx-danger'}>
-                  {result.ok ? t('settings.ok') : t(`error.${result.error ?? 'unknown'}.title` as MessageKey)}
-                </span>
-              </span>
-              {result.ok && result.latencyMs !== undefined && (
-                <span className="st">
-                  <span className="hx-muted">{t('settings.latency')}</span>
-                  <span className="hx-tabular">
-                    <CountUp value={result.latencyMs} /> ms
-                  </span>
-                </span>
-              )}
-            </span>
-          )}
         </div>
       </div>
     </>
@@ -315,8 +367,8 @@ function ModelGroup() {
   const settings = useApp((s) => s.settings)
   return (
     <>
-      <div className="oy-section is-plain">
-        <Row title={t('settings.defaultModel')}>
+      <div className="oy-section is-plain hx-settings-rows">
+        <Row title={t('settings.defaultModel')} desc={t('settings.defaultModel.desc')}>
           <Select
             className="hx-row-control"
             label={t('settings.defaultModel')}
@@ -325,7 +377,7 @@ function ModelGroup() {
             onChange={(model) => update({ model })}
           />
         </Row>
-        <Row title={t('settings.defaultEffort')}>
+        <Row title={t('settings.defaultEffort')} desc={t('settings.defaultEffort.desc')}>
           <Segmented<Effort>
             label={t('settings.defaultEffort')}
             value={settings.effort}
@@ -333,7 +385,7 @@ function ModelGroup() {
             onChange={(effort) => update({ effort })}
           />
         </Row>
-        <Row title={t('settings.style')}>
+        <Row title={t('settings.style')} desc={t('settings.style.desc')}>
           <Segmented<ReplyStyle>
             label={t('settings.style')}
             value={settings.replyStyle}
@@ -341,7 +393,7 @@ function ModelGroup() {
             onChange={(replyStyle) => update({ replyStyle })}
           />
         </Row>
-        <Row title={t('settings.maxSteps')}>
+        <Row title={t('settings.maxSteps')} desc={t('settings.maxSteps.desc')}>
           <Select
             className="hx-row-control"
             label={t('settings.maxSteps')}
@@ -366,39 +418,40 @@ function Permissions() {
   }
   return (
     <>
-      <div className="hx-card">
-        <div className="oy-section is-plain">
-          <Row title={t('settings.defaultMode')}>
-            <Select<PermissionMode>
-              className="hx-row-control"
-              label={t('settings.defaultMode')}
-              value={settings.permissionMode}
-              options={PERMISSION_MODES.map((m) => ({ value: m, label: t(`mode.${m}`), desc: t(`mode.${m}.desc`) }))}
-              onChange={(permissionMode) => update({ permissionMode })}
-            />
-          </Row>
-          <Row title={t('settings.allowed')} />
+      <div className="oy-section is-plain hx-settings-rows">
+        <Row title={t('settings.defaultMode')} desc={t(`mode.${settings.permissionMode}.desc`)}>
+          <Select<PermissionMode>
+            className="hx-row-control"
+            label={t('settings.defaultMode')}
+            value={settings.permissionMode}
+            options={PERMISSION_MODES.map((m) => ({ value: m, label: t(`mode.${m}`), desc: t(`mode.${m}.desc`) }))}
+            onChange={(permissionMode) => update({ permissionMode })}
+          />
+        </Row>
+      </div>
+      <h2 className="hx-settings-head">{t('settings.allowed')}</h2>
+      <p className="hx-settings-desc">{t('settings.allowedDesc')}</p>
+      <div className="hx-allowed">
+        <div className="hx-allowed-list">
+          {settings.allowedCommands.map((prefix) => (
+            <div key={prefix} className="hx-allowed-item">
+              <span className="hx-mono">{prefix}</span>
+              <button
+                type="button"
+                className="btn-ghost hx-icon-btn"
+                aria-label={t('settings.allowedRemove', { prefix })}
+                title={t('settings.allowedRemove', { prefix })}
+                onClick={() => update({ allowedCommands: settings.allowedCommands.filter((p) => p !== prefix) })}
+              >
+                <Icon icon={X} size={16} />
+              </button>
+            </div>
+          ))}
         </div>
-        <div className="hx-allowed">
-          <div className="hx-allowed-list">
-            {settings.allowedCommands.map((prefix) => (
-              <div key={prefix} className="hx-allowed-item">
-                <span className="hx-mono">{prefix}</span>
-                <button
-                  type="button"
-                  className="btn-ghost hx-icon-btn"
-                  aria-label={t('settings.allowedRemove', { prefix })}
-                  title={t('settings.allowedRemove', { prefix })}
-                  onClick={() => update({ allowedCommands: settings.allowedCommands.filter((p) => p !== prefix) })}
-                >
-                  <Icon icon={X} size={14} />
-                </button>
-              </div>
-            ))}
-          </div>
-          <div className="hx-allowed-add">
+        <div className="hx-form-line">
+          <div className="hx-underline">
             <input
-              className="input-base"
+              className="hx-mono"
               value={adding}
               spellCheck={false}
               placeholder={t('settings.allowedPlaceholder')}
@@ -408,10 +461,10 @@ function Permissions() {
                 if (event.key === 'Enter') add()
               }}
             />
-            <button type="button" className="btn-secondary" disabled={!adding.trim()} onClick={add}>
-              {t('settings.allowedAdd')}
-            </button>
           </div>
+          <button type="button" className="btn-secondary" disabled={!adding.trim()} onClick={add}>
+            {t('settings.allowedAdd')}
+          </button>
         </div>
       </div>
     </>
@@ -423,8 +476,8 @@ function Appearance() {
   const version = useApp((s) => s.app.version)
   return (
     <>
-      <div className="oy-section is-plain">
-        <Row title={t('settings.theme')}>
+      <div className="oy-section is-plain hx-settings-rows">
+        <Row title={t('settings.theme')} desc={t('settings.theme.desc')}>
           <Segmented<ThemePref>
             label={t('settings.theme')}
             value={settings.theme}
@@ -432,7 +485,7 @@ function Appearance() {
             onChange={(theme) => update({ theme })}
           />
         </Row>
-        <Row title={t('settings.language')}>
+        <Row title={t('settings.language')} desc={t('settings.language.desc')}>
           <Select<Locale>
             className="hx-row-control"
             label={t('settings.language')}
