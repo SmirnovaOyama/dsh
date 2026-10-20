@@ -7,7 +7,6 @@ import { modelName } from '../models'
 import { actions, projectPaths, useApp } from '../store'
 import { Icon } from './Icon'
 import { Menu, MenuItem } from './Menu'
-import { Modal } from './Modal'
 import { PageHead } from './PageHead'
 import { Select } from './Select'
 
@@ -46,10 +45,14 @@ function useNow(): number {
 
 export function ScheduledView() {
   const tasks = useApp((s) => s.schedules)
-  const [editing, setEditing] = useState<ScheduledTask | 'new' | null>(null)
-  const [removing, setRemoving] = useState<ScheduledTask | null>(null)
+  const [editing, setEditing] = useState<string | 'new' | null>(null)
   const [scrolled, setScrolled] = useState(false)
   const now = useNow()
+
+  if (editing) {
+    const task = editing === 'new' ? null : (tasks?.find((t) => t.id === editing) ?? null)
+    return <TaskEditor key={editing} task={task} onClose={() => setEditing(null)} />
+  }
 
   return (
     <main className="hx-page" onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}>
@@ -65,36 +68,12 @@ export function ScheduledView() {
         {tasks && tasks.length > 0 && (
           <ul className="hx-sched-list">
             {tasks.map((task) => (
-              <TaskRow key={task.id} task={task} now={now} onEdit={() => setEditing(task)} onRemove={() => setRemoving(task)} />
+              <TaskRow key={task.id} task={task} now={now} onEdit={() => setEditing(task.id)} />
             ))}
           </ul>
         )}
         <p className="hx-page-foot">{t('scheduled.openOnly')}</p>
       </div>
-      {editing && <TaskEditor task={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
-      <Modal
-        open={removing !== null}
-        onClose={() => setRemoving(null)}
-        title={t('scheduled.removeTitle', { name: removing?.name ?? '' })}
-        body={t('scheduled.removeBody')}
-        actions={
-          <>
-            <button type="button" className="btn-secondary" data-autofocus onClick={() => setRemoving(null)}>
-              {t('common.cancel')}
-            </button>
-            <button
-              type="button"
-              className="btn-danger"
-              onClick={() => {
-                if (removing) void actions.removeSchedule(removing.id)
-                setRemoving(null)
-              }}
-            >
-              {t('scheduled.remove')}
-            </button>
-          </>
-        }
-      />
     </main>
   )
 }
@@ -128,7 +107,7 @@ function LastRun({ task, now }: { task: ScheduledTask; now: number }) {
   )
 }
 
-function TaskRow({ task, now, onEdit, onRemove }: { task: ScheduledTask; now: number; onEdit(): void; onRemove(): void }) {
+function TaskRow({ task, now, onEdit }: { task: ScheduledTask; now: number; onEdit(): void }) {
   const locale = useApp((s) => s.settings.locale)
   const moreRef = useRef<HTMLButtonElement>(null)
   const [menu, setMenu] = useState(false)
@@ -140,9 +119,8 @@ function TaskRow({ task, now, onEdit, onRemove }: { task: ScheduledTask; now: nu
         : task.nextRun
           ? describeWhen(task.nextRun, now, locale)
           : ''
-  const item = (icon: typeof Play, label: string, run: () => void, danger = false) => (
+  const item = (icon: typeof Play, label: string, run: () => void) => (
     <MenuItem
-      danger={danger}
       icon={<Icon icon={icon} size={16} />}
       onSelect={() => {
         setMenu(false)
@@ -187,7 +165,6 @@ function TaskRow({ task, now, onEdit, onRemove }: { task: ScheduledTask; now: nu
           item(task.enabled ? CirclePause : Clock, t(task.enabled ? 'scheduled.pause' : 'scheduled.resume'), () =>
             void actions.saveSchedule({ ...task, enabled: !task.enabled }),
           )}
-        {item(Trash2, t('scheduled.remove'), onRemove, true)}
       </Menu>
     </li>
   )
@@ -228,23 +205,23 @@ function TaskEditor({ task, onClose }: { task: ScheduledTask | null; onClose(): 
     if (saved) onClose()
   }
   const minutes = MINUTES.includes(draft.schedule.minute) ? MINUTES : [...MINUTES, draft.schedule.minute].sort((a, b) => a - b)
+  const [confirmRemove, setConfirmRemove] = useState(false)
+  const promptRef = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    if (!task) promptRef.current?.focus()
+  }, [task])
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
 
   return (
-    <Modal
-      open
-      onClose={onClose}
-      title={task ? t('scheduled.edit') : t('scheduled.new')}
-      actions={
-        <>
-          <button type="button" className="btn-secondary" onClick={onClose}>
-            {t('common.cancel')}
-          </button>
-          <button type="button" className="btn-primary" disabled={!ready} onClick={() => void save()}>
-            {t('scheduled.save')}
-          </button>
-        </>
-      }
-    >
+    <main className="hx-page">
+      <PageHead title={task ? t('scheduled.edit') : t('scheduled.new')} onBack={onClose} backLabel={t('scheduled.title')} />
+      <div className="hx-page-body">
       <div className="hx-sched-form">
         <label className="oy-field-label" htmlFor="sched-name">
           {t('scheduled.name')}
@@ -263,8 +240,8 @@ function TaskEditor({ task, onClose }: { task: ScheduledTask | null; onClose(): 
         <textarea
           id="sched-prompt"
           className="input-base"
-          data-autofocus
-          rows={4}
+          ref={promptRef}
+          rows={5}
           value={draft.prompt}
           placeholder={t('scheduled.promptPlaceholder')}
           onChange={(e) => patch({ prompt: e.target.value })}
@@ -340,7 +317,35 @@ function TaskEditor({ task, onClose }: { task: ScheduledTask | null; onClose(): 
           </div>
         </div>
         <p className="note">{t('scheduled.note')}</p>
+        <div className="hx-sched-actions">
+          {task &&
+            (confirmRemove ? (
+              <span className="hx-confirm">
+                <span>{t('scheduled.removeBody')}</span>
+                <button type="button" className="btn-ghost is-danger" onClick={() => void actions.removeSchedule(task.id).then(onClose)}>
+                  {t('scheduled.removeConfirm')}
+                </button>
+                <button type="button" className="btn-ghost" onClick={() => setConfirmRemove(false)}>
+                  {t('scheduled.keep')}
+                </button>
+              </span>
+            ) : (
+              <button type="button" className="btn-ghost is-danger" onClick={() => setConfirmRemove(true)}>
+                <Icon icon={Trash2} size={16} />
+                {t('scheduled.remove')}
+              </button>
+            ))}
+          <span className="end">
+            <button type="button" className="btn-secondary" onClick={onClose}>
+              {t('common.cancel')}
+            </button>
+            <button type="button" className="btn-primary" disabled={!ready} onClick={() => void save()}>
+              {t('scheduled.save')}
+            </button>
+          </span>
+        </div>
       </div>
-    </Modal>
+      </div>
+    </main>
   )
 }

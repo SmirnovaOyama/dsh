@@ -732,8 +732,7 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-sched:hover .more, .hx-sched .more:focus-visible, .hx-sched[data-menu] .more { opacity: 1; }
 .hx-sched[data-off] :is(.name, .next) { color: var(--text-muted); }
 
-.modal-shell:has(.hx-sched-form) { max-width: 34rem; }
-.hx-sched-form { display: flex; flex-direction: column; margin-top: 16px; }
+.hx-sched-form { display: flex; flex-direction: column; padding-top: 8px; }
 .hx-sched-form > .input-base { width: 100%; margin-bottom: 16px; font-size: 13px; }
 .hx-sched-form textarea.input-base { min-height: 96px; line-height: 20px; }
 .hx-sched-form .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 12px; }
@@ -741,3 +740,15 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-time { display: flex; gap: 6px; }
 .hx-time .oy-select { flex: 1; min-width: 0; }
 .hx-sched-form .note { margin: 16px 0 0; font-size: 12px; line-height: 18px; color: var(--text-muted); white-space: pre-line; }
+.hx-page-back {
+  display: inline-flex; align-items: center; gap: 2px; height: 24px; margin: 0 0 6px -6px; padding: 0 8px 0 4px;
+  border-radius: var(--radius-xs); font-size: 13px; color: var(--text-muted);
+}
+.hx-page-back:hover { background: var(--surface-hover); color: var(--text); }
+.hx-sched-actions { display: flex; align-items: center; gap: 8px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); }
+.hx-sched-actions .end { display: flex; gap: 8px; margin-inline-start: auto; }
+.hx-sched-actions .btn-ghost { height: 32px; gap: 6px; font-size: 13px; }
+.hx-sched-actions .btn-ghost.is-danger { color: var(--danger); }
+.hx-sched-actions .btn-ghost.is-danger:hover { background: var(--surface-hover); }
+.hx-confirm { display: flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text-muted); }
+.hx-confirm > span { margin-inline-end: 4px; }
