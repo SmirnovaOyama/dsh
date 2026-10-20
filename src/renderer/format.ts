@@ -52,6 +52,19 @@ export function sessionTime(ts: number, now: number, locale: Locale): string {
   return new Intl.DateTimeFormat(locale, { month: 'numeric', day: 'numeric' }).format(ts)
 }
 
+/** How long ago, the way a library of things shows it: 3 分鐘前, 昨天, then a date. */
+export function timeAgo(ts: number, now: number, locale: Locale): string {
+  const minutes = Math.max(0, Math.floor((now - ts) / 60_000))
+  const relative = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
+  if (minutes < 1) return relative.format(0, 'second')
+  if (minutes < 60) return relative.format(-minutes, 'minute')
+  if (minutes < 24 * 60) return relative.format(-Math.floor(minutes / 60), 'hour')
+  const days = Math.round((startOfDay(now) - startOfDay(ts)) / 86_400_000)
+  if (days < 7) return relative.format(-days, 'day')
+  const sameYear = new Date(ts).getFullYear() === new Date(now).getFullYear()
+  return new Intl.DateTimeFormat(locale, sameYear ? { month: 'numeric', day: 'numeric' } : { year: 'numeric', month: 'numeric', day: 'numeric' }).format(ts)
+}
+
 export function modKey(platform: string): string {
   return platform === 'darwin' ? '⌘' : 'Ctrl+'
 }

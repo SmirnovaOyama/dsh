@@ -8,7 +8,8 @@ import { PreviewPages, withPolicy } from '../src/main/artifactPreview'
 import { artifactNote } from '../src/main/agent'
 import { draftArtifact, nextArtifact, partialField, streamedCommand, viewArtifact } from '../src/main/tools/artifact'
 import { ToolError } from '../src/main/tools/paths'
-import type { ArtifactVersion } from '../src/shared/types'
+import { artifactsIn } from '../src/shared/library'
+import type { ArtifactVersion, SessionData, TranscriptItem } from '../src/shared/types'
 
 const page: ArtifactVersion = { id: 'timer', title: '番茄鐘', type: 'html', content: '<!doctype html><html><head></head><body><b>25:00</b></body></html>', version: 1 }
 const lookup = (...versions: ArtifactVersion[]) => (id: string) => versions.filter((v) => v.id === id).at(-1)
@@ -223,5 +224,33 @@ describe('preview pages', () => {
     expect(withPolicy('<html><head><title>t</title></head></html>')).toMatch(/^<html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'/)
     expect(withPolicy('<!doctype html><p>x</p>')).toMatch(/^<!doctype html><head><meta http-equiv="Content-Security-Policy"/)
     expect(withPolicy('<header>x</header>')).toMatch(/^<head><meta /)
+  })
+})
+
+describe('artifactsIn', () => {
+  const made = (id: string, version: ArtifactVersion, status: 'done' | 'running' | 'stopped' | 'error', endedAt?: number): TranscriptItem => ({
+    kind: 'tool', id, callId: id, name: 'artifact', target: version.title, status, startedAt: 1, endedAt, artifact: version,
+  })
+  const session = (items: TranscriptItem[]): SessionData => ({
+    id: 's1', title: '番茄鐘', workspace: '/w', createdAt: 0, updatedAt: 99, model: 'deepseek-flash', effort: 'high', permissionMode: 'ask', status: 'idle', items,
+    usage: { promptTokens: 0, completionTokens: 0, cacheHitTokens: 0, contextTokens: 0 },
+  })
+
+  it('keeps the newest finished version of each artifact', () => {
+    const notes: ArtifactVersion = { id: 'notes', title: 'Notes', type: 'markdown', content: '# a', version: 1 }
+    const listed = artifactsIn(
+      session([
+        made('i1', page, 'done', 10),
+        made('i2', { ...page, version: 2 }, 'done', 20),
+        made('i3', { ...page, version: 3 }, 'stopped'),
+        made('i4', { ...page, version: 3 }, 'error'),
+        made('i5', notes, 'running'),
+      ]),
+    )
+    expect(listed).toEqual([{ sessionId: 's1', sessionTitle: '番茄鐘', workspace: '/w', itemId: 'i2', artifact: { ...page, version: 2 }, updatedAt: 20 }])
+  })
+
+  it('lists nothing for a conversation without artifacts', () => {
+    expect(artifactsIn(session([{ kind: 'user', id: 'u', text: 'hi', at: 0 }]))).toEqual([])
   })
 })

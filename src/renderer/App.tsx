@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChangesPanel } from './components/ChangesPanel'
 import { Resizer } from './components/Resizer'
+import { ScheduledView } from './components/ScheduledView'
 import { ChatView } from './components/ChatView'
+import { LibraryView } from './components/LibraryView'
 import { SettingsView } from './components/SettingsView'
 import { Sidebar } from './components/Sidebar'
 import { setLocale, t } from './i18n'
@@ -39,6 +41,9 @@ function useShortcuts(onSearch: () => void) {
         event.preventDefault()
         if (getState().view === 'settings') actions.closeSettings()
         onSearch()
+      } else if (key === 'b') {
+        event.preventDefault()
+        actions.toggleSidebar()
       } else if (key === ',') {
         event.preventDefault()
         actions.openSettings()
@@ -65,7 +70,9 @@ function usePresence(shown: boolean, ms: number): Motion | null {
     }
     if (shown) {
       setMotion('in')
-      return
+      // Once open, the pane settles, so it never plays the opening again when it is drawn anew.
+      const timer = setTimeout(() => setMotion('still'), 400)
+      return () => clearTimeout(timer)
     }
     setMotion((m) => (m === null ? null : 'out'))
     const timer = setTimeout(() => setMotion(null), ms)
@@ -84,6 +91,8 @@ export function App() {
   const chat = useApp((s) => s.chat)
   const panelMotion = usePresence(panel, 220)
   const panelPane = useApp((s) => (s.panelTab === 'artifacts' ? 'artifacts' : 'changes'))
+  const switching = useApp((s) => s.switching)
+  const showSidebar = useApp((s) => s.showSidebar)
   const [searchTick, setSearchTick] = useState(0)
 
   setLocale(locale)
@@ -94,8 +103,12 @@ export function App() {
     document.documentElement.dataset.platform = platform
   }, [platform])
   useEffect(() => {
-    document.title = title ? `${title} - ${t('app.name')}` : t('app.name')
-  }, [title, locale])
+    document.documentElement.dataset.sidebar = showSidebar ? 'shown' : 'hidden'
+  }, [showSidebar])
+  useEffect(() => {
+    const name = view === 'artifacts' ? t('library.title') : view === 'scheduled' ? t('scheduled.title') : title
+    document.title = name ? `${name} - ${t('app.name')}` : t('app.name')
+  }, [title, view, locale])
 
   // Nothing renders until the saved state is in, so the first frame is already the right one.
   if (!ready) return null
@@ -107,13 +120,17 @@ export function App() {
       </div>
     )
   }
+  // The library covers the conversation rather than replacing it, so coming back finds the conversation,
+  // its scroll and its running pages as they were.
+  const library = view === 'artifacts'
   return (
-    <div className="hx-app">
-      <Sidebar searchTick={searchTick} />
-      <Resizer pane="sidebar" />
-      <ChatView />
-      {panelMotion && panelMotion !== 'out' && <Resizer key={panelPane} pane={panelPane} />}
-      {panelMotion && <ChangesPanel chat={chat} motion={panelMotion} />}
+    <div className="hx-app" aria-busy={switching || undefined}>
+      {showSidebar && <Sidebar searchTick={searchTick} />}
+      {showSidebar && <Resizer pane="sidebar" />}
+      {view === 'scheduled' ? <ScheduledView /> : <ChatView />}
+      {view !== 'scheduled' && panelMotion && panelMotion !== 'out' && !library && <Resizer key={panelPane} pane={panelPane} />}
+      {view !== 'scheduled' && panelMotion && <ChangesPanel chat={chat} motion={panelMotion} />}
+      {library && <LibraryView />}
     </div>
   )
 }

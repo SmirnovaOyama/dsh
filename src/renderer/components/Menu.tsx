@@ -29,11 +29,20 @@ export function Menu({ anchor, open, onClose, label, side = 'bottom', align = 's
     if (open && anchor) setRect(anchor.getBoundingClientRect())
   }, [open, anchor])
 
-  // The menu is in the page only once it has been placed, so wait for that before wiring it up;
-  // otherwise the first click inside a freshly opened menu reads as a click outside and closes it.
-  const placed = open && rect !== null
+  // A choice closes the menu and takes the focused item with it; focus goes back to what opened the menu,
+  // unless the choice already sent it somewhere, so the next key never lands on the page itself.
   useEffect(() => {
-    if (!placed) return
+    if (!open) return
+    return () => {
+      const lost = !document.activeElement || document.activeElement === document.body
+      if (lost && anchor?.isConnected) anchor.focus({ preventScroll: true })
+    }
+  }, [open, anchor])
+
+  // The menu renders once its anchor is measured; wire it up only then, so focus and outside clicks see it.
+  const placed = rect !== null
+  useEffect(() => {
+    if (!open || !placed) return
     const menu = ref.current
     const items = () => Array.from(menu?.querySelectorAll<HTMLElement>(ITEMS) ?? [])
     const first = items().find((el) => el.getAttribute('aria-checked') === 'true') ?? items()[0]
@@ -77,7 +86,7 @@ export function Menu({ anchor, open, onClose, label, side = 'bottom', align = 's
       window.removeEventListener('resize', onResize)
       window.removeEventListener('blur', onResize)
     }
-  }, [placed, anchor])
+  }, [open, anchor, placed])
 
   if (!open || !rect) return null
   const style: CSSProperties = {
@@ -135,4 +144,13 @@ export function MenuItem({ onSelect, checked, icon, desc, sub, danger, disabled,
 
 export function MenuSeparator() {
   return <div className="oy-menu-sep" role="separator" />
+}
+
+/** A quiet heading over a group of items. */
+export function MenuLabel({ children }: { children: ReactNode }) {
+  return (
+    <div className="hx-menu-label" role="presentation">
+      {children}
+    </div>
+  )
 }

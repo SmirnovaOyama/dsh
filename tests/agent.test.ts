@@ -64,7 +64,7 @@ async function setup(steps: Step[], seen: ChatRequest[] = [], withKey = true) {
   return { controller, settings, sessions }
 }
 
-const opts = (permissionMode: 'ask' | 'acceptEdits') => ({ id: randomUUID(), model: 'deepseek-chat', permissionMode })
+const opts = (permissionMode: 'ask' | 'acceptEdits') => ({ id: randomUUID(), model: 'deepseek-flash', effort: 'none' as const, permissionMode })
 
 const editCall = {
   id: 'call_1',
@@ -196,14 +196,14 @@ describe('apiHistory', () => {
     { role: 'tool', tool_call_id: 'call_1', content: 'ok' },
   ]
 
-  it('keeps only the current turn reasoning for thinking models', () => {
-    const out = apiHistory(history, 'deepseek-reasoner')
+  it('keeps only the current turn reasoning while thinking', () => {
+    const out = apiHistory(history, true)
     expect(out[1]).not.toHaveProperty('reasoning_content')
     expect(out[3]).toHaveProperty('reasoning_content', 'current thoughts')
   })
 
-  it('drops reasoning for other models', () => {
-    const out = apiHistory(history, 'deepseek-chat')
+  it('drops reasoning when thinking is off', () => {
+    const out = apiHistory(history, false)
     expect(out.some((m) => 'reasoning_content' in m)).toBe(false)
   })
 })
@@ -211,7 +211,7 @@ describe('apiHistory', () => {
 describe('compacting', () => {
   it('summarises the history before a request once the context is nearly full', async () => {
     const seen: ChatRequest[] = []
-    const { controller } = await setup([{ content: 'first', tokens: 110_000 }, { content: 'SUMMARY' }, { content: 'second' }], seen)
+    const { controller } = await setup([{ content: 'first', tokens: 900_000 }, { content: 'SUMMARY' }, { content: 'second' }], seen)
     const meta = await controller.start(ws, 'one', opts('ask'))
     await idle(controller, meta.id)
     events = []
@@ -225,7 +225,7 @@ describe('compacting', () => {
     expect(after[1].content).toContain('SUMMARY')
     expect(after[3].content).toBe('two')
     expect(snap.session.items.map((i) => i.kind)).toEqual(['user', 'text', 'user', 'compact', 'text'])
-    expect(snap.session.items[3]).toMatchObject({ kind: 'compact', auto: true, status: 'done', summary: 'SUMMARY', before: 110_005 })
+    expect(snap.session.items[3]).toMatchObject({ kind: 'compact', auto: true, status: 'done', summary: 'SUMMARY', before: 900_005 })
   })
 
   it('compacts on request with the focus the person gave', async () => {
@@ -494,6 +494,40 @@ describe('artifacts in the agent loop', () => {
     const meta = await controller.start(ws, 'make two', opts('ask'))
     await idle(controller, meta.id)
     expect(drafted().some((a) => a.queued)).toBe(false)
+  })
+  it('lists the newest finished version of every artifact for the library, also after a restart', async () => {
+    const notes = { ...create, id: 'notes', title: 'Notes', type: 'markdown', content: '# hi' }
+    const { controller, sessions } = await setup([
+      { toolCalls: [call('c1', create)] },
+      { toolCalls: [call('c2', { command: 'rewrite', id: 'timer', content: '<b>05:00</b>' })] },
+      { content: 'ok' },
+      { toolCalls: [call('c3', notes)] },
+      { content: 'ok' },
+    ])
+    const first = await controller.start(ws, 'timer', opts('ask'))
+    await idle(controller, first.id)
+    await new Promise((r) => setTimeout(r, 5))
+    const second = await controller.start(ws, 'notes', opts('ask'))
+    await idle(controller, second.id)
+
+    const listed = await controller.artifacts()
+    expect(listed.map((a) => [a.sessionId, a.artifact.id, a.artifact.version, a.workspace])).toEqual([
+      [second.id, 'notes', 1, ws],
+      [first.id, 'timer', 2, ws],
+    ])
+    await sessions.flush()
+
+    const reloaded = new SessionStore(root)
+    await reloaded.load()
+    const settings = new SettingsStore(root, plainCipher)
+    await settings.load()
+    const fresh = new Controller({ settings, sessions: reloaded, emit: () => {} })
+    expect((await fresh.artifacts()).map((a) => [a.artifact.id, a.artifact.version])).toEqual([
+      ['notes', 1],
+      ['timer', 2],
+    ])
+    await fresh.remove(second.id)
+    expect((await fresh.artifacts()).map((a) => a.artifact.id)).toEqual(['timer'])
   })
 })
 

@@ -1,9 +1,10 @@
 import { ChevronLeft, Cpu, KeyRound, LoaderCircle, Shield, Sun, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { MAX_STEPS_OPTIONS, MODELS, type ConnectionResult, type Locale, type PermissionMode, type ReplyStyle, type ThemePref } from '../../shared/types'
+import { EFFORTS, MAX_STEPS_OPTIONS, MODELS, PERMISSION_MODES, type ConnectionResult, type Effort, type Locale, type PermissionMode, type ReplyStyle, type ThemePref } from '../../shared/types'
 import { api } from '../api'
 import { LOCALE_NAMES, t, type MessageKey } from '../i18n'
 import { actions, useApp, type SettingsSection } from '../store'
+import { modelDesc, modelName } from '../models'
 import { Icon } from './Icon'
 import { Reserve } from './Reserve'
 import { Segmented } from './Segmented'
@@ -23,6 +24,7 @@ export function SettingsView() {
   const [current, setCurrent] = useState<SettingsSection>(initial ?? 'connection')
   const [scrolled, setScrolled] = useState(false)
   const pageRef = useRef<HTMLDivElement>(null)
+  const from = useApp((s) => s.settingsFrom)
 
   const goTo = (id: SettingsSection, smooth = true) => {
     setCurrent(id)
@@ -66,8 +68,8 @@ export function SettingsView() {
       <nav className="oy-sidebar hx-sidebar" aria-label={t('settings.title')}>
         <div className="hx-drag" />
         <button type="button" className="hx-back" onClick={() => actions.closeSettings()}>
-          <Icon icon={ChevronLeft} size={18} />
-          {t('settings.back')}
+          <Icon icon={ChevronLeft} />
+          {t(from === 'artifacts' ? 'settings.backToLibrary' : 'settings.back')}
         </button>
         <div className="hx-settings-nav">
           {SECTIONS.map((section) => (
@@ -321,8 +323,16 @@ function ModelGroup() {
             className="hx-row-control"
             label={t('settings.defaultModel')}
             value={settings.model}
-            options={MODELS.map((m) => ({ value: m, label: m, desc: t(`model.${m}` as MessageKey) }))}
+            options={MODELS.map((m) => ({ value: m, label: modelName(m), desc: modelDesc(m) }))}
             onChange={(model) => update({ model })}
+          />
+        </Row>
+        <Row title={t('settings.defaultEffort')}>
+          <Segmented<Effort>
+            label={t('settings.defaultEffort')}
+            value={settings.effort}
+            options={EFFORTS.map((e) => ({ value: e, label: t(`effort.${e}`) }))}
+            onChange={(effort) => update({ effort })}
           />
         </Row>
         <Row title={t('settings.style')}>
@@ -358,50 +368,52 @@ function Permissions() {
   }
   return (
     <Group id="permissions" title={t('settings.permissions')}>
-      <div className="oy-section is-plain">
-        <Row title={t('settings.defaultMode')}>
-          <Select<PermissionMode>
-            className="hx-row-control"
-            label={t('settings.defaultMode')}
-            value={settings.permissionMode}
-            options={(['ask', 'acceptEdits', 'auto'] as const).map((m) => ({ value: m, label: t(`mode.${m}`), desc: t(`mode.${m}.desc`) }))}
-            onChange={(permissionMode) => update({ permissionMode })}
-          />
-        </Row>
-        <Row title={t('settings.allowed')} />
-      </div>
-      <div className="hx-allowed">
-        <div className="hx-allowed-list">
-          {settings.allowedCommands.map((prefix) => (
-            <div key={prefix} className="hx-allowed-item">
-              <span className="hx-mono">{prefix}</span>
-              <button
-                type="button"
-                className="btn-ghost hx-icon-btn"
-                aria-label={t('settings.allowedRemove', { prefix })}
-                title={t('settings.allowedRemove', { prefix })}
-                onClick={() => update({ allowedCommands: settings.allowedCommands.filter((p) => p !== prefix) })}
-              >
-                <Icon icon={X} size={16} />
-              </button>
-            </div>
-          ))}
+      <div className="hx-card">
+        <div className="oy-section is-plain">
+          <Row title={t('settings.defaultMode')}>
+            <Select<PermissionMode>
+              className="hx-row-control"
+              label={t('settings.defaultMode')}
+              value={settings.permissionMode}
+              options={PERMISSION_MODES.map((m) => ({ value: m, label: t(`mode.${m}`), desc: t(`mode.${m}.desc`) }))}
+              onChange={(permissionMode) => update({ permissionMode })}
+            />
+          </Row>
+          <Row title={t('settings.allowed')} />
         </div>
-        <div className="hx-allowed-add">
-          <input
-            className="input-base"
-            value={adding}
-            spellCheck={false}
-            placeholder={t('settings.allowedPlaceholder')}
-            aria-label={t('settings.allowed')}
-            onChange={(event) => setAdding(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') add()
-            }}
-          />
-          <button type="button" className="btn-secondary" disabled={!adding.trim()} onClick={add}>
-            {t('settings.allowedAdd')}
-          </button>
+        <div className="hx-allowed">
+          <div className="hx-allowed-list">
+            {settings.allowedCommands.map((prefix) => (
+              <div key={prefix} className="hx-allowed-item">
+                <span className="hx-mono">{prefix}</span>
+                <button
+                  type="button"
+                  className="btn-ghost hx-icon-btn"
+                  aria-label={t('settings.allowedRemove', { prefix })}
+                  title={t('settings.allowedRemove', { prefix })}
+                  onClick={() => update({ allowedCommands: settings.allowedCommands.filter((p) => p !== prefix) })}
+                >
+                  <Icon icon={X} size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="hx-allowed-add">
+            <input
+              className="input-base"
+              value={adding}
+              spellCheck={false}
+              placeholder={t('settings.allowedPlaceholder')}
+              aria-label={t('settings.allowed')}
+              onChange={(event) => setAdding(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') add()
+              }}
+            />
+            <button type="button" className="btn-secondary" disabled={!adding.trim()} onClick={add}>
+              {t('settings.allowedAdd')}
+            </button>
+          </div>
         </div>
       </div>
     </Group>

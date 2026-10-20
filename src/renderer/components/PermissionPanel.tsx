@@ -1,14 +1,47 @@
-import { FilePen, FilePlus, Terminal } from 'lucide-react'
+import { ClipboardList, FilePen, FilePlus, Terminal } from 'lucide-react'
 import type { PermissionRequest } from '../../shared/types'
 import { tildify } from '../format'
 import { t } from '../i18n'
-import { actions, useApp } from '../store'
+import { actions, getState, useApp } from '../store'
 import { DiffStatsText, DiffView } from './DiffView'
 import { Icon } from './Icon'
+import { Markdown } from './Markdown'
 
 export function PermissionPanel({ request }: { request: PermissionRequest }) {
   const home = useApp((s) => s.app.home)
   const titleId = `perm-${request.id}`
+
+  if (request.kind === 'plan') {
+    return (
+      <section className="hx-perm" aria-labelledby={titleId}>
+        <div className="q">
+          <Icon icon={ClipboardList} />
+          <div className="text">
+            <h3 id={titleId}>{t('perm.planTitle')}</h3>
+            <p className="why">{t('perm.planWhy')}</p>
+          </div>
+        </div>
+        <div className="box hx-plan-box">
+          <Markdown text={request.plan ?? ''} streaming={false} />
+        </div>
+        <div className="acts">
+          <span className="hx-hint grow">
+            <span>{t('perm.hintAllow')}</span>
+            <span>{t('perm.hintPlanDeny')}</span>
+          </span>
+          <button type="button" className="btn-secondary" onClick={() => void actions.respond({ type: 'deny' })}>
+            {t('perm.planKeep')}
+          </button>
+          <button type="button" className="btn-tonal" onClick={() => void actions.respond({ type: 'allow', mode: 'ask' })}>
+            {t('perm.planAsk')}
+          </button>
+          <button type="button" className="btn-primary" data-perm-allow onClick={() => void actions.respond({ type: 'allow', mode: 'acceptEdits' })}>
+            {t('perm.planGo')}
+          </button>
+        </div>
+      </section>
+    )
+  }
 
   if (request.kind === 'command') {
     const prefix = request.prefix
@@ -57,13 +90,12 @@ export function PermissionPanel({ request }: { request: PermissionRequest }) {
         <Icon icon={request.created ? FilePlus : FilePen} />
         <div className="text">
           <h3 id={titleId}>{t(request.created ? 'perm.createTitle' : 'perm.editTitle')}</h3>
-          <p className="why">
+          <p className="why hx-perm-file">
             <span className="hx-mono">{request.path}</span>
-            {t('perm.sep')}
-            <span style={{ display: 'inline-flex', gap: 4 }}>
+            <span className="stats">
               <DiffStatsText added={stats.added} removed={stats.removed} />
-            </span>{' '}
-            {t('perm.lines')}
+              <span>{t('perm.lines')}</span>
+            </span>
           </p>
         </div>
       </div>
@@ -94,6 +126,7 @@ export function PermissionPanel({ request }: { request: PermissionRequest }) {
 /** Enter allows and Esc declines, unless focus is somewhere that uses those keys itself. */
 export function permissionKey(event: KeyboardEvent, composerHasText: boolean): boolean {
   if (event.isComposing || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return false
+  if (getState().view !== 'chat') return false
   // A dialog over the window, such as an expanded artifact, hides the prompt; its keys are its own.
   if (document.querySelector('[aria-modal="true"]')) return false
   const target = event.target as HTMLElement | null

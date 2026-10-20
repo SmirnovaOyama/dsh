@@ -46,7 +46,7 @@ describe('streamChat', () => {
     }) as unknown as typeof fetch
 
     const result = await streamChat(
-      { baseUrl: 'https://api.deepseek.com/', apiKey: 'sk-test', model: 'deepseek-chat', messages: [{ role: 'user', content: 'hi' }], fetchImpl },
+      { baseUrl: 'https://api.deepseek.com/', apiKey: 'sk-test', model: 'deepseek-flash', messages: [{ role: 'user', content: 'hi' }], fetchImpl },
       { onReasoning: (d) => reasoning.push(d), onContent: (d) => content.push(d) },
     )
 
@@ -57,6 +57,22 @@ describe('streamChat', () => {
     expect(result.toolCalls).toEqual([{ id: 'call_1', type: 'function', function: { name: 'read_file', arguments: '{"path":"a.ts"}' } }])
     expect(result.finishReason).toBe('tool_calls')
     expect(result.usage?.prompt_cache_hit_tokens).toBe(64)
+  })
+
+  it('asks for thinking at the chosen effort, or turns it off', async () => {
+    const bodies: Record<string, unknown>[] = []
+    const fetchImpl = (async (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)))
+      return sseResponse(['data: [DONE]\n\n'])
+    }) as unknown as typeof fetch
+    const base = { baseUrl: 'https://x', apiKey: 'k', model: 'deepseek-v4-pro', messages: [], fetchImpl }
+    await streamChat({ ...base, effort: 'max' })
+    await streamChat({ ...base, effort: 'none' })
+    await streamChat(base)
+    expect(bodies[0]).toMatchObject({ thinking: { type: 'enabled' }, reasoning_effort: 'max' })
+    expect(bodies[1]).toMatchObject({ thinking: { type: 'disabled' } })
+    expect(bodies[1]).not.toHaveProperty('reasoning_effort')
+    expect(bodies[2]).not.toHaveProperty('thinking')
   })
 
   it('turns HTTP errors into error codes', async () => {

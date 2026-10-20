@@ -2,24 +2,19 @@ import {
   Check,
   ChevronDown,
   ChevronLeft,
-  ChevronRight,
   CircleAlert,
   Code2,
   Copy,
   Download,
-  Ellipsis,
   ExternalLink,
   Eye,
-  FileDiff,
   FolderDown,
-  LayoutGrid,
   Maximize2,
   Minimize2,
   Monitor,
   RotateCw,
   Smartphone,
   Tablet,
-  Wrench,
   X,
   type LucideIcon,
 } from 'lucide-react'
@@ -45,14 +40,13 @@ import {
 import { clockTime } from '../format'
 import { t } from '../i18n'
 import { actions, useApp } from '../store'
-import { CopyButton } from './CodeBlock'
 import { DiffView } from './DiffView'
 import { tokenLines } from './FilesView'
 import { Icon } from './Icon'
 import { Markdown } from './Markdown'
-import { Menu, MenuItem, MenuSeparator } from './Menu'
+import { Menu, MenuItem, MenuLabel, MenuSeparator } from './Menu'
 import { Reserve } from './Reserve'
-import { Shimmer, ThinkingMark } from './Thinking'
+import { ThinkingMark } from './Thinking'
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
@@ -87,7 +81,7 @@ function ArtifactList() {
   const list = useMemo(() => latestArtifacts(items ?? []), [items])
   return (
     <>
-      <div className="hx-changes-head">
+      <div className="hx-changes-head hx-artifact-list-head">
         <h2>{t('panel.artifacts')}</h2>
         {list.length > 0 && <span className="sum">{t('artifact.count', { n: list.length })}</span>}
         <span className="grow" />
@@ -97,17 +91,13 @@ function ArtifactList() {
         <div className="hx-artifact-list">
           {list.map((item) => (
             <button key={item.id} type="button" className="hx-artifact-row" onClick={() => actions.viewArtifact(item.id)}>
-              <span className="glyph">
-                <Icon icon={artifactIcon(item.artifact.type)} size={16} />
+              <span className="kind">{item.status === 'running' && !item.queued ? <ThinkingMark size={16} /> : <Icon icon={artifactIcon(item.artifact.type)} size={16} />}</span>
+              <span className="name">{item.artifact.title || t('artifact.untitled')}</span>
+              <span className="sub">
+                <span>{typeLabel(item.artifact)}</span>
+                {item.artifact.version > 1 && <span>{t('artifact.version', { n: item.artifact.version })}</span>}
+                {item.status === 'stopped' && <span>{t('artifact.stopped')}</span>}
               </span>
-              <span className="text">
-                <span className="title">{item.artifact.title || t('artifact.untitled')}</span>
-                <span className="sub">
-                  <span>{typeLabel(item.artifact)}</span>
-                  {item.artifact.version > 1 && <span>{t('artifact.versions', { n: item.artifact.version })}</span>}
-                </span>
-              </span>
-              {item.status === 'running' && !item.queued ? <ThinkingMark size={16} /> : <Icon icon={ChevronRight} size={16} className="hx-row-chev" />}
             </button>
           ))}
         </div>
@@ -120,14 +110,13 @@ function ArtifactList() {
 
 type Mode = 'preview' | 'code' | 'diff'
 type Device = 'desktop' | 'tablet' | 'phone'
-type Notice =
-  | { kind: 'saved'; path: string; inProject: boolean }
-  | { kind: 'failed'; text: string }
-  | { kind: 'copied' }
-  | { kind: 'link'; url: string }
+type Notice = { kind: 'saved'; path: string; inProject: boolean } | { kind: 'failed'; text: string } | { kind: 'link'; url: string }
 
-const MODE_ICONS: Record<Mode, LucideIcon> = { preview: Eye, code: Code2, diff: FileDiff }
-const MODE_LABELS = { preview: 'artifact.preview', code: 'artifact.code', diff: 'artifact.mode.diff' } as const
+/** The two ways to look at an artifact; comparing versions lives in the version menu. */
+const VIEWS = [
+  { value: 'preview', icon: Eye, label: 'artifact.preview' },
+  { value: 'code', icon: Code2, label: 'artifact.code' },
+] as const
 const DEVICES = [
   { value: 'desktop', icon: Monitor, label: 'artifact.device.desktop' },
   { value: 'tablet', icon: Tablet, label: 'artifact.device.tablet' },
@@ -141,7 +130,7 @@ const MAX_ERROR_LENGTH = 1000
 /** A row of icon toggles; each keeps its own width, so choosing one never moves the others. */
 function IconToggles<T extends string>(props: {
   label: string
-  value: T
+  value: T | null
   options: { value: T; icon: LucideIcon; label: string; title?: string; disabled?: boolean }[]
   onChange(value: T): void
 }) {
@@ -177,8 +166,6 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
   const ready = item.status === 'done'
   const unfinished = !writing && !queued && !ready
   const page = isPage(artifact.type)
-  const prev = versions[index - 1]
-  const next = versions[index + 1]
   const last = versions[versions.length - 1]
   const newestDone = versions.findLast((v) => v.status === 'done')
   // A diff is against the version this one was made from, which is never a stopped one.
@@ -193,15 +180,14 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
   const errors = pageErrors.item === item.id ? pageErrors.list : []
   const clearErrors = () => setPageErrors({ item: item.id, list: [] })
   const [notice, setNotice] = useState<Notice | null>(null)
+  const [copied, setCopied] = useState(false)
   const [menu, setMenu] = useState<'more' | 'versions' | null>(null)
   const viewRef = useRef<HTMLDivElement>(null)
-  const fullRef = useRef<HTMLButtonElement>(null)
   const moreRef = useRef<HTMLButtonElement>(null)
   const versionRef = useRef<HTMLButtonElement>(null)
 
-  // The diff toggle stays put across versions and is only unavailable on the first, so the title never moves.
-  const modes: Mode[] = [...(hasPreview(artifact.type) ? (['preview'] as const) : []), 'code', ...(versions.length > 1 ? (['diff'] as const) : [])]
-  const usable = modes.filter((m) => m !== 'diff' || base)
+  const previewable = hasPreview(artifact.type)
+  const usable: Mode[] = [...(previewable ? (['preview'] as const) : []), 'code', ...(base ? (['diff'] as const) : [])]
   // While the agent writes, and for a version it never finished, the code is what there is to see.
   const shownMode: Mode = writing || unfinished ? 'code' : usable.includes(mode) ? mode : usable[0]
 
@@ -213,6 +199,12 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
   }, [writing])
 
   useEffect(() => {
+    if (!copied) return
+    const timer = window.setTimeout(() => setCopied(false), 1600)
+    return () => window.clearTimeout(timer)
+  }, [copied])
+
+  useEffect(() => {
     if (!notice) return
     const timer = window.setTimeout(() => setNotice(null), notice.kind === 'link' ? 15000 : 5000)
     return () => window.clearTimeout(timer)
@@ -220,7 +212,7 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
 
   const shrink = () => {
     setFull(false)
-    fullRef.current?.focus({ preventScroll: true })
+    moreRef.current?.focus({ preventScroll: true })
   }
 
   // Expanded, the artifact is a dialog over the window: Escape shrinks it before anything else hears
@@ -231,8 +223,7 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
       if (event.key !== 'Escape' || event.defaultPrevented || document.querySelector('.hx-menu')) return
       event.preventDefault()
       event.stopPropagation()
-      setFull(false)
-      fullRef.current?.focus({ preventScroll: true })
+      shrink()
     }
     document.addEventListener('keydown', onKey, true)
     const view = viewRef.current
@@ -264,10 +255,10 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
     const opened = await api.artifacts.openInBrowser(fileNameFor(artifact), pageFor(artifact)).catch((error) => ({ ok: false as const, error: errorText(error) }))
     if (!opened.ok) failed(t('artifact.openFailed', { error: opened.error }))
   }
+  // The label stays put while the icon turns into a tick, so the button never changes width.
   const copy = () => {
-    setMenu(null)
     void navigator.clipboard.writeText(artifact.content).then(
-      () => setNotice({ kind: 'copied' }),
+      () => setCopied(true),
       (error) => failed(errorText(error)),
     )
   }
@@ -310,88 +301,72 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
             <Icon icon={ChevronLeft} size={16} />
           </button>
         )}
-        <IconToggles<Mode>
-          label={t('artifact.view')}
-          value={shownMode}
-          options={modes.map((m) => ({
-            value: m,
-            icon: MODE_ICONS[m],
-            label: t(MODE_LABELS[m]),
-            title: m === 'diff' && !base ? t('artifact.diffFirst') : undefined,
-            disabled: ((writing || unfinished) && m !== 'code') || (m === 'diff' && !base),
-          }))}
-          onChange={setMode}
-        />
+        {previewable && (
+          <IconToggles<Mode>
+            label={t('artifact.view')}
+            value={shownMode === 'diff' ? null : shownMode}
+            options={VIEWS.map((v) => ({ value: v.value, icon: v.icon, label: t(v.label), disabled: (writing || unfinished) && v.value === 'preview' }))}
+            onChange={setMode}
+          />
+        )}
         <span className="title" title={artifact.title}>
           {artifact.title || t('artifact.untitled')}
         </span>
         <span className="grow" />
-        {full && page && shownMode === 'preview' && (
-          <IconToggles<Device> label={t('artifact.device')} value={device} options={DEVICES.map((d) => ({ value: d.value, icon: d.icon, label: t(d.label) }))} onChange={setDevice} />
-        )}
         {versions.length > 1 && (
-          <span className="hx-versions">
-            <button type="button" className="btn-ghost hx-icon-btn step" disabled={!prev} aria-label={t('artifact.prev')} title={t('artifact.prev')} onClick={() => prev && actions.viewArtifact(prev.id)}>
-              <Icon icon={ChevronLeft} size={14} />
-            </button>
-            <button
-              ref={versionRef}
-              type="button"
-              className="btn-ghost hx-version-pick"
-              aria-haspopup="menu"
-              aria-expanded={menu === 'versions'}
-              aria-label={`${t('artifact.versionsMenu')} ${versionLabel(artifact.version)}`}
-              title={t('artifact.versionsMenu')}
-              onClick={() => setMenu((m) => (m === 'versions' ? null : 'versions'))}
-            >
-              {/* Holds the width of the longest label, so stepping from 10 to 9 leaves the arrows in place. */}
-              <span className="n long" aria-hidden="true">
-                <Reserve shown={0} forms={[versionLabel(artifact.version), versionLabel(last.artifact.version)]} />
-              </span>
-              <span className="n short" aria-hidden="true">
-                <Reserve shown={0} forms={[shortLabel(artifact.version), shortLabel(last.artifact.version)]} />
-              </span>
-              <Icon icon={ChevronDown} size={14} />
-            </button>
-            <button type="button" className="btn-ghost hx-icon-btn step" disabled={!next} aria-label={t('artifact.next')} title={t('artifact.next')} onClick={() => next && actions.viewArtifact(next.id)}>
-              <Icon icon={ChevronRight} size={14} />
-            </button>
-          </span>
-        )}
-        {full && page && (
-          <button type="button" className="btn-ghost hx-icon-btn" disabled={!ready || shownMode !== 'preview'} aria-label={t('artifact.reload')} title={t('artifact.reload')} onClick={reload}>
-            <Icon icon={RotateCw} size={16} />
+          <button
+            ref={versionRef}
+            type="button"
+            className="btn-ghost hx-version-pick"
+            aria-haspopup="menu"
+            aria-expanded={menu === 'versions'}
+            aria-label={`${t('artifact.versionsMenu')} ${versionLabel(artifact.version)}`}
+            title={t('artifact.versionsMenu')}
+            onClick={() => setMenu((m) => (m === 'versions' ? null : 'versions'))}
+          >
+            {/* Holds the width of the longest label, so going from version 10 to 9 moves nothing. */}
+            <span className="n long" aria-hidden="true">
+              <Reserve shown={0} forms={[versionLabel(artifact.version), versionLabel(last.artifact.version)]} />
+            </span>
+            <span className="n short" aria-hidden="true">
+              <Reserve shown={0} forms={[shortLabel(artifact.version), shortLabel(last.artifact.version)]} />
+            </span>
+            <Icon icon={ChevronDown} size={14} />
           </button>
         )}
-        <CopyButton text={artifact.content} label={t('artifact.copy')} disabled={!ready} />
-        <button
-          ref={fullRef}
-          type="button"
-          className="btn-ghost hx-icon-btn"
-          aria-label={t(full ? 'artifact.shrink' : 'artifact.expand')}
-          title={t(full ? 'artifact.shrink' : 'artifact.expand')}
-          onClick={() => setFull((f) => !f)}
-        >
-          <Icon icon={full ? Minimize2 : Maximize2} size={16} />
-        </button>
-        <button
-          ref={moreRef}
-          type="button"
-          className="btn-ghost hx-icon-btn"
-          aria-haspopup="menu"
-          aria-expanded={menu === 'more'}
-          aria-label={t('artifact.more')}
-          title={t('artifact.more')}
-          onClick={() => setMenu((m) => (m === 'more' ? null : 'more'))}
-        >
-          <Icon icon={Ellipsis} size={16} />
-        </button>
-        <CloseButton />
+        <span className="hx-split">
+          <button type="button" className="copy" disabled={!ready} aria-label={t(copied ? 'copy.done' : 'artifact.copy')} title={t(copied ? 'copy.done' : 'artifact.copy')} onClick={copy}>
+            <span className="hx-swap" data-on={copied}>
+              <Icon icon={Copy} size={16} />
+              <Icon icon={Check} size={16} />
+            </span>
+            <span className="label">{t('artifact.copyShort')}</span>
+          </button>
+          <button
+            ref={moreRef}
+            type="button"
+            className="more"
+            aria-haspopup="menu"
+            aria-expanded={menu === 'more'}
+            aria-label={t('artifact.more')}
+            title={t('artifact.more')}
+            onClick={() => setMenu((m) => (m === 'more' ? null : 'more'))}
+          >
+            <Icon icon={ChevronDown} size={14} />
+          </button>
+        </span>
+        {full ? (
+          <button type="button" className="btn-ghost hx-icon-btn" aria-label={t('artifact.shrink')} title={t('artifact.shrink')} onClick={shrink}>
+            <Icon icon={Minimize2} size={16} />
+          </button>
+        ) : (
+          <CloseButton />
+        )}
       </div>
 
       {unfinished && (
         <div className="hx-artifact-unfinished" role="note">
-          <Icon icon={CircleAlert} size={14} />
+          <Icon icon={CircleAlert} size={16} />
           <span className="text">{t(item.status === 'stopped' ? 'artifact.unfinished.stopped' : 'artifact.unfinished.error')}</span>
           {newestDone && (
             <button type="button" className="btn-ghost" onClick={() => actions.viewArtifact(newestDone.id)}>
@@ -460,12 +435,11 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
                 </button>
               ) : (
                 <button type="button" className="btn-secondary hx-fix" disabled={busy} title={busy ? t('artifact.fixBusy') : undefined} onClick={fix}>
-                  <Icon icon={Wrench} size={14} />
                   {t('artifact.fix')}
                 </button>
               )}
               <button type="button" className="btn-ghost hx-icon-btn" aria-label={t('artifact.dismiss')} title={t('artifact.dismiss')} onClick={clearErrors}>
-                <Icon icon={X} size={14} />
+                <Icon icon={X} size={16} />
               </button>
             </div>
           </div>
@@ -473,39 +447,52 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
       </div>
 
       <Menu anchor={moreRef.current} open={menu === 'more'} onClose={() => setMenu(null)} label={t('artifact.more')} align="end" minWidth={220}>
-        {many && (
-          <MenuItem
-            icon={<Icon icon={LayoutGrid} size={16} />}
-            onSelect={() => {
-              setMenu(null)
-              setFull(false)
-              actions.viewArtifact(null)
-            }}
-          >
-            {t('artifact.all')}
-          </MenuItem>
-        )}
-        {many && <MenuSeparator />}
-        <MenuItem icon={<Icon icon={Copy} size={16} />} disabled={!ready} onSelect={copy}>
-          {t('artifact.copy')}
+        <MenuItem icon={<Icon icon={Download} size={16} />} disabled={!ready} onSelect={() => void saveAs()}>
+          {t('artifact.save')}
         </MenuItem>
-        {page && (
-          <MenuItem icon={<Icon icon={RotateCw} size={16} />} disabled={!ready} onSelect={reload}>
-            {t('artifact.reload')}
-          </MenuItem>
-        )}
+        <MenuItem icon={<Icon icon={FolderDown} size={16} />} disabled={!ready} onSelect={() => void saveToProject()}>
+          {t('artifact.saveToProject')}
+        </MenuItem>
         {page && (
           <MenuItem icon={<Icon icon={ExternalLink} size={16} />} disabled={!ready} onSelect={() => void openInBrowser()}>
             {t('artifact.openBrowser')}
           </MenuItem>
         )}
-        <MenuSeparator />
-        <MenuItem icon={<Icon icon={FolderDown} size={16} />} disabled={!ready} onSelect={() => void saveToProject()}>
-          {t('artifact.saveToProject')}
-        </MenuItem>
-        <MenuItem icon={<Icon icon={Download} size={16} />} disabled={!ready} onSelect={() => void saveAs()}>
-          {t('artifact.save')}
-        </MenuItem>
+        {(page || !full) && <MenuSeparator />}
+        {page && (
+          <MenuItem icon={<Icon icon={RotateCw} size={16} />} disabled={!ready} onSelect={reload}>
+            {t('artifact.reload')}
+          </MenuItem>
+        )}
+        {!full && (
+          <MenuItem
+            icon={<Icon icon={Maximize2} size={16} />}
+            onSelect={() => {
+              setMenu(null)
+              setFull(true)
+            }}
+          >
+            {t('artifact.expand')}
+          </MenuItem>
+        )}
+        {full && page && <MenuSeparator />}
+        {full && page && <MenuLabel>{t('artifact.device')}</MenuLabel>}
+        {full &&
+          page &&
+          DEVICES.map((d) => (
+            <MenuItem
+              key={d.value}
+              icon={<Icon icon={d.icon} size={16} />}
+              checked={device === d.value}
+              onSelect={() => {
+                setMenu(null)
+                setDevice(d.value)
+                setMode('preview')
+              }}
+            >
+              {t(d.label)}
+            </MenuItem>
+          ))}
       </Menu>
 
       <Menu anchor={versionRef.current} open={menu === 'versions'} onClose={() => setMenu(null)} label={t('artifact.versionsMenu')} align="end" minWidth={180}>
@@ -522,6 +509,18 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
             {versionLabel(v.artifact.version)}
           </MenuItem>
         ))}
+        <MenuSeparator />
+        <MenuItem
+          checked={shownMode === 'diff'}
+          disabled={!base || writing || unfinished}
+          sub={base ? undefined : t('artifact.diffFirst')}
+          onSelect={() => {
+            setMenu(null)
+            setMode((m) => (m === 'diff' ? 'preview' : 'diff'))
+          }}
+        >
+          {t('artifact.mode.diff')}
+        </MenuItem>
       </Menu>
     </div>
   )
@@ -532,15 +531,13 @@ function NoticeBar({ notice, onClose, onShowFile }: { notice: Notice; onClose():
   const bad = notice.kind === 'failed'
   return (
     <div className="hx-artifact-notice" role={notice.kind === 'link' ? 'alertdialog' : 'status'} aria-label={notice.kind === 'link' ? t('artifact.linkTitle') : undefined}>
-      <Icon icon={notice.kind === 'link' ? ExternalLink : bad ? CircleAlert : Check} size={14} className={bad ? 'hx-danger' : notice.kind === 'link' ? 'hx-muted' : 'hx-positive'} />
+      <Icon icon={notice.kind === 'link' ? ExternalLink : bad ? CircleAlert : Check} size={16} className={bad ? 'hx-danger' : notice.kind === 'link' ? 'hx-muted' : 'hx-positive'} />
       <span className="text" title={notice.kind === 'link' ? notice.url : notice.kind === 'saved' ? notice.path : undefined}>
         {notice.kind === 'saved'
           ? t('artifact.savedTo', { path: notice.path })
           : notice.kind === 'failed'
             ? notice.text
-            : notice.kind === 'link'
-              ? t('artifact.linkAsk', { url: notice.url })
-              : t('copy.done')}
+            : t('artifact.linkAsk', { url: notice.url })}
       </span>
       {notice.kind === 'saved' && notice.inProject && (
         <button type="button" className="btn-ghost" onClick={() => onShowFile(notice.path)}>
@@ -560,7 +557,7 @@ function NoticeBar({ notice, onClose, onShowFile }: { notice: Notice; onClose():
             {t('artifact.linkOpen')}
           </button>
           <button type="button" className="btn-ghost hx-icon-btn" aria-label={t('common.cancel')} title={t('common.cancel')} onClick={onClose}>
-            <Icon icon={X} size={14} />
+            <Icon icon={X} size={16} />
           </button>
         </>
       )}
@@ -601,7 +598,7 @@ const ArtifactCode = memo(function ArtifactCode({ item, follow }: { item: Artifa
       {follow && (
         <p className="hx-artifact-writing">
           <ThinkingMark size={16} />
-          <Shimmer>{t('artifact.writing')}</Shimmer>
+          <span>{t('artifact.writing')}</span>
         </p>
       )}
     </div>
@@ -732,7 +729,7 @@ function Frame(props: {
         (slow || !covered) && (
           <p className={slow ? 'hx-artifact-loading is-late' : 'hx-artifact-loading'} role="status">
             <ThinkingMark size={16} />
-            <Shimmer>{t('artifact.loading')}</Shimmer>
+            <span>{t('artifact.loading')}</span>
           </p>
         )
       )}

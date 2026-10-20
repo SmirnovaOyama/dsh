@@ -7,7 +7,7 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
-body { overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font-sans); font-size: 14px; line-height: 20px; -webkit-font-smoothing: antialiased; }
+body { overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font-sans); font-size: 13px; line-height: 18px; -webkit-font-smoothing: antialiased; }
 p { margin: 0; }
 input, textarea, select { font: inherit; color: inherit; }
 ::selection { background: color-mix(in oklch, var(--text) 16%, transparent); }
@@ -16,30 +16,31 @@ input, textarea, select { font: inherit; color: inherit; }
 
 /* Pet peeve 5: ODS ghost buttons, segmented controls and back links are pills, here they are not. */
 .btn-primary, .btn-tonal, .btn-secondary, .btn-danger, .btn-ghost {
-  height: 32px; padding: 0 12px; gap: 6px; border-radius: var(--radius-sm);
-  font-size: 14px; line-height: 20px; font-weight: 500; letter-spacing: 0;
+  height: 30px; padding: 0 12px; gap: 6px; border-radius: var(--radius-sm);
+  font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: 0;
 }
-.btn-secondary { background: var(--surface); box-shadow: inset 0 0 0 1px var(--border-strong); }
+.btn-secondary { background: var(--surface); box-shadow: inset 0 0 0 1px var(--border-strong), var(--shadow-xs); }
 .btn-secondary:hover:not(:disabled) { background: var(--surface-hover); }
 /* Secondary choices stay neutral; the accent is kept for the one main action. */
 .btn-tonal { background: var(--surface-pressed); color: var(--text); }
 .btn-tonal:hover:not(:disabled) { background: color-mix(in oklch, var(--text) 13%, transparent); }
 .btn-ghost { padding: 0 8px; font-weight: 400; }
 :is(.btn-primary, .btn-tonal, .btn-secondary, .btn-danger, .btn-ghost):active:not(:disabled) { transform: none; }
-:is(.btn-primary, .btn-tonal, .btn-secondary, .btn-danger):disabled { opacity: 0.45; }
-.input-base, .oy-select { min-height: 36px; padding-block: 7px; font-size: 14px; line-height: 20px; border-color: var(--border-strong); border-radius: var(--radius-sm); }
+:is(.btn-primary, .btn-tonal, .btn-secondary, .btn-danger):disabled { opacity: 1; color: var(--text-disabled); background: var(--surface-hover); box-shadow: none; }
+.input-base, .oy-select { min-height: 32px; padding-block: 6px; padding-inline: 10px; font-size: 13px; line-height: 18px; border-color: var(--border-strong); border-radius: var(--radius-sm); }
 .oy-select { padding-block: 0; }
 /* Focus is a neutral ring, never a coloured glow. */
 .input-base:focus, .input-base.is-focus, .oy-select.is-open { border-color: var(--text-muted); box-shadow: 0 0 0 3px var(--surface-hover); }
-.oy-menu { padding: 4px; border-radius: var(--radius-lg); }
-.oy-menu-item { min-height: 32px; padding: 0 8px 0 10px; gap: 8px; border-radius: var(--radius-sm); font-size: 14px; line-height: 20px; }
+.oy-menu { padding: 4px; border-radius: var(--radius-md); border-color: var(--border-strong); box-shadow: var(--shadow-menu); }
+.oy-menu-item { min-height: 28px; padding: 0 8px; gap: 8px; border-radius: var(--radius-xs); font-size: 13px; line-height: 18px; }
 .modal-card.is-dialog { border-radius: var(--radius-xl); }
-.oy-nav-item { height: 32px; gap: 10px; padding: 0 10px; border-radius: var(--radius-sm); font-size: 14px; line-height: 20px; color: var(--text); }
+.oy-nav-item { height: 30px; gap: 8px; padding: 0 8px; border-radius: var(--radius-sm); font-size: 13px; line-height: 18px; color: var(--text); }
 .oy-nav-item .oy-icon { color: var(--text-muted); }
 .oy-nav-item[aria-current="page"] { font-weight: 400; background: var(--surface-pressed); }
 .oy-nav-item[aria-current="page"] .oy-icon { color: var(--text); stroke-width: inherit; }
-.oy-segmented { border-radius: var(--radius-md); }
-.oy-segmented .seg { border-radius: 9px; }
+.oy-segmented { padding: 2px; border-radius: var(--radius-sm); }
+.oy-segmented .seg { height: 26px; padding: 0 10px; border-radius: var(--radius-xs); }
+.oy-segmented .thumb { top: 2px; bottom: 2px; border-radius: var(--radius-xs); }
 .oy-segmented .seg[aria-selected="true"] { background: var(--control-thumb); box-shadow: var(--shadow-xs); }
 .oy-notice .dismiss { border-radius: var(--radius-xs); }
 
@@ -61,7 +62,8 @@ input, textarea, select { font: inherit; color: inherit; }
 .hx-mono { font-family: var(--font-mono); font-size: 13px; }
 .hx-plus { color: var(--status-positive); font-variant-numeric: tabular-nums; }
 .hx-minus { color: var(--danger); font-variant-numeric: tabular-nums; }
-.hx-positive { color: var(--status-positive); }
+/* Success reads as plain text: colour is kept for diffs and errors. */
+.hx-positive { color: var(--text); }
 .hx-warning { color: var(--warning); }
 .hx-danger { color: var(--danger); }
 .hx-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -97,68 +99,87 @@ input, textarea, select { font: inherit; color: inherit; }
   width: var(--sidebar-width);
   min-width: 0;
   min-height: 0;
-  padding: calc(8px + var(--titlebar-height)) 10px 10px;
+  padding: calc(4px + var(--titlebar-height)) 8px 8px;
 }
-.hx-sidebar-top { display: flex; flex-direction: column; gap: 4px; }
+/* The row beside the macOS window buttons: it drags the window and holds the sidebar toggle. */
+.hx-side-bar {
+  position: absolute; inset: 0 0 auto 0; height: var(--titlebar-height);
+  display: flex; align-items: center; padding-inline-start: 76px;
+  -webkit-app-region: drag;
+}
+.hx-side-bar button { -webkit-app-region: no-drag; width: 28px; height: 28px; color: var(--text-muted); }
+/* With the sidebar hidden, the header makes room for the window buttons. */
+:root[data-platform="darwin"][data-sidebar="hidden"] .hx-header { padding-inline-start: 76px; }
+.hx-sidebar-top { display: flex; flex-direction: column; gap: 6px; }
 .hx-nav { display: flex; flex-direction: column; gap: 2px; }
 .hx-project {
-  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px;
-  padding: 6px 10px; border-radius: var(--radius-sm); text-align: start;
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px;
+  padding: 4px 8px; border-radius: var(--radius-sm); text-align: start;
 }
 .hx-project:hover, .hx-project[aria-expanded="true"] { background: var(--surface-hover); }
 .hx-project > .oy-icon { color: var(--text-muted); }
 .hx-project .text { flex: 1; min-width: 0; }
-.hx-project .name { display: block; font-size: 14px; line-height: 18px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hx-project .path { display: block; font-size: 12px; line-height: 16px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hx-nav-trail { margin-inline-start: auto; font-size: 12px; color: var(--text-disabled); font-variant-numeric: tabular-nums; }
+.hx-project .name { display: block; font-size: 13px; line-height: 17px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-project .path { display: block; font-size: 11.5px; line-height: 15px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-nav-trail { margin-inline-start: auto; font-size: 11.5px; color: var(--text-disabled); font-variant-numeric: tabular-nums; }
 .hx-search {
-  display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 6px 0 10px;
+  display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 4px 0 8px;
   border-radius: var(--radius-sm); background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); color: var(--text-muted);
 }
 .hx-search:focus-within { box-shadow: inset 0 0 0 1px var(--text-muted); }
-.hx-search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: none; background: transparent; font-size: 14px; color: var(--text); }
+.hx-search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: none; background: transparent; font-size: 13px; color: var(--text); }
 .hx-search input::placeholder { color: var(--text-muted); }
-.hx-search .btn-ghost { width: 24px; height: 24px; padding: 0; border-radius: var(--radius-xs); }
+.hx-search .btn-ghost { width: 22px; height: 22px; padding: 0; border-radius: var(--radius-xs); }
 
-.hx-sessions { flex: 1; min-height: 0; overflow-y: auto; margin: 4px -10px 0; padding: 0 10px 10px; }
-.hx-side-head { margin: 18px 10px 4px; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--text-muted); }
-.hx-side-note { margin: 16px 10px 0; font-size: 13px; line-height: 18px; color: var(--text-muted); }
-.hx-session-list { display: flex; flex-direction: column; gap: 2px; }
+.hx-sessions { flex: 1; min-height: 0; overflow-y: auto; margin: 4px -8px 0; padding: 0 8px 8px; }
+.hx-side-head { margin: 16px 8px 4px; font-size: 11.5px; line-height: 16px; font-weight: 500; color: var(--text-muted); }
+.hx-side-note { margin: 16px 8px 0; font-size: 12.5px; line-height: 18px; color: var(--text-muted); }
+.hx-session-list { display: flex; flex-direction: column; gap: 1px; }
 .hx-session {
-  display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; padding: 0 10px;
-  border-radius: var(--radius-sm); font-size: 14px; line-height: 20px; color: var(--text); text-align: start;
+  display: flex; align-items: center; gap: 8px; width: 100%; height: 30px; padding: 0 8px;
+  border-radius: var(--radius-sm); font-size: 13px; line-height: 18px; color: var(--text); text-align: start;
 }
 .hx-session:hover { background: var(--surface-hover); }
 .hx-session[aria-current="page"] { background: var(--surface-pressed); }
 .hx-session .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hx-session .s { flex-shrink: 0; font-size: 12px; color: var(--text-disabled); font-variant-numeric: tabular-nums; }
+.hx-session .s { flex-shrink: 0; font-size: 11.5px; color: var(--text-muted); }
 .hx-session .s.is-waiting { color: var(--text); font-weight: 500; }
-.hx-side-foot { margin-top: auto; padding-top: 6px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 2px; }
+.hx-side-foot { margin-top: auto; padding-top: 4px; display: flex; flex-direction: column; gap: 2px; }
 
 /* ── conversation column ─────────────────────────────────────── */
 .hx-main { position: relative; flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; background: var(--bg); }
 .hx-scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; display: flex; flex-direction: column; }
 .hx-header {
   position: sticky; top: 0; z-index: 4; flex-shrink: 0;
-  display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 12px 8px 20px;
-  background: var(--bg); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 12px; height: calc(44px + var(--titlebar-height) / 4); padding: 0 8px 0 20px;
+  background: var(--bg);
 }
-.hx-header .heading { flex: 1; min-width: 0; }
-.hx-header .title { margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hx-header .sub { display: flex; align-items: center; gap: 12px; min-width: 0; font-size: 12px; line-height: 16px; color: var(--text-muted); white-space: nowrap; overflow: hidden; }
-.hx-header .sub > span { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
-.hx-header .sub > span.path { overflow: hidden; text-overflow: ellipsis; display: block; }
-.hx-header .actions { display: flex; gap: 4px; flex-shrink: 0; }
+/* One line: the title, then the folder and branch quietly after it. The title keeps its room; the rest gives way. */
+.hx-header .heading { flex: 1; min-width: 0; display: flex; align-items: center; gap: 14px; white-space: nowrap; }
+.hx-title { flex: 0 1 auto; min-width: 4em; display: inline-flex; align-items: center; gap: 4px; height: 28px; margin-inline-start: -8px; padding: 0 6px 0 8px; border-radius: var(--radius-sm); color: var(--text); }
+.hx-title:hover:not(:disabled), .hx-title[aria-expanded="true"] { background: var(--surface-hover); }
+.hx-title:disabled { cursor: default; }
+.hx-title h1 { min-width: 0; margin: 0; font-size: 13px; line-height: 18px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.hx-title > .oy-icon { flex-shrink: 0; color: var(--text-muted); }
+.hx-pane-btn { height: 28px; padding: 0 8px; gap: 6px; font-size: 12.5px; }
+.hx-pane-btn[aria-pressed="true"] { color: var(--text); background: var(--surface-hover); }
+.hx-pane-btn .stats { display: inline-flex; gap: 4px; font-size: 12px; }
+.hx-header .sub { flex: 0 10000 auto; min-width: 0; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; line-height: 16px; color: var(--text-muted); }
+.hx-header .sub > .oy-icon { flex-shrink: 0; }
+.hx-header .sub > .path { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.hx-header .actions { display: flex; gap: 2px; flex-shrink: 0; }
+.hx-header { transition: box-shadow var(--duration-quick) var(--ease-standard); }
+.hx-scroll[data-scrolled] .hx-header { box-shadow: 0 1px 0 var(--border); }
 
 .hx-column {
   width: 100%; max-width: var(--column-width); margin-inline: auto; flex: 1 0 auto;
-  padding: 28px var(--column-pad) 32px; display: flex; flex-direction: column; gap: 24px;
+  padding: 20px var(--column-pad) 32px; display: flex; flex-direction: column; gap: 24px;
 }
 .hx-column { font-size: 15px; line-height: 24px; }
 .hx-user { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 /* Corners stay at 12px so a one-line message never turns into a pill. */
 .hx-user .body {
-  max-width: 85%; padding: 10px 14px; border-radius: var(--radius-lg); background: var(--bubble);
+  max-width: 85%; padding: 8px 14px; border-radius: var(--radius-lg); background: var(--bubble);
   color: var(--text); text-align: start; white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .hx-user .refs { display: flex; flex-direction: column; gap: 2px; margin: 6px 0 0; padding: 0; list-style: none; white-space: normal; }
@@ -169,7 +190,9 @@ input, textarea, select { font: inherit; color: inherit; }
 .hx-user .refs button:hover { color: var(--text); }
 .hx-user .refs .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
 .hx-user .refs .lines { flex-shrink: 0; }
-.hx-user .time { font-size: 12px; line-height: 16px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+/* The time shows on hover, in room it always keeps, so nothing moves. */
+.hx-user .time { font-size: 11.5px; line-height: 16px; color: var(--text-muted); font-variant-numeric: tabular-nums; opacity: 0; transition: opacity var(--duration-quick) var(--ease-standard); }
+.hx-user:hover .time { opacity: 1; }
 .hx-turn { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 
 /* answer text */
@@ -187,7 +210,7 @@ input, textarea, select { font: inherit; color: inherit; }
 .hx-prose li > p + p { margin-top: 8px; }
 .hx-prose blockquote { padding-inline-start: 12px; border-inline-start: 3px solid var(--border); color: var(--text-muted); }
 .hx-prose hr { border: 0; border-top: 1px solid var(--border); }
-.hx-prose :not(pre) > code { font-family: var(--font-mono); font-size: 0.86em; padding: 1px 5px; border-radius: var(--radius-xs); background: var(--surface-muted); box-shadow: inset 0 0 0 1px var(--border); }
+.hx-prose :not(pre) > code { font-family: var(--font-mono); font-size: 0.84em; padding: 2px 5px; border-radius: 5px; background: var(--code-inline); }
 .hx-prose strong { font-weight: 600; }
 .hx-prose .hx-table { overflow-x: auto; }
 .hx-prose table { border-collapse: collapse; font-size: 14px; line-height: 20px; }
@@ -199,7 +222,7 @@ input, textarea, select { font: inherit; color: inherit; }
 
 /* reasoning and tool rows share the disclosure */
 .hx-disclose {
-  display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; min-height: 32px;
+  display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; min-height: 28px;
   padding: 0 8px; margin-inline-start: -8px; border-radius: var(--radius-sm);
   font-size: 14px; line-height: 20px; color: var(--text-muted);
 }
@@ -246,45 +269,51 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-output { max-height: 320px; overflow: auto; }
 
 /* code blocks */
-.hx-code { position: relative; min-width: 0; border-radius: var(--radius-md); background: var(--surface-muted); box-shadow: inset 0 0 0 1px var(--border); }
-.hx-code .bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; padding: 4px 4px 0 16px; font-size: 12px; line-height: 16px; color: var(--text-muted); }
-.hx-code pre { margin: 0; padding: 4px 16px 12px; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; line-height: 20px; color: var(--text); white-space: pre; tab-size: 4; }
-.hx-code pre.is-plain { padding-top: 12px; }
+.hx-code { position: relative; min-width: 0; border-radius: var(--radius-md); background: var(--code-bg); box-shadow: inset 0 0 0 1px var(--border); }
+.hx-code .bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; padding: 2px 2px 0 14px; font-size: 12px; line-height: 16px; color: var(--text-muted); }
+.hx-code .bar .hx-icon-btn { width: 28px; height: 28px; }
+.hx-code pre { margin: 0; padding: 2px 14px 12px; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; line-height: 20px; color: var(--text); white-space: pre; tab-size: 4; }
+.hx-code pre.is-plain { padding-top: 10px; padding-bottom: 10px; }
 .hx-code pre.is-wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
-:is(.hx-code, .hx-viewer) .tok-k { color: var(--code-keyword); }
-:is(.hx-code, .hx-viewer) .tok-c { color: var(--text-muted); }
-:is(.hx-code, .hx-viewer) .tok-s { color: var(--code-string); }
-:is(.hx-code, .hx-viewer) .tok-n { color: var(--code-number); }
+:is(.hx-code, .hx-viewer, .hx-lib-card) .tok-k { color: var(--code-keyword); }
+:is(.hx-code, .hx-viewer, .hx-lib-card) .tok-c { color: var(--text-muted); }
+:is(.hx-code, .hx-viewer, .hx-lib-card) .tok-s { color: var(--code-string); }
+:is(.hx-code, .hx-viewer, .hx-lib-card) .tok-n { color: var(--code-number); }
 .hx-copy { position: relative; }
 .hx-copy .tick-draw, .hx-copy .copy-glyph { position: absolute; inset: 0; margin: auto; }
 
 /* errors and notices in the transcript */
-.hx-error { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border-radius: var(--radius-md); background: var(--surface-muted); }
-.hx-error > .oy-icon { color: var(--danger); margin-top: 1px; }
+.hx-error { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: var(--radius-md); box-shadow: inset 0 0 0 1px var(--border); }
+.hx-error > .oy-icon { color: var(--danger); margin-top: 4px; }
 .hx-error .text { flex: 1; min-width: 0; }
 .hx-error .title { font-weight: 500; }
 .hx-error .body { margin-top: 2px; font-size: 14px; line-height: 20px; color: var(--text-muted); }
 .hx-error .detail { margin: 8px 0 0; font-family: var(--font-mono); font-size: 12px; line-height: 18px; color: var(--text-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
 .hx-error .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.hx-error .acts :is(.btn-secondary, .btn-tonal) { height: 32px; padding: 0 12px; font-size: 14px; }
 .hx-notice { display: flex; align-items: center; gap: 8px; min-height: 32px; font-size: 14px; line-height: 20px; color: var(--text-muted); }
 
 /* new conversation and empty pages */
 .hx-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 64px 24px; text-align: center; }
-.hx-empty h2 { margin: 12px 0 0; font-size: 17px; line-height: 24px; font-weight: 600; letter-spacing: -0.01em; }
-.hx-empty p { max-width: 24rem; color: var(--text-muted); }
+.hx-empty h2 { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -0.01em; }
+.hx-empty p { max-width: 26rem; font-size: 14px; line-height: 20px; color: var(--text-muted); }
 .hx-empty .btn-primary { margin-top: 16px; }
-.hx-empty .oy-doodle { stroke-width: 2.4; }
+
+/* A new conversation opens with the greeting and the field together in the middle, like Claude Code. */
+.hx-greeting { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 0 0 4px; text-align: center; }
+.hx-greeting h2 { margin: 0; font-size: 26px; line-height: 34px; font-weight: 500; letter-spacing: -0.02em; }
+.hx-greeting p { max-width: 28rem; font-size: 14px; line-height: 20px; color: var(--text-muted); }
+.hx-scroll-content.is-new .hx-column { flex: 0 0 auto; margin-top: auto; padding-bottom: 16px; }
+.hx-scroll-content.is-new .hx-composer { position: relative; margin-bottom: auto; padding-bottom: 12vh; background: none; }
 
 /* ── composer ────────────────────────────────────────────────── */
-.hx-composer { position: sticky; bottom: 0; z-index: 4; flex-shrink: 0; padding: 8px var(--column-pad) 14px; background: linear-gradient(to bottom, transparent, var(--bg) 16px); }
+.hx-composer { position: sticky; bottom: 0; z-index: 4; flex-shrink: 0; padding: 20px var(--column-pad) 16px; background: linear-gradient(to bottom, transparent, var(--bg) 28px); }
 .hx-composer-inner { position: relative; max-width: calc(var(--column-width) - 2 * var(--column-pad)); margin-inline: auto; display: flex; flex-direction: column; gap: 8px; container-type: inline-size; }
 .hx-changes.is-artifacts { flex-basis: var(--artifacts-width); }
 .hx-field {
-  border: 1px solid var(--border-strong); border-radius: var(--radius-xl); background: var(--field); box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--field); box-shadow: var(--shadow-field);
   transition: border-color var(--duration-quick) var(--ease-standard);
 }
-.hx-field:focus-within { border-color: color-mix(in oklch, var(--text) 28%, transparent); }
+.hx-field:focus-within { border-color: color-mix(in oklch, var(--text) 30%, transparent); }
 .hx-refs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 10px 12px 0; list-style: none; }
 /* References are small squared cards, never pills. */
 .hx-ref {
@@ -299,28 +328,32 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-ref .remove { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 4px; color: var(--text-muted); }
 .hx-ref .remove:hover { color: var(--text); background: var(--surface-hover); }
 .hx-field textarea {
-  display: block; width: 100%; min-height: 48px; max-height: 232px; padding: 14px 16px 4px;
+  display: block; width: 100%; min-height: 48px; max-height: 232px; padding: 12px 14px 2px;
   field-sizing: content; border: 0; outline: none; resize: none; background: transparent;
   font-size: 15px; line-height: 22px; color: var(--text);
 }
 .hx-field textarea::placeholder { color: var(--text-muted); }
 .hx-field textarea:focus-visible { outline: none; }
-.hx-field .bar { display: flex; align-items: center; gap: 2px; padding: 4px 8px 8px; }
+.hx-field .bar { display: flex; align-items: center; gap: 2px; padding: 4px 6px 6px; }
 .hx-field .bar .grow { flex: 1; }
-.hx-field .bar .btn-ghost { padding: 0 8px; font-size: 13px; }
+.hx-field .bar .btn-ghost { height: 28px; padding: 0 8px; gap: 5px; font-size: 12.5px; }
 .hx-field .bar .btn-ghost .label { max-width: 12rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-field .bar .btn-ghost .hx-quiet { color: var(--text-muted); font-weight: 400; }
 /* Phrases sit apart with space, never a separator character. */
 .hx-hint { display: inline-flex; gap: 12px; font-size: 12px; line-height: 16px; color: var(--text-muted); white-space: nowrap; }
-.hx-send { width: 32px; height: 32px; padding: 0; flex-shrink: 0; border-radius: var(--radius-md); }
-.hx-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; padding: 0 8px; font-size: 12px; line-height: 16px; color: var(--text-disabled); font-variant-numeric: tabular-nums; }
-.hx-meta b { font-weight: 500; color: var(--text-muted); }
+.hx-send { width: 28px; height: 28px; padding: 0; flex-shrink: 0; border-radius: var(--radius-sm); }
+.hx-send:disabled { color: var(--text-disabled); background: var(--surface-hover); }
+.hx-usage { display: grid; place-items: center; width: 24px; height: 28px; margin-inline-end: 2px; cursor: default; }
+.hx-usage circle { fill: none; stroke-width: 2; }
+.hx-usage .track { stroke: var(--border-strong); }
+.hx-usage .fill { stroke: var(--text-muted); stroke-linecap: round; }
 
 /* jump to latest floats above the composer, so it never moves anything */
 .hx-jump {
   position: absolute; z-index: 5; bottom: calc(100% + 12px); left: 50%; translate: -50% 0;
-  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px;
-  border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow-md);
-  font-size: 13px; font-weight: 500; color: var(--text);
+  display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px;
+  border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface); box-shadow: var(--shadow-menu);
+  font-size: 12.5px; font-weight: 500; color: var(--text);
   transition: opacity var(--duration-quick) var(--ease-standard), visibility var(--duration-quick);
 }
 .hx-jump:hover { background: var(--surface-hover); }
@@ -328,105 +361,124 @@ button.hx-tool:hover { background: var(--surface-hover); }
 
 /* ── permission panel sits above the field ───────────────────── */
 .hx-perm {
-  border: 1px solid var(--border-strong); border-radius: var(--radius-xl); background: var(--surface); box-shadow: var(--shadow-md);
-  padding: 16px; display: flex; flex-direction: column; gap: 12px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-field);
+  padding: 12px 12px 10px 14px; display: flex; flex-direction: column; gap: 10px;
   animation: hx-perm-in var(--duration-base) var(--ease-out);
 }
-@keyframes hx-perm-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-.hx-perm .q { display: flex; align-items: flex-start; gap: 12px; }
-.hx-perm .q > .oy-icon { color: var(--accent-ink); margin-top: 2px; }
+@keyframes hx-perm-in { from { opacity: 0; } to { opacity: 1; } }
+.hx-perm .q { display: flex; align-items: flex-start; gap: 10px; }
+.hx-perm .q > .oy-icon { color: var(--text-muted); margin-top: 1px; }
 .hx-perm .q .text { flex: 1; min-width: 0; }
-.hx-perm h3 { margin: 0; font-size: 15px; line-height: 22px; font-weight: 600; }
-.hx-perm .why { margin-top: 2px; font-size: 13px; line-height: 18px; color: var(--text-muted); overflow-wrap: anywhere; }
+.hx-perm h3 { margin: 0; font-size: 13.5px; line-height: 18px; font-weight: 600; }
+.hx-perm .why { margin-top: 2px; font-size: 12px; line-height: 16px; color: var(--text-muted); overflow-wrap: anywhere; }
 .hx-perm .why .hx-mono { font-size: 12px; }
-.hx-perm .box { max-height: 236px; overflow: auto; padding: 8px 0; border-radius: var(--radius-md); background: var(--surface-muted); }
-.hx-perm .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* The file and its line counts sit apart with space, no separator character. */
+.hx-perm-file { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
+.hx-perm-file .stats { display: inline-flex; gap: 4px; font-variant-numeric: tabular-nums; }
+.hx-perm .box { max-height: 236px; overflow: auto; padding: 6px 0; border-radius: var(--radius-sm); background: var(--code-bg); box-shadow: inset 0 0 0 1px var(--border); }
+.hx-perm .hx-code { border-radius: var(--radius-sm); }
+.hx-perm .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.hx-perm .acts :is(.btn-primary, .btn-secondary, .btn-tonal) { height: 28px; padding: 0 10px; }
 .hx-perm .acts .grow { flex: 1; }
 .hx-perm-always { min-width: 0; max-width: 100%; }
 .hx-perm-always > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── side panel tabs ─────────────────────────────────────────── */
 /* Both tabs keep the same weight, so switching never changes their width. */
-.hx-tabs { display: flex; gap: 2px; margin-inline: -8px 6px; }
+.hx-tabs { display: flex; gap: 2px; margin-inline: -6px 6px; }
 .hx-tabs button {
-  height: 28px; padding: 0 8px; border-radius: var(--radius-sm); font-size: 14px; line-height: 20px; font-weight: 600;
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; height: 28px; padding: 0 8px; border-radius: var(--radius-sm); font-size: 13px; line-height: 18px; font-weight: 600;
   color: var(--text-muted); transition: background-color var(--duration-quick) var(--ease-standard), color var(--duration-quick) var(--ease-standard);
 }
 .hx-tabs button:hover { color: var(--text); background: var(--surface-hover); }
-.hx-tabs button[aria-selected="true"] { color: var(--text); }
+.hx-tabs button[aria-selected="true"] { color: var(--text); background: var(--surface-hover); }
+.hx-tabs .hx-sketch { flex-shrink: 0; }
 
 /* ── files ───────────────────────────────────────────────────── */
 .hx-files-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.hx-files-bar { flex-shrink: 0; display: flex; align-items: center; gap: 4px; padding: 10px 10px 6px 12px; }
-.hx-files-bar .hx-icon-btn { width: 28px; height: 28px; color: var(--text-muted); }
+.hx-files-bar { flex-shrink: 0; display: flex; align-items: center; padding: 10px 10px 6px; }
+/* A filled field with no outline, the way an editor's quick filter looks; focus adds one hairline. */
 .hx-files-search {
-  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 6px 0 10px;
-  border-radius: var(--radius-sm); background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); color: var(--text-muted);
-  transition: box-shadow var(--duration-quick) var(--ease-standard);
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 5px 0 10px;
+  border-radius: var(--radius-sm); background: var(--surface-hover); color: var(--text-muted);
+  transition: background-color var(--duration-quick) var(--ease-standard), box-shadow var(--duration-quick) var(--ease-standard);
 }
-.hx-files-search:focus-within { box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--text) 28%, transparent); }
+.hx-files-search:focus-within { background: var(--bg); box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--text) 24%, transparent); }
 .hx-files-search input { flex: 1; min-width: 0; border: 0; outline: none; background: none; font-size: 13px; color: var(--text); }
+.hx-files-search input::placeholder { color: var(--text-muted); }
 .hx-files-search input::-webkit-search-cancel-button { display: none; }
-.hx-files-clear { display: grid; place-items: center; width: 20px; height: 20px; border-radius: var(--radius-xs); color: var(--text-muted); }
-.hx-files-clear:hover { color: var(--text); background: var(--surface-hover); }
+.hx-files-clear { flex-shrink: 0; display: grid; place-items: center; width: 22px; height: 22px; border-radius: var(--radius-xs); color: var(--text-muted); }
+.hx-files-clear:hover { color: var(--text); background: color-mix(in oklch, var(--text) 8%, transparent); }
 .hx-tree { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 6px 16px; }
 .hx-files-note { padding: 12px 14px; font-size: 13px; line-height: 18px; color: var(--text-muted); }
 .hx-tree-row {
-  display: flex; align-items: center; gap: 6px; width: 100%; min-height: 28px; padding-inline-end: 4px;
-  border-radius: var(--radius-sm); font-size: 13px; line-height: 18px; color: var(--text); text-align: start;
+  position: relative; display: flex; align-items: center; gap: 6px; width: 100%; min-height: 26px; padding-inline-end: 2px;
+  border-radius: var(--radius-xs); font-size: 13px; line-height: 18px; color: var(--text); text-align: start;
   transition: background-color var(--duration-quick) var(--ease-standard);
 }
 .hx-tree-row:hover { background: var(--surface-hover); }
+.hx-tree-row .guides { position: absolute; inset: 0; pointer-events: none; }
+.hx-tree-row .guides > span { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); }
 .hx-tree-row .hx-chev { flex-shrink: 0; color: var(--text-muted); }
+.hx-tree-row .kind { flex-shrink: 0; color: var(--text-muted); }
+
+.hx-tree-row .gap { flex-shrink: 0; width: 14px; }
 .hx-tree-row .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hx-tree-row.is-file .open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; min-height: 28px; padding-inline-start: 0; text-align: start; }
-.hx-tree-row.is-file .open > .oy-icon { flex-shrink: 0; color: var(--text-muted); }
+.hx-tree-row.is-file .open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; min-height: 26px; padding-inline-start: 0; text-align: start; }
 .hx-tree-row.is-file .name { flex: 0 1 auto; }
+.hx-tree-row.is-changed .name { font-weight: 500; }
 .hx-tree-row .dir { flex: 0 10000 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-muted); }
-.hx-tree-row .n { flex-shrink: 0; margin-inline-start: auto; padding-inline-start: 8px; display: inline-flex; gap: 6px; font-size: 12px; }
+.hx-tree-row .n { flex-shrink: 0; margin-inline-start: auto; padding-inline-start: 8px; display: inline-flex; gap: 6px; font-size: 12px; font-variant-numeric: tabular-nums; }
 /* The pointer stays out of the way until the row is hovered or focused. */
-.hx-tree-row .point { width: 24px; height: 24px; flex-shrink: 0; color: var(--text-muted); opacity: 0; transition: opacity var(--duration-quick) var(--ease-standard); }
+.hx-tree-row .point { width: 22px; height: 22px; flex-shrink: 0; color: var(--text-muted); opacity: 0; transition: opacity var(--duration-quick) var(--ease-standard); }
 .hx-tree-row:hover .point, .hx-tree-row .point:focus-visible { opacity: 1; }
 .hx-tree-row .point:hover { color: var(--text); }
-.hx-viewer-bar { flex-shrink: 0; display: flex; align-items: center; gap: 6px; min-height: 48px; padding: 8px 10px 8px 8px; border-bottom: 1px solid var(--border); }
+.hx-viewer-bar { flex-shrink: 0; display: flex; align-items: center; gap: 4px; min-height: 44px; padding: 6px 8px 6px 6px; border-bottom: 1px solid var(--border); }
 .hx-viewer-bar .hx-icon-btn { width: 28px; height: 28px; color: var(--text-muted); }
 .hx-viewer-bar .p { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
 .hx-viewer-bar .p > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .hx-viewer-bar .name { flex: 0 1 auto; font-size: 13px; font-weight: 500; }
 .hx-viewer-bar .dir { flex: 0 10000 auto; font-size: 12px; color: var(--text-muted); }
-.hx-viewer-bar .hx-point { flex-shrink: 0; height: 28px; padding: 0 10px; gap: 6px; font-size: 13px; }
-.hx-viewer { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 0 24px; }
-.hx-code-lines { font-family: var(--font-mono); font-size: 12.5px; line-height: 20px; }
-.hx-code-lines .l { display: grid; grid-template-columns: 52px minmax(0, 1fr); }
+.hx-viewer-bar .hx-point { flex-shrink: 0; height: 28px; padding: 0 8px; gap: 6px; font-size: 13px; color: var(--text-muted); }
+.hx-viewer-bar .hx-point:hover:not(:disabled) { color: var(--text); }
+.hx-viewer-bar .hx-point .hx-reserve > * { justify-content: end; }
+/* Code keeps its lines: long ones scroll sideways while the numbers stay pinned. */
+.hx-viewer { flex: 1; min-height: 0; overflow: auto; padding: 8px 0 24px; }
+.hx-code-lines { width: max-content; min-width: 100%; font-family: var(--font-mono); font-size: 12.5px; line-height: 20px; }
+.hx-code-lines .l { display: grid; grid-template-columns: 48px auto; }
 .hx-code-lines .num {
-  align-self: start; height: 20px; padding-inline-end: 14px; text-align: end; font: inherit; font-size: 12px; color: var(--text-disabled);
+  position: sticky; inset-inline-start: 0; align-self: stretch; height: auto; min-height: 20px; padding-inline-end: 14px; text-align: end;
+  background: var(--bg); font: inherit; font-size: 12px; color: var(--text-disabled);
   font-variant-numeric: tabular-nums; user-select: none; cursor: pointer;
 }
 .hx-code-lines .num:hover { color: var(--text); }
-.hx-code-lines .code { padding-inline-end: 16px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); }
+.hx-code-lines .code { padding-inline-end: 24px; white-space: pre; color: var(--text); }
 /* Picked lines take a cool tint, so they never read as a deletion in a diff. */
 .hx-code-lines .l.is-picked { background: color-mix(in oklch, var(--status-info) 12%, transparent); }
-.hx-code-lines .l.is-picked .num { color: var(--status-info); }
+.hx-code-lines .l.is-picked .num { color: var(--status-info); background: color-mix(in oklch, var(--status-info) 12%, var(--bg)); }
 
 /* ── changes panel ───────────────────────────────────────────── */
 .hx-changes { position: relative; flex: 0 0 var(--changes-width); min-width: 0; display: flex; flex-direction: column; background: var(--bg); border-inline-start: 1px solid var(--border); container-type: inline-size; }
-.hx-changes-head { flex-shrink: 0; display: flex; align-items: center; gap: 4px; min-height: 52px; padding: 8px 10px 8px 20px; border-bottom: 1px solid var(--border); }
+.hx-changes-head { flex-shrink: 0; display: flex; align-items: center; gap: 4px; height: calc(44px + var(--titlebar-height) / 4); padding: 0 8px 0 16px; border-bottom: 1px solid var(--border); }
 .hx-changes-head h2 { margin: 0 8px 0 0; font-size: 14px; line-height: 20px; font-weight: 600; white-space: nowrap; }
-.hx-changes-head .sum { display: inline-flex; gap: 10px; min-width: 0; font-size: 13px; line-height: 18px; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* Nothing in the title bar may wrap: a narrow panel drops the summary and the revert label instead. */
+.hx-changes-head > * { flex-shrink: 0; white-space: nowrap; }
+.hx-changes-head .sum { display: inline-flex; gap: 10px; flex-shrink: 1; min-width: 0; overflow: hidden; font-size: 13px; line-height: 18px; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .hx-changes-head .stats { display: inline-flex; gap: 6px; }
 .hx-changes-head .grow { flex: 1; }
-.hx-changes-head .hx-commit { height: 28px; padding: 0 10px; margin-inline: 4px 2px; font-size: 13px; }
+.hx-changes-head .hx-commit { height: 26px; padding: 0 10px; margin-inline: 4px 2px; font-size: 12.5px; }
 .hx-changes-head .hx-icon-btn { width: 28px; height: 28px; color: var(--text-muted); }
 .hx-changes-head .hx-icon-btn:hover:not(:disabled) { color: var(--text); }
 .hx-changes-head .hx-revert { height: 28px; padding: 0 8px; gap: 6px; font-size: 13px; color: var(--text-muted); }
 .hx-changes-head .hx-revert:hover:not(:disabled) { color: var(--text); }
-@container (max-width: 420px) { .hx-changes-head .hx-revert .label { display: none; } }
-@container (max-width: 380px) { .hx-changes-head .sum { display: none; } }
+@container (max-width: 560px) { .hx-changes-head .sum .n { display: none; } }
+@container (max-width: 520px) { .hx-changes-head .hx-revert .label { display: none; } }
+@container (max-width: 360px) { .hx-changes-head .sum { display: none; } }
 .hx-changes-list { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; padding-bottom: 24px; }
 .hx-cfile + .hx-cfile { border-top: 1px solid var(--border); }
 .hx-cfile-head {
   position: sticky; top: 0; z-index: 1;
-  display: flex; align-items: center; gap: 8px; width: 100%; height: 40px; padding: 0 16px 0 14px;
+  display: flex; align-items: center; gap: 8px; width: 100%; height: 36px; padding: 0 14px 0 12px;
   background: var(--bg); border-bottom: 1px solid var(--border); text-align: start; color: var(--text);
 }
 .hx-cfile-head[aria-expanded="false"] { border-bottom-color: transparent; }
@@ -440,13 +492,13 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-cfile-head .dir { flex: 0 10000 auto; font-size: 12px; color: var(--text-muted); }
 .hx-cfile-head .note { flex-shrink: 0; font-size: 12px; color: var(--text-muted); }
 .hx-cfile-head .n { flex-shrink: 0; display: inline-flex; gap: 6px; font-size: 12px; }
-.hx-cfile .hx-diff { padding-block: 6px; }
+:is(.hx-cfile, .hx-artifact-diff) .hx-diff { padding-block: 6px; }
 .hx-cfile-body { min-width: 0; }
 /* The panel is narrow, so long lines wrap under their own text instead of scrolling sideways. */
-.hx-cfile .hx-diff { min-width: 0; }
-.hx-cfile .hx-diff .l { grid-template-columns: 36px 36px 18px minmax(0, 1fr); }
-.hx-cfile .hx-diff.is-whole .l { grid-template-columns: 44px minmax(0, 1fr); }
-.hx-cfile .hx-diff .l > :last-child { white-space: pre-wrap; overflow-wrap: anywhere; }
+:is(.hx-cfile, .hx-artifact-diff) .hx-diff { min-width: 0; }
+:is(.hx-cfile, .hx-artifact-diff) .hx-diff .l { grid-template-columns: 36px 36px 18px minmax(0, 1fr); }
+:is(.hx-cfile, .hx-artifact-diff) .hx-diff.is-whole .l { grid-template-columns: 44px minmax(0, 1fr); }
+:is(.hx-cfile, .hx-artifact-diff) .hx-diff .l > :last-child { white-space: pre-wrap; overflow-wrap: anywhere; }
 .hx-diff { font-family: var(--font-mono); font-size: 12.5px; line-height: 20px; min-width: max-content; }
 .hx-diff .l { display: grid; grid-template-columns: 40px 40px 20px 1fr; padding-inline-end: 16px; white-space: pre; color: var(--text); }
 .hx-diff .l .a, .hx-diff .l .b { padding-inline-end: 8px; text-align: end; font-size: 12px; color: var(--text-disabled); user-select: none; font-variant-numeric: tabular-nums; }
@@ -459,32 +511,31 @@ button.hx-tool:hover { background: var(--surface-hover); }
 /* A whole new or deleted file reads as plain code: one line-number column, no marks or tint. */
 .hx-diff.is-whole .l { grid-template-columns: 48px 1fr; background: none; }
 .hx-diff.is-whole .l .b { padding-inline-end: 16px; }
-.hx-changes-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 24px; text-align: center; font-size: 14px; line-height: 20px; color: var(--text-muted); }
+.hx-changes-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 24px; text-align: center; font-size: 13px; line-height: 18px; color: var(--text-muted); }
 
 /* ── menus and dialogs ───────────────────────────────────────── */
-.hx-menu { position: fixed; animation-name: menu-in; }
-.hx-menu[data-side="top"] { transform-origin: bottom; animation-name: hx-menu-up; }
-@keyframes hx-menu-up { from { opacity: 0; transform: translateY(4px) scale(0.97); } to { opacity: 1; transform: none; } }
+.hx-menu { position: fixed; max-height: min(480px, calc(100vh - 96px)); animation-name: hx-fade-in; }
 .hx-menu .oy-menu-item { text-align: start; }
-.hx-menu .oy-menu-item .check { width: 16px; height: 16px; color: var(--accent-ink); visibility: hidden; }
+.hx-menu .oy-menu-item .check { width: 14px; height: 14px; color: var(--text); visibility: hidden; }
 .hx-menu .oy-menu-item[aria-checked="true"] .check { visibility: visible; }
-.hx-menu .oy-menu-item.has-desc { align-items: flex-start; padding-block: 8px; }
-.hx-menu .oy-menu-item.has-desc .check { margin-top: 3px; }
-.hx-menu .oy-menu-item .desc { display: block; font-size: 13px; line-height: 18px; font-weight: 400; color: var(--text-muted); }
+.hx-menu .oy-menu-item.has-desc { align-items: flex-start; padding-block: 6px; }
+.hx-menu .oy-menu-item.has-desc .check { margin-top: 2px; }
+.hx-menu .oy-menu-item .desc { display: block; font-size: 12px; line-height: 16px; font-weight: 400; color: var(--text-muted); }
 .hx-menu .oy-menu-item .sub { display: block; font-size: 12px; line-height: 16px; font-weight: 400; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hx-menu .oy-menu-item.is-danger { color: var(--danger); }
 .hx-menu .oy-menu-item:disabled { opacity: 0.45; cursor: default; background: none; }
 .hx-menu .oy-menu-item > .oy-icon:first-child { color: var(--text-muted); }
 .hx-menu .oy-menu-item.is-danger > .oy-icon:first-child { color: var(--danger); }
 .hx-menu .oy-menu-item:focus-visible { outline-offset: -2px; }
+.hx-menu-label { padding: 6px 8px 2px; font-size: 11.5px; line-height: 16px; color: var(--text-muted); }
 .modal-card .modal-body + .oy-field-label, .modal-card .modal-body + div { margin-top: 16px; }
 .modal-card .hx-modal-error { margin-top: 8px; font-size: 13px; line-height: 18px; color: var(--danger); white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* ── settings ────────────────────────────────────────────────── */
 .hx-back {
-  display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; height: 32px;
-  padding: 0 12px 0 8px; margin: 4px 0 12px; border-radius: var(--radius-md);
-  font-size: 14px; font-weight: 400; color: var(--text-muted);
+  display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; height: 30px;
+  padding: 0 10px 0 6px; margin: 4px 0 10px; border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 400; color: var(--text-muted);
 }
 .hx-back:hover { background: var(--surface-hover); color: var(--text); }
 .hx-settings-nav { display: flex; flex-direction: column; gap: 2px; }
@@ -494,33 +545,42 @@ button.hx-tool:hover { background: var(--surface-hover); }
   border-bottom: 1px solid transparent; transition: border-color var(--duration-quick) var(--ease-standard);
 }
 .hx-page-head.is-scrolled { border-bottom-color: var(--border); }
-.hx-page-head .in { max-width: var(--column-width); margin-inline: auto; padding: calc(28px + var(--titlebar-height) / 2) 32px 12px; }
-.hx-page-head h1 { margin: 0; font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -0.01em; }
-.hx-page-body { max-width: var(--column-width); margin-inline: auto; padding: 16px 32px 96px; }
-.hx-group { scroll-margin-top: 96px; }
-.hx-group + .hx-group { margin-top: 36px; }
-.hx-group-head { margin: 0 0 4px; font-size: 13px; line-height: 18px; font-weight: 600; color: var(--text-muted); }
-.hx-fieldset { display: flex; flex-direction: column; gap: 16px; padding: 12px 0 8px; }
+.hx-page-head .in { max-width: 44rem; margin-inline: auto; padding: calc(24px + var(--titlebar-height) / 2) 32px 10px; }
+.hx-page-head h1 { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -0.01em; }
+.hx-page-body { max-width: 44rem; margin-inline: auto; padding: 12px 32px 96px; }
+.hx-group { scroll-margin-top: 88px; }
+.hx-group + .hx-group { margin-top: 28px; }
+.hx-group-head { margin: 0 0 6px; font-size: 13px; line-height: 18px; font-weight: 600; color: var(--text); }
+/* Each group is one bordered block of rows, the way Claude Code lays out its settings. */
+.hx-group > .oy-section, .hx-group > .hx-fieldset, .hx-card { padding-inline: 14px; border-radius: var(--radius-md); background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); }
+.hx-fieldset { display: flex; flex-direction: column; gap: 14px; padding: 14px 0; }
+.hx-page .oy-section > .oy-row + .oy-row::before { inset-inline: 0; }
+.hx-page .oy-row { min-height: 48px; padding: 8px 0; gap: 16px; }
+.hx-page .oy-row .title { font-size: 13px; line-height: 18px; font-weight: 500; }
+.hx-page .oy-row .desc { font-size: 12px; line-height: 16px; }
+.hx-page .oy-field-label { font-size: 12.5px; margin-bottom: 6px; }
+.hx-page .oy-field-hint { font-size: 12px; line-height: 16px; }
 .hx-field-row { display: flex; gap: 8px; }
 .hx-field-row .input-base { flex: 1; min-width: 0; }
-.hx-field-row :is(.btn-secondary, .btn-primary) { height: 36px; flex-shrink: 0; }
+.hx-field-row :is(.btn-secondary, .btn-primary) { height: 32px; flex-shrink: 0; }
 .hx-field-hint-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.hx-text-btn { flex-shrink: 0; margin-top: 6px; font-size: 13px; line-height: 18px; font-weight: 500; color: var(--danger); border-radius: var(--radius-xs); }
+.hx-text-btn { flex-shrink: 0; margin-top: 6px; font-size: 12px; line-height: 18px; font-weight: 500; color: var(--danger); border-radius: var(--radius-xs); }
 .hx-text-btn:hover { text-decoration: underline; text-underline-offset: 3px; }
-.hx-test-line { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: 14px; line-height: 20px; }
+.hx-test-line { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: 13px; line-height: 18px; }
 .hx-test-line .st { display: inline-flex; gap: 6px; }
-.hx-row-control { flex-shrink: 0; width: 200px; min-height: 36px; }
+.hx-row-control { flex-shrink: 0; width: 200px; min-height: 32px; }
 .oy-row .trail { display: inline-flex; align-items: center; gap: 8px; }
-.hx-allowed { display: flex; flex-direction: column; gap: 8px; padding: 0 0 14px; }
+.hx-allowed { display: flex; flex-direction: column; gap: 10px; padding: 0 0 14px; }
+.hx-allowed-list { border-top: 1px solid var(--border); }
 .hx-allowed-list { display: flex; flex-direction: column; }
-.hx-allowed-item { display: flex; align-items: center; gap: 8px; min-height: 40px; padding-inline-start: 2px; border-bottom: 1px solid var(--border); }
+.hx-allowed-item { display: flex; align-items: center; gap: 8px; min-height: 34px; padding-inline-start: 2px; border-bottom: 1px solid var(--border); }
 .hx-allowed-item:last-child { border-bottom: 0; }
 .hx-allowed-item .hx-mono { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .hx-allowed-item .hx-icon-btn { color: var(--text-muted); opacity: 0.6; transition: opacity var(--duration-quick) var(--ease-standard), color var(--duration-quick) var(--ease-standard), background-color var(--duration-quick) var(--ease-standard); }
 .hx-allowed-item:hover .hx-icon-btn, .hx-allowed-item .hx-icon-btn:focus-visible { opacity: 1; }
 .hx-allowed-add { display: flex; gap: 8px; }
-.hx-allowed-add .input-base { flex: 1; min-width: 0; min-height: 36px; padding-block: 7px; font-family: var(--font-mono); font-size: 13px; }
-.hx-allowed-add .btn-secondary { height: 36px; }
+.hx-allowed-add .input-base { flex: 1; min-width: 0; min-height: 32px; padding-block: 6px; font-family: var(--font-mono); font-size: 12.5px; }
+.hx-allowed-add .btn-secondary { height: 32px; }
 
 /* ── motion ──────────────────────────────────────────────────── */
 /* Small and quick, only where something arrives, leaves or changes state. */
@@ -543,7 +603,7 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-test-result .st + .st { animation-delay: 60ms; }
 .hx-test-result.is-stale { opacity: 0.4; }
 .hx-count { display: inline-block; text-align: end; }
-:is(.hx-session, .hx-project, .hx-cfile-head, .hx-disclose, .hx-back, .oy-nav-item, .oy-menu-item, .hx-icon-btn, .hx-search) {
+:is(.hx-session, .hx-project, .hx-cfile-head, .hx-disclose, .hx-back, .oy-nav-item, .oy-menu-item, .hx-icon-btn, .hx-search, .hx-artifact-row) {
   transition: background-color var(--duration-quick) var(--ease-standard), color var(--duration-quick) var(--ease-standard), box-shadow var(--duration-quick) var(--ease-standard);
 }
 .hx-send { transition: background-color var(--duration-quick) var(--ease-standard), opacity var(--duration-quick) var(--ease-standard), transform var(--duration-quick) var(--ease-standard); }
@@ -603,65 +663,85 @@ button.hx-tool:hover { background: var(--surface-hover); }
 }
 .hx-scroll-content { flex: 1 0 auto; display: flex; flex-direction: column; }
 .oy-icon.hx-fill { fill: currentColor; stroke: none; }
-.hx-version { margin-top: 32px; font-size: 13px; line-height: 18px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.hx-version { margin-top: 28px; font-size: 12px; line-height: 18px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .hx-search input::-webkit-search-cancel-button { display: none; }
 
+/* Dialogs fade in where they sit; nothing floats up into place. */
+.modal-shell, .modal-shell-wide { animation-name: hx-fade-in; }
+
+/* Dialogs: a compact card, the title at 16px, actions at the row height used everywhere else. */
+.modal-card { padding: 20px; border-radius: var(--radius-lg); border-color: var(--border-strong); box-shadow: var(--shadow-lg); }
+.modal-card.is-dialog { border-radius: var(--radius-lg); }
+.modal-title { margin-bottom: 6px; font-size: 16px; line-height: 22px; letter-spacing: -0.01em; }
+.modal-body { font-size: 13px; line-height: 19px; }
+.oy-modal-actions { margin-top: 20px; }
+.modal-overlay { -webkit-backdrop-filter: none; backdrop-filter: none; }
 /* ── artifacts ───────────────────────────────────────────────── */
-/* The card in the conversation: a tile with the kind of thing, its title and what it is, then quick actions. */
+/* The card in the conversation: one quiet outlined button with the kind of thing, its title and a line about it. */
 .hx-artifact-card {
-  display: flex; align-items: center; gap: 4px; width: min(100%, 28rem); min-height: 64px; padding-inline-end: 8px;
-  border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--surface);
+  display: flex; align-items: center; gap: 12px; width: min(100%, 24rem); min-height: 56px; padding: 7px 14px 7px 7px;
+  border: 1px solid var(--border); border-radius: var(--radius-lg); background: transparent; text-align: start; color: var(--text);
   transition: background-color var(--duration-quick) var(--ease-standard), border-color var(--duration-quick) var(--ease-standard);
 }
-.hx-artifact-card:hover, .hx-artifact-card[data-open="true"] { background: var(--surface-hover); }
-.hx-artifact-card[data-open="true"] { border-color: var(--border-strong); }
-.hx-artifact-card .main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; align-self: stretch; padding: 8px 4px 8px 8px; border-radius: var(--radius-lg); text-align: start; color: var(--text); }
-.hx-artifact-card .acts { flex-shrink: 0; display: inline-flex; gap: 2px; transition: opacity var(--duration-quick) var(--ease-standard); }
-.hx-artifact-card .acts[data-hidden] { visibility: hidden; opacity: 0; }
-.hx-artifact-card .acts .hx-icon-btn { width: 30px; height: 30px; color: var(--text-muted); }
-.hx-artifact-card .acts .hx-icon-btn:hover { color: var(--text); background: var(--surface-pressed); }
-.hx-artifact-card .glyph, .hx-artifact-row .glyph {
-  flex-shrink: 0; display: grid; place-items: center; width: 48px; height: 48px;
-  border-radius: var(--radius-md); background: var(--surface-muted); color: var(--text-muted);
+.hx-artifact-card:hover { background: var(--surface-hover); }
+.hx-artifact-card[aria-pressed="true"] { border-color: var(--border-strong); }
+.hx-artifact-card .glyph {
+  flex-shrink: 0; display: grid; place-items: center; width: 40px; height: 40px;
+  border-radius: var(--radius-sm); box-shadow: inset 0 0 0 1px var(--border); color: var(--text-muted);
 }
-.hx-artifact-card .text, .hx-artifact-row .text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.hx-artifact-card .title, .hx-artifact-row .title { font-size: 14px; line-height: 20px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-artifact-card .text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.hx-artifact-card .title { font-size: 14px; line-height: 20px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Phrases sit apart with space, never a separator character. */
-.hx-artifact-card .sub, .hx-artifact-row .sub { display: flex; align-items: center; gap: 10px; font-size: 12px; line-height: 16px; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.hx-artifact-card .sub .hx-think { margin-inline-end: -4px; }
+.hx-artifact-card .sub { display: flex; gap: 10px; min-width: 0; overflow: hidden; font-size: 12px; line-height: 16px; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.hx-artifact-card .sub > :last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
-/* The list in the panel. */
-.hx-artifact-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; padding: 8px 8px 24px; }
-.hx-artifact-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 6px 8px 6px 6px; border-radius: var(--radius-md); text-align: start; color: var(--text); }
+/* The list in the panel: one row each, like the conversations in the sidebar. */
+.hx-artifact-list-head h2 { font-size: 13px; line-height: 18px; }
+.hx-artifact-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; padding: 6px 6px 16px; }
+.hx-artifact-row {
+  display: flex; align-items: center; gap: 8px; width: 100%; height: 30px; padding: 0 8px; border-radius: var(--radius-sm);
+  font-size: 13px; line-height: 18px; text-align: start; color: var(--text);
+}
 .hx-artifact-row:hover { background: var(--surface-hover); }
-.hx-artifact-row .glyph { width: 36px; height: 36px; border-radius: var(--radius-sm); }
-.hx-artifact-row .hx-row-chev { flex-shrink: 0; color: var(--text-disabled); }
-.hx-artifact-row:hover .hx-row-chev { color: var(--text-muted); }
+.hx-artifact-row .kind { flex-shrink: 0; display: grid; place-items: center; width: 16px; height: 16px; color: var(--text-muted); }
+.hx-artifact-row .name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-artifact-row .sub { flex-shrink: 0; display: inline-flex; gap: 8px; font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-/* An open artifact: view switch, title, then versions and actions, all 28px tall so nothing moves. */
-.hx-artifact-head { gap: 6px; padding-inline-start: 12px; }
-.hx-artifact-head .title { flex: 0 1 auto; min-width: 5em; margin-inline-start: 4px; font-size: 14px; line-height: 20px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hx-artifact-head .hx-copy { width: 28px; height: 28px; color: var(--text-muted); }
-.hx-artifact-head .hx-copy:hover { color: var(--text); }
-.hx-iconseg { flex-shrink: 0; display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--radius-md); background: var(--surface-muted); }
+/* An open artifact, in claude.ai's order: back, view, title, then version, copy with its menu, and close.
+   The controls are 28px tall, so nothing moves between states. */
+.hx-artifact-head { padding-inline-start: 10px; }
+.hx-artifact-head .title { flex: 0 1 auto; min-width: 5em; margin-inline-start: 6px; font-size: 13px; line-height: 18px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-iconseg { flex-shrink: 0; display: inline-flex; gap: 2px; }
 .hx-iconseg button {
-  display: grid; place-items: center; width: 30px; height: 26px; border-radius: var(--radius-sm); color: var(--text-muted);
+  display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--radius-sm); color: var(--text-muted);
   transition: background-color var(--duration-quick) var(--ease-standard), color var(--duration-quick) var(--ease-standard);
 }
-.hx-iconseg button:hover:not(:disabled) { color: var(--text); }
-.hx-iconseg button[aria-pressed="true"] { background: var(--control-thumb); color: var(--text); box-shadow: var(--shadow-xs); }
-.hx-iconseg button:disabled { opacity: 0.4; }
-.hx-versions { flex-shrink: 0; display: inline-flex; align-items: center; gap: 0; margin-inline-end: 4px; font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
-.hx-versions .hx-icon-btn { width: 24px !important; height: 24px !important; }
-.hx-versions .hx-icon-btn:disabled { opacity: 0.35; }
-.hx-version-pick { height: 28px; padding: 0 4px 0 8px; gap: 2px; font-size: 12px; color: var(--text-muted); }
-.hx-version-pick:hover, .hx-version-pick[aria-expanded="true"] { color: var(--text); }
-.hx-versions .n { white-space: nowrap; }
+.hx-iconseg button:hover:not(:disabled), .hx-iconseg button[aria-pressed="true"] { color: var(--text); background: var(--surface-hover); }
+.hx-iconseg button:disabled { color: var(--text-disabled); cursor: default; }
+.hx-version-pick { height: 28px; padding: 0 6px 0 8px; gap: 4px; font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.hx-version-pick:hover, .hx-version-pick[aria-expanded="true"] { color: var(--text); background: var(--surface-hover); }
+.hx-version-pick .n { white-space: nowrap; }
 .hx-version-pick .short { display: none; }
-/* A narrow panel keeps the title readable: stepping, copying and the way back to the list stay in
-   the version and more menus, and the version shortens to its number. */
-@container (max-width: 520px) { .hx-versions .step { display: none; } }
-@container (max-width: 460px) { .hx-artifact-head > :is(.hx-copy, .hx-to-list) { display: none; } }
+/* Copy, with everything else that can be done with the artifact under its arrow; drawn like 提交 in the changes panel. */
+.hx-split {
+  flex-shrink: 0; display: inline-flex; height: 26px; margin-inline: 4px 2px; border-radius: var(--radius-sm);
+  background: var(--surface); box-shadow: inset 0 0 0 1px var(--border-strong), var(--shadow-xs);
+}
+.hx-split > button {
+  display: inline-flex; align-items: center; height: 100%; border: 0; color: var(--text);
+  transition: background-color var(--duration-quick) var(--ease-standard), color var(--duration-quick) var(--ease-standard);
+}
+.hx-split > .copy { gap: 6px; padding: 0 8px; border-radius: var(--radius-sm) 0 0 var(--radius-sm); font-size: 12.5px; font-weight: 500; }
+.hx-split > .more { justify-content: center; width: 22px; border-inline-start: 1px solid var(--border); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; color: var(--text-muted); }
+.hx-split > button:hover:not(:disabled), .hx-split > .more[aria-expanded="true"] { color: var(--text); background: var(--surface-hover); }
+.hx-split > button:disabled { color: var(--text-disabled); cursor: default; }
+/* The copy icon fades into a tick and back, in the same place. */
+.hx-swap { display: inline-grid; }
+.hx-swap > * { grid-area: 1 / 1; transition: opacity var(--duration-quick) var(--ease-standard); }
+.hx-swap > :last-child, .hx-swap[data-on="true"] > :first-child { opacity: 0; }
+.hx-swap[data-on="true"] > :last-child { opacity: 1; }
+/* A narrow panel keeps the title readable: the copy label goes first, then the version shortens to its number. */
+@container (max-width: 460px) { .hx-split .label { display: none; } .hx-split > .copy { padding: 0 6px; } }
 @container (max-width: 420px) {
   .hx-version-pick .long { display: none; }
   .hx-version-pick .short { display: inline-grid; }
@@ -675,15 +755,18 @@ button.hx-tool:hover { background: var(--surface-hover); }
   .hx-artifact-head .title { flex: 1 1 0; min-width: 0; }
   .hx-artifact-head .grow { display: none; }
 }
-@container (max-width: 300px) { .hx-artifact-head .title { visibility: hidden; } }
+@container (max-width: 300px) { .hx-artifact-head .title { visibility: hidden; margin: 0; } }
+/* In the narrowest panels the less used controls go, so copy, its menu and close always stay in reach. */
+@container (max-width: 250px) { .hx-artifact-head .hx-version-pick { display: none; } }
+@container (max-width: 190px) { .hx-artifact-head :is(.hx-iconseg, .hx-to-list) { display: none; } }
 .hx-code-lines .num.is-static { cursor: default; }
 .hx-code-lines .num.is-static:hover { color: var(--text-disabled); }
-.hx-artifact-writing { display: flex; align-items: center; gap: 6px; padding: 8px 0 0 52px; font-size: 12px; color: var(--text-muted); }
+.hx-artifact-writing { display: flex; align-items: center; gap: 6px; padding: 8px 0 0 48px; font-size: 12px; color: var(--text-muted); }
 
 .hx-artifact-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .hx-artifact-diff { padding-top: 0; }
 
-/* Pages render on white, as they would in a browser, and fade in once their document is ready; until
+/* Pages render as they would in a browser, and fade in once their document is ready; until
    then a quiet note says the preview is loading. A page that picks a dark scheme paints its own canvas.
    A narrower device width centres the page on the panel colour with a hairline either side. */
 .hx-artifact-frame {
@@ -691,9 +774,10 @@ button.hx-tool:hover { background: var(--surface-hover); }
 }
 .hx-artifact-frame[hidden] { display: grid; position: absolute; inset: 0; visibility: hidden; pointer-events: none; }
 .hx-artifact-frame:not([data-device="desktop"]) { padding: 16px 0; background: var(--surface-muted); }
-/* A new page sits over the old one in the same cell and fades in on top of it. */
+/* A new page sits over the old one in the same cell and fades in on top of it. A page that says it
+   handles dark mode follows the system, on the theme's own canvas; any other page keeps its white one. */
 .hx-artifact-frame iframe {
-  grid-area: 1 / 1; width: 100%; height: 100%; border: 0; background: #fff; color-scheme: light; opacity: 0;
+  grid-area: 1 / 1; width: 100%; height: 100%; border: 0; background: Canvas; opacity: 0;
   transition: opacity var(--duration-base) var(--ease-standard);
 }
 .hx-artifact-frame[data-device="tablet"] iframe { max-width: 768px; border-radius: var(--radius-md); box-shadow: 0 0 0 1px var(--border); }
@@ -715,11 +799,11 @@ button.hx-tool:hover { background: var(--surface-hover); }
   animation: hx-fade-in var(--duration-base) var(--ease-standard) both;
 }
 .hx-changes:has(> .hx-artifact-full) { container-type: normal; overflow: visible; }
-:root[data-platform="darwin"] .hx-artifact-full .hx-artifact-head { padding-inline-start: 84px; min-height: var(--titlebar-height, 52px); }
+:root[data-platform="darwin"] .hx-artifact-full .hx-artifact-head { padding-inline-start: 84px; }
 
 /* A version the agent never finished says so above its code. */
 .hx-artifact-unfinished {
-  flex-shrink: 0; display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 4px 10px 4px 20px;
+  flex-shrink: 0; display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 4px 8px 4px 16px;
   border-bottom: 1px solid var(--border); font-size: 13px; line-height: 18px; color: var(--text-muted);
 }
 .hx-artifact-unfinished > .oy-icon { flex-shrink: 0; }
@@ -735,21 +819,21 @@ button.hx-tool:hover { background: var(--surface-hover); }
 
 /* The page failed: say so plainly, and offer to hand it to the agent. */
 .hx-artifact-error {
-  align-self: stretch; display: flex; align-items: flex-start; gap: 10px; padding: 12px 8px 12px 14px;
-  border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-md);
+  align-self: stretch; display: flex; align-items: flex-start; gap: 10px; padding: 10px 6px 10px 12px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-menu);
   animation: hx-fade-in var(--duration-base) var(--ease-standard) both;
 }
-.hx-artifact-error > .oy-icon { flex-shrink: 0; margin-top: 2px; color: var(--danger); }
+.hx-artifact-error > .oy-icon { flex-shrink: 0; margin-top: 1px; color: var(--danger); }
 .hx-artifact-error .text { flex: 1; min-width: 0; }
-.hx-artifact-error .title { font-size: 14px; line-height: 20px; font-weight: 600; }
+.hx-artifact-error .title { font-size: 13px; line-height: 18px; font-weight: 500; }
 /* All of the error is readable here, since all of it goes to the agent; a long one scrolls. */
 .hx-artifact-error .detail {
-  margin-top: 2px; max-height: 72px; overflow-y: auto; font-family: var(--font-mono); font-size: 12px; line-height: 18px;
+  margin-top: 2px; max-height: 54px; overflow-y: auto; font-family: var(--font-mono); font-size: 12px; line-height: 18px;
   color: var(--text-muted); white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .hx-artifact-error .more { margin-inline-start: 8px; font-size: 12px; font-weight: 400; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .hx-artifact-error .more[data-none] { visibility: hidden; }
-.hx-artifact-error .hx-fix { flex-shrink: 0; height: 28px; padding: 0 10px; gap: 6px; font-size: 13px; }
+.hx-artifact-error .hx-fix { flex-shrink: 0; height: 26px; padding: 0 10px; font-size: 12.5px; }
 .hx-artifact-error .hx-icon-btn { width: 28px; height: 28px; color: var(--text-muted); }
 /* In a narrow panel the message keeps the width and the fix button goes under it, lined up with the text. */
 @container (max-width: 520px) {
@@ -760,7 +844,7 @@ button.hx-tool:hover { background: var(--surface-hover); }
 
 .hx-artifact-notice {
   max-width: 100%; display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 4px 0 12px;
-  border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-menu);
   font-size: 13px; line-height: 18px; animation: hx-fade-in var(--duration-base) var(--ease-standard) both;
 }
 .hx-artifact-notice:not(:has(.btn-ghost)) { padding-inline-end: 12px; }
@@ -774,3 +858,265 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-artifact-notice .btn-ghost:not(.hx-icon-btn) { color: var(--accent-ink); }
 .hx-artifact-notice .hx-icon-btn { width: 28px; color: var(--text-muted); }
 .hx-artifact-doc .hx-prose { font-size: 15px; line-height: 24px; }
+
+/* ── artifacts library ───────────────────────────────────────── */
+/* The library covers the conversation instead of replacing it, so coming back finds it as it was. */
+.hx-app { position: relative; }
+/* Opening an artifact from another folder: nothing else moves until it lands, and the pointer says so. */
+.hx-app[aria-busy='true'], .hx-app[aria-busy='true'] * { cursor: progress; }
+.hx-library { position: absolute; inset-block: 0; inset-inline: var(--sidebar-width) 0; z-index: 5; outline: none; }
+.hx-library .hx-page-head .in { max-width: 72rem; padding-bottom: 12px; }
+.hx-lib-count { font-size: 13px; line-height: 18px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.hx-lib-tools { display: flex; align-items: center; gap: 8px; min-height: 30px; margin-top: 12px; }
+.hx-lib-search {
+  flex: 0 1 320px; min-width: 160px; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 4px 0 8px;
+  border-radius: var(--radius-sm); background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); color: var(--text-muted); cursor: text;
+}
+.hx-lib-search:focus-within { box-shadow: inset 0 0 0 1px var(--text-muted); }
+.hx-lib-search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: none; background: transparent; font: inherit; font-size: 13px; color: var(--text); }
+.hx-lib-search input::placeholder { color: var(--text-muted); }
+.hx-lib-search input::-webkit-search-cancel-button { display: none; }
+.hx-lib-search .btn-ghost { flex-shrink: 0; width: 22px; height: 22px; padding: 0; border-radius: var(--radius-xs); }
+.hx-lib-filter { flex-shrink: 0; height: 30px; padding: 0 6px 0 8px; gap: 4px; font-size: 13px; color: var(--text); }
+.hx-lib-filter > .oy-icon { color: var(--text-muted); }
+.hx-lib-filter[aria-expanded="true"] { background: var(--surface-hover); }
+.hx-lib-note {
+  min-width: 0; margin-inline-start: 4px; font-size: 12px; line-height: 16px; color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: hx-fade-in var(--duration-base) var(--ease-standard) both;
+}
+
+.hx-lib-body { max-width: 72rem; margin-inline: auto; padding: 8px 32px 96px; }
+.hx-lib-empty h2 { margin: 0; font-size: 13px; line-height: 18px; font-weight: 600; }
+.hx-lib-empty p, .hx-lib-empty-note { max-width: 36rem; margin: 4px 0 0; font-size: 13px; line-height: 20px; color: var(--text-muted); }
+.hx-lib-empty, .hx-lib-empty-note { animation: hx-fade-in var(--duration-base) var(--ease-standard) both; }
+
+/* Dense, like a file browser: four or five across in a normal window. */
+.hx-lib-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(188px, 1fr)); gap: 20px 16px; }
+.hx-lib-card { position: relative; min-width: 0; display: flex; flex-direction: column; animation: hx-fade-in var(--duration-base) var(--ease-standard) both; }
+.hx-lib-card .thumb { position: relative; aspect-ratio: 16 / 10; overflow: hidden; border-radius: var(--radius-md); background: var(--surface); }
+.hx-lib-card .thumb::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  box-shadow: inset 0 0 0 1px var(--border); transition: box-shadow var(--duration-quick) var(--ease-standard);
+}
+.hx-lib-card:hover .thumb::after { box-shadow: inset 0 0 0 1px var(--border-strong); }
+.hx-lib-card .scaled { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.hx-lib-card .page { position: absolute; inset: 0; background: var(--surface); }
+.hx-lib-card iframe {
+  display: block; width: 100%; height: 100%; border: 0; background: Canvas; pointer-events: none;
+  opacity: 0; transition: opacity var(--duration-base) var(--ease-standard);
+}
+.hx-lib-card iframe.is-shown { opacity: 1; }
+.hx-lib-card .glyph { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-disabled); transition: opacity var(--duration-base) var(--ease-standard); }
+.hx-lib-card .glyph.is-hidden { opacity: 0; }
+/* A drawing sits on white, as it does in the viewer, so dark lines stay visible in dark mode. */
+.hx-lib-card .picture { position: absolute; inset: 0; width: 100%; height: 100%; padding: 12%; box-sizing: border-box; object-fit: contain; background: #fff; }
+.hx-lib-card .doc { padding: 28px 40px; }
+.hx-lib-card .doc .hx-prose { font-size: 15px; line-height: 24px; }
+.hx-lib-card .code { margin: 0; padding: 24px 28px; font-family: var(--font-mono); font-size: 14px; line-height: 22px; color: var(--text); white-space: pre; tab-size: 4; }
+
+/* The name is the card's one button; it stretches over the whole card. */
+.hx-lib-card .name {
+  margin-top: 8px; padding: 0; border: 0; background: none; font: inherit; font-size: 13px; line-height: 18px; font-weight: 500;
+  color: var(--text); text-align: start; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+}
+.hx-lib-card .name::after { content: ""; position: absolute; inset: -4px; border-radius: calc(var(--radius-md) + 4px); }
+.hx-lib-card .name:focus-visible { outline: none; }
+.hx-lib-card .name:focus-visible::after { outline: 2px solid var(--focus-ring); outline-offset: 0; }
+.hx-lib-card :is(.sub, .from) { display: flex; gap: 8px; min-width: 0; font-size: 12px; line-height: 16px; color: var(--text-muted); white-space: nowrap; }
+.hx-lib-card .sub { margin-top: 2px; font-variant-numeric: tabular-nums; }
+.hx-lib-card .from { gap: 0; }
+.hx-lib-card .from > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.hx-lib-card .from .project { flex-shrink: 0; max-width: 50%; }
+.hx-lib-card .from .chat::before { content: "/"; margin-inline: 5px; color: var(--text-disabled); }
+
+@media (max-width: 720px) {
+  .hx-library .hx-page-head .in, .hx-lib-body { padding-inline: 20px; }
+  .hx-lib-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px 12px; }
+}
+/* With the sidebar hidden, the library covers the whole window. */
+:root[data-sidebar="hidden"] .hx-library { inset-inline-start: 0; }
+
+/* ── Claude Code parity: suggestions, queue, to-dos, plans, rewind ─ */
+.hx-field { position: relative; }
+/* The / and @ list floats over whatever sits above the field, so opening it moves nothing. */
+.hx-suggest {
+  position: absolute; z-index: 6; left: 0; right: 0; bottom: calc(100% + 6px);
+  max-height: 296px; overflow-y: auto; margin: 0; padding: 4px; list-style: none;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-md);
+  animation: hx-fade-in var(--duration-quick) var(--ease-standard) both;
+}
+.hx-suggest li {
+  display: flex; align-items: baseline; gap: 10px; min-height: 30px; padding: 6px 10px;
+  border-radius: var(--radius-sm); font-size: 13px; line-height: 20px; color: var(--text); cursor: default;
+}
+.hx-suggest li.is-file { align-items: center; gap: 8px; }
+.hx-suggest li[aria-selected="true"] { background: var(--surface-hover); }
+.hx-suggest li > .oy-icon { flex-shrink: 0; color: var(--text-muted); }
+.hx-suggest .label { flex-shrink: 0; font-weight: 500; white-space: nowrap; }
+/* Command names sit in a column so the descriptions line up. */
+.hx-suggest li:not(.is-file) .label { min-width: 8rem; }
+.hx-suggest .hint { flex-shrink: 0; font-size: 13px; color: var(--text-muted); white-space: nowrap; }
+.hx-suggest .detail { flex: 1; min-width: 0; font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-suggest .tag { flex-shrink: 0; font-size: 12px; color: var(--text-disabled); }
+
+/* Queued messages read like the person's own messages, waiting their turn. */
+.hx-queue { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.hx-queue li {
+  display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 4px 4px 4px 12px;
+  border-radius: var(--radius-md); background: var(--bubble); font-size: 13px; line-height: 20px;
+  animation: hx-fade-in var(--duration-base) var(--ease-standard) both;
+}
+.hx-queue .when { flex-shrink: 0; font-size: 12px; color: var(--text-muted); }
+.hx-queue .text { flex: 1; min-width: 0; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-queue .remove { display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0; border-radius: var(--radius-sm); color: var(--text-muted); }
+.hx-queue .remove:hover { color: var(--text); background: var(--surface-hover); }
+
+.hx-todos { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.hx-todos .head {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 0 10px 0 12px;
+  font-size: 13px; line-height: 18px; color: var(--text); text-align: start;
+}
+.hx-todos .head > .oy-icon { flex-shrink: 0; color: var(--text-muted); }
+.hx-todos .head .title { flex-shrink: 0; font-weight: 600; }
+.hx-todos .head .count { flex-shrink: 0; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.hx-todos .head .now { min-width: 0; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-todos .head .grow { flex: 1; }
+.hx-todos .list { display: flex; flex-direction: column; gap: 2px; max-height: 200px; overflow-y: auto; margin: 0; padding: 0 12px 10px; list-style: none; }
+.hx-todos .list li { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 20px; color: var(--text); }
+.hx-todos .list li > .oy-icon { flex-shrink: 0; margin-top: 2px; color: var(--text-muted); }
+.hx-todos .list li.is-in_progress { font-weight: 600; }
+.hx-todos .list li.is-in_progress > .oy-icon { color: var(--text); }
+.hx-todos .list li.is-completed { color: var(--text-muted); }
+.hx-todos .list li.is-completed > span { text-decoration: line-through; text-decoration-color: var(--text-disabled); }
+
+.hx-plan { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.hx-plan .head {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 0 12px 0 14px;
+  font-size: 13px; line-height: 20px; text-align: start; color: var(--text);
+}
+.hx-plan .head:hover { background: var(--surface-hover); }
+.hx-plan .head > .oy-icon { flex-shrink: 0; color: var(--text-muted); }
+.hx-plan .head .title { font-weight: 600; }
+.hx-plan .head .status { color: var(--text-muted); font-size: 13px; }
+.hx-plan .head .grow { flex: 1; }
+.hx-plan .head .hx-chev { color: var(--text-muted); }
+.hx-plan .body { padding: 4px 16px 16px; }
+.hx-plan-box { max-height: 320px; padding: 12px 16px; font-size: 13px; line-height: 22px; }
+
+/* The rewind button shows beside a message on hover, without moving it. */
+.hx-rewind {
+  position: absolute; top: 6px; right: calc(100% + 6px); height: 28px; width: 28px;
+  color: var(--text-muted); opacity: 0; transition: opacity var(--duration-quick) var(--ease-standard);
+}
+.hx-user .body { position: relative; }
+.hx-user:hover .hx-rewind, .hx-rewind:focus-visible { opacity: 1; }
+.hx-rewind:hover { color: var(--text); }
+.hx-rewind-list { display: flex; flex-direction: column; gap: 2px; max-height: 320px; overflow-y: auto; margin: 16px 0 0; padding: 0; list-style: none; }
+.hx-rewind-list button {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 40px; padding: 8px 10px;
+  border-radius: var(--radius-sm); font-size: 13px; line-height: 20px; text-align: start; color: var(--text);
+}
+.hx-rewind-list button:hover { background: var(--surface-hover); }
+.hx-rewind-list .text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-rewind-list .time { flex-shrink: 0; font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.hx-rewind-quote {
+  margin: 12px 0 0; padding: 10px 14px; border-radius: var(--radius-md); background: var(--bubble);
+  font-size: 13px; line-height: 20px; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.hx-rewind-modes { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; }
+.hx-rewind-modes label { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer; }
+.hx-rewind-modes label:hover { background: var(--surface-hover); }
+.hx-rewind-modes label.is-disabled { opacity: 0.45; cursor: default; }
+.hx-rewind-modes label.is-disabled:hover { background: none; }
+.hx-rewind-modes input { margin: 3px 0 0; accent-color: var(--text); }
+.hx-rewind-modes .text { display: flex; flex-direction: column; min-width: 0; }
+.hx-rewind-modes .name { font-size: 13px; line-height: 20px; font-weight: 500; color: var(--text); }
+.hx-rewind-modes .desc { font-size: 13px; line-height: 18px; color: var(--text-muted); }
+.hx-rewind-note { margin-top: 10px; font-size: 12px; line-height: 16px; color: var(--text-muted); }
+
+/* ── projects in the sidebar ─────────────────────────────────── */
+.hx-projects-head { display: flex; align-items: center; justify-content: space-between; margin-inline-end: 4px; }
+.hx-projects-head h2 { margin: 0; font: inherit; }
+.hx-projects-head .btn-ghost, .hx-proj-row .acts .btn-ghost { width: 24px; height: 24px; padding: 0; border-radius: var(--radius-xs); color: var(--text-muted); }
+.hx-projects-head .btn-ghost:hover, .hx-proj-row .acts .btn-ghost:hover { color: var(--text); }
+.hx-proj + .hx-proj { margin-top: 6px; }
+.hx-proj-row { position: relative; display: flex; align-items: center; border-radius: var(--radius-sm); }
+.hx-proj-row:hover { background: var(--surface-hover); }
+.hx-proj-name {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px;
+  font-size: 13px; line-height: 20px; font-weight: 500; color: var(--text); text-align: start;
+}
+.hx-proj-name > .oy-icon { flex-shrink: 0; color: var(--text-muted); }
+.hx-proj-name .n { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-proj-name .hx-chev { flex-shrink: 0; color: var(--text-disabled); }
+.hx-proj[data-current] .hx-proj-name > .oy-icon:first-child { color: var(--text); }
+/* The actions take no room until the row is hovered, so the name never moves. */
+.hx-proj-row .acts { position: absolute; right: 4px; top: 4px; display: flex; gap: 2px; opacity: 0; transition: opacity var(--duration-quick) var(--ease-standard); }
+.hx-proj-row:hover .acts, .hx-proj-row:focus-within .acts { opacity: 1; }
+.hx-proj .hx-session { padding-inline-start: 34px; }
+.hx-proj .hx-session-list { padding-top: 2px; }
+.hx-proj-empty { padding: 6px 10px 6px 34px; font-size: 13px; line-height: 18px; color: var(--text-disabled); }
+.hx-proj-more { height: 28px; padding: 0 10px 0 34px; font-size: 13px; color: var(--text-muted); text-align: start; border-radius: var(--radius-sm); }
+.hx-proj-more:hover { color: var(--text); background: var(--surface-hover); }
+.hx-proj-add { display: flex; align-items: center; gap: 8px; width: 100%; height: 30px; padding: 0 10px; border-radius: var(--radius-sm); font-size: 13px; color: var(--text-muted); }
+.hx-proj-add:hover { color: var(--text); background: var(--surface-hover); }
+.hx-session .p { flex-shrink: 0; max-width: 40%; font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* The demo in a browser draws stand-ins for the macOS window buttons, so its screenshots match the app. */
+:root[data-demo][data-platform="darwin"] body::after {
+  content: ""; position: fixed; z-index: 100; top: 14px; left: 18px; width: 12px; height: 12px; border-radius: 50%;
+  background: #ff5f57; box-shadow: 20px 0 0 #febc2e, 40px 0 0 #28c840; pointer-events: none;
+}
+
+/* ── pages the sidebar opens: scheduled tasks and artifacts ──── */
+.hx-page-head-row { display: flex; align-items: center; gap: 12px; }
+.hx-page-head-row h1 { flex: 1; min-width: 0; }
+.hx-page-toggle { position: absolute; top: calc(var(--titlebar-height) / 2 + 26px); inset-inline-start: 12px; }
+:root[data-platform="darwin"] .hx-page-toggle { top: 6px; inset-inline-start: 76px; }
+.hx-page-btn { height: 32px; padding: 0 12px 0 10px; gap: 6px; font-size: 13px; }
+.hx-page-intro { margin: -8px 0 12px; font-size: 13px; line-height: 20px; color: var(--text-muted); }
+.hx-page-empty { margin: 32px 0; font-size: 13px; line-height: 20px; color: var(--text-muted); }
+.hx-page-foot { margin: 16px 0 0; font-size: 12px; line-height: 16px; color: var(--text-muted); }
+
+.hx-sched-list { list-style: none; margin: 0 -8px; padding: 0; }
+.hx-sched { position: relative; display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 0 4px 0 0; border-radius: var(--radius-sm); }
+.hx-sched + .hx-sched::before { content: ""; position: absolute; top: 0; inset-inline: 8px; height: 1px; background: var(--border); }
+.hx-sched:hover, .hx-sched[data-menu] { background: var(--surface-hover); }
+.hx-sched:hover::before, .hx-sched:hover + .hx-sched::before, .hx-sched[data-menu]::before, .hx-sched[data-menu] + .hx-sched::before { opacity: 0; }
+.hx-sched .main { flex: 1; min-width: 0; align-self: stretch; display: flex; align-items: center; gap: 12px; padding: 8px 0 8px 8px; text-align: start; }
+.hx-sched .main > .oy-icon { flex-shrink: 0; color: var(--text-muted); }
+.hx-sched .text { display: flex; flex-direction: column; min-width: 0; }
+.hx-sched .name { font-size: 13px; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-sched .sub { display: flex; gap: 12px; font-size: 12px; line-height: 16px; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.hx-sched .side { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums; }
+.hx-sched .next { font-size: 13px; line-height: 20px; color: var(--text); }
+.hx-sched .last { color: var(--text-muted); }
+.hx-sched .last.is-error { color: var(--danger); }
+.hx-sched .last.is-waiting { color: var(--text); font-weight: 500; }
+.hx-last-link { padding: 0; font: inherit; }
+.hx-last-link:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+.hx-sched .more { width: 28px; height: 28px; color: var(--text-muted); opacity: 0; }
+.hx-sched:hover .more, .hx-sched .more:focus-visible, .hx-sched[data-menu] .more { opacity: 1; }
+.hx-sched[data-off] :is(.name, .next) { color: var(--text-muted); }
+
+.hx-sched-form { display: flex; flex-direction: column; padding-top: 8px; }
+.hx-sched-form > .input-base { width: 100%; margin-bottom: 16px; font-size: 13px; }
+.hx-sched-form textarea.input-base { min-height: 96px; line-height: 20px; }
+.hx-sched-form .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 12px; }
+.hx-sched-form .grid .oy-select { width: 100%; font-size: 13px; }
+.hx-time { display: flex; gap: 6px; }
+.hx-time .oy-select { flex: 1; min-width: 0; }
+.hx-sched-form .note { margin: 16px 0 0; font-size: 12px; line-height: 18px; color: var(--text-muted); white-space: pre-line; }
+.hx-page-back {
+  display: inline-flex; align-items: center; gap: 2px; height: 24px; margin: 0 0 6px -6px; padding: 0 8px 0 4px;
+  border-radius: var(--radius-xs); font-size: 13px; color: var(--text-muted);
+}
+.hx-page-back:hover { background: var(--surface-hover); color: var(--text); }
+.hx-sched-actions { display: flex; align-items: center; gap: 8px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); }
+.hx-sched-actions .end { display: flex; gap: 8px; margin-inline-start: auto; }
+.hx-sched-actions .btn-ghost { height: 32px; gap: 6px; font-size: 13px; }
+.hx-sched-actions .btn-ghost.is-danger { color: var(--danger); }
+.hx-sched-actions .btn-ghost.is-danger:hover { background: var(--surface-hover); }
+.hx-confirm { display: flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text-muted); }
+.hx-confirm > span { margin-inline-end: 4px; }

@@ -7,6 +7,7 @@ import {
   FileText,
   FolderSearch,
   List,
+  ListTodo,
   LoaderCircle,
   Search,
   Terminal,
@@ -34,6 +35,7 @@ const ICONS: Record<string, LucideIcon> = {
   run_command: Terminal,
   artifact: AppWindow,
   artifact_view: Eye,
+  todo_write: ListTodo,
 }
 
 function iconFor(item: ToolItem): LucideIcon {

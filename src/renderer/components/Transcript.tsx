@@ -1,13 +1,11 @@
-import { ChevronRight, CircleAlert, Download, FileText } from 'lucide-react'
-import { memo, useContext, useEffect, useMemo, useState } from 'react'
+import { ChevronRight, CircleAlert, ClipboardList, FileText, Undo2 } from 'lucide-react'
+import { memo, useContext, useMemo, useState } from 'react'
 import { artifactIcon, isArtifact, typeLabel, type ArtifactItem } from '../artifacts'
 import type { FileChange, SessionData, TranscriptItem } from '../../shared/types'
 import { clockTime } from '../format'
 import { t, type MessageKey } from '../i18n'
 import { HoldScroll } from '../scroll'
 import { actions, getState, useApp } from '../store'
-import { saveArtifact } from './ArtifactsView'
-import { CopyButton } from './CodeBlock'
 import { RefLabel } from './Composer'
 import { Icon } from './Icon'
 import { Markdown } from './Markdown'
@@ -38,7 +36,8 @@ function group(items: TranscriptItem[]): Block[] {
     }
     const last = turn.parts[turn.parts.length - 1]
     // A finished or live artifact stands on its own as a card; one that failed folds in with the steps.
-    if (item.kind === 'reasoning' || (item.kind === 'tool' && (!item.artifact || item.status === 'error'))) {
+    // A plan is something to read, like an answer, so it never folds away with the steps.
+    if (item.kind === 'reasoning' || (item.kind === 'tool' && item.name !== PLAN_TOOL && (!item.artifact || item.status === 'error'))) {
       if (last?.type === 'steps') last.items.push(item)
       else turn.parts.push({ type: 'steps', id: item.id, items: [item] })
     } else {
@@ -47,6 +46,8 @@ function group(items: TranscriptItem[]): Block[] {
   }
   return blocks
 }
+
+const PLAN_TOOL = 'exit_plan_mode'
 
 function isLive(item: StepItem): boolean {
   return item.kind === 'reasoning' ? item.endedAt === undefined : item.status === 'running' || item.status === 'waiting'
@@ -64,10 +65,21 @@ function needsPending(items: TranscriptItem[], status: SessionData['status']): b
   return last.kind === 'user'
 }
 
-const UserMessage = memo(function UserMessage({ item }: { item: Extract<TranscriptItem, { kind: 'user' }> }) {
+const UserMessage = memo(function UserMessage({ item, canRewind }: { item: Extract<TranscriptItem, { kind: 'user' }>; canRewind: boolean }) {
   return (
     <div className="hx-user">
       <div className="body">
+        {canRewind && (
+          <button
+            type="button"
+            className="btn-ghost hx-icon-btn hx-rewind"
+            aria-label={t('rewind.here')}
+            title={t('rewind.here')}
+            onClick={() => actions.openRewind(item.id)}
+          >
+            <Icon icon={Undo2} size={16} />
+          </button>
+        )}
         <p>{item.text}</p>
         {item.refs && item.refs.length > 0 && (
           <ul className="refs" aria-label={t('ref.label')}>
@@ -92,69 +104,35 @@ const ArtifactCard = memo(function ArtifactCard({ item }: { item: ArtifactItem }
   const open = useApp((s) => s.showChanges && s.panelTab === 'artifacts' && s.viewedArtifact === item.id)
   const { artifact } = item
   const title = artifact.title || t('artifact.untitled')
-  const busy = item.status === 'running'
-  const writing = busy && !item.queued
-  // Only a finished version can be copied or saved; a stopped or failed one is half written.
-  const ready = item.status === 'done'
-  const [saveError, setSaveError] = useState<string | null>(null)
-  useEffect(() => {
-    if (!saveError) return
-    const timer = window.setTimeout(() => setSaveError(null), 4000)
-    return () => window.clearTimeout(timer)
-  }, [saveError])
-  const saveLabel = saveError ? t('artifact.saveFailed', { error: saveError }) : t('artifact.save')
+  const writing = item.status === 'running' && !item.queued
+  // What is happening goes last on the line, so the kind and version never move when it ends.
+  const status = writing
+    ? t('artifact.writing')
+    : item.status === 'running'
+      ? t('artifact.queued')
+      : item.status === 'stopped'
+        ? t('artifact.stopped')
+        : item.status === 'error'
+          ? t('artifact.failed')
+          : null
   return (
-    <div className="hx-artifact-card" data-open={open}>
-      <button
-        type="button"
-        className="main"
-        aria-pressed={open}
-        aria-label={t('artifact.open', { title })}
-        onClick={() => (open ? actions.closeArtifacts() : actions.viewArtifact(item.id))}
-      >
-        <span className="glyph">
-          <Icon icon={artifactIcon(artifact.type)} size={18} />
+    <button
+      type="button"
+      className="hx-artifact-card"
+      aria-pressed={open}
+      aria-label={t('artifact.open', { title })}
+      onClick={() => (open ? actions.closeArtifacts() : actions.viewArtifact(item.id))}
+    >
+      <span className="glyph">{writing ? <ThinkingMark size={16} /> : <Icon icon={artifactIcon(artifact.type)} size={16} />}</span>
+      <span className="text">
+        <span className="title">{title}</span>
+        <span className="sub">
+          <span>{typeLabel(artifact)}</span>
+          {artifact.version > 1 && <span>{t('artifact.version', { n: artifact.version })}</span>}
+          {status && <span>{status}</span>}
         </span>
-        <span className="text">
-          <span className="title">{title}</span>
-          <span className="sub">
-            {writing ? (
-              <>
-                <ThinkingMark size={16} />
-                <Shimmer>{t('artifact.writing')}</Shimmer>
-              </>
-            ) : busy ? (
-              <span>{t('artifact.queued')}</span>
-            ) : item.status === 'stopped' ? (
-              <span>{t('artifact.stopped')}</span>
-            ) : item.status === 'error' ? (
-              <span>{t('artifact.failed')}</span>
-            ) : (
-              <>
-                <span>{typeLabel(artifact)}</span>
-                {artifact.version > 1 && <span>{t('artifact.version', { n: artifact.version })}</span>}
-              </>
-            )}
-          </span>
-        </span>
-      </button>
-      {/* The quick actions keep their place while the agent writes, so the card never changes size. */}
-      <span className="acts" data-hidden={busy || undefined}>
-        <CopyButton text={artifact.content} label={t('artifact.copy')} disabled={!ready} />
-        <button
-          type="button"
-          className="btn-ghost hx-icon-btn"
-          disabled={!ready}
-          aria-label={saveLabel}
-          title={saveLabel}
-          onClick={() => {
-            void saveArtifact(artifact).then((saved) => setSaveError(saved && !saved.ok ? saved.error : null))
-          }}
-        >
-          {saveError ? <Icon icon={CircleAlert} size={16} className="hx-danger" /> : <Icon icon={Download} size={16} />}
-        </button>
       </span>
-    </div>
+    </button>
   )
 })
 
@@ -164,7 +142,7 @@ function ErrorBlock({ item, active }: { item: Extract<TranscriptItem, { kind: 'e
   const code = item.code
   return (
     <div className="hx-error" role="alert">
-      <Icon icon={CircleAlert} size={18} />
+      <Icon icon={CircleAlert} />
       <div className="text">
         <p className="title">{t(`error.${code}.title` as MessageKey)}</p>
         <p className="body">{t(`error.${code}.body` as MessageKey)}</p>
@@ -224,14 +202,31 @@ function count(key: string, n: number): string | null {
 /** "執行了 2 個指令，改了 1 個檔案" for finished steps; the current step while they run. */
 function stepsLabel(items: StepItem[]): string {
   const tools = items.filter((i): i is ToolItem => i.kind === 'tool')
-  const parts = [
-    count('steps.commands', tools.filter((i) => i.name === 'run_command').length),
-    count('steps.edits', new Set(tools.filter((i) => EDITS.has(i.name)).map((i) => i.path ?? i.target)).size),
-    count('steps.reads', tools.filter((i) => READS.has(i.name)).length),
-    count('steps.searches', tools.filter((i) => SEARCHES.has(i.name)).length),
-    count('steps.others', tools.filter((i) => !READS.has(i.name) && !SEARCHES.has(i.name) && !EDITS.has(i.name) && i.name !== 'run_command').length),
-    count('steps.failed', tools.filter((i) => i.status === 'error').length),
-  ].filter((p): p is string => p !== null)
+  const kindOf = (i: ToolItem) =>
+    i.name === 'run_command'
+      ? 'commands'
+      : i.name === 'todo_write'
+        ? 'todos'
+        : EDITS.has(i.name)
+          ? 'edits'
+          : READS.has(i.name)
+            ? 'reads'
+            : SEARCHES.has(i.name)
+              ? 'searches'
+              : 'others'
+  const counts = {
+    commands: tools.filter((i) => kindOf(i) === 'commands').length,
+    edits: new Set(tools.filter((i) => kindOf(i) === 'edits').map((i) => i.path ?? i.target)).size,
+    reads: tools.filter((i) => kindOf(i) === 'reads').length,
+    searches: tools.filter((i) => kindOf(i) === 'searches').length,
+    todos: tools.some((i) => kindOf(i) === 'todos') ? 1 : 0,
+    others: tools.filter((i) => kindOf(i) === 'others').length,
+  }
+  // Listed in the order the agent did them, so the line reads like the rows it folds.
+  const order = [...new Set(tools.map(kindOf))]
+  const parts = [...order.map((k) => count(`steps.${k}`, counts[k])), count('steps.failed', tools.filter((i) => i.status === 'error').length)].filter(
+    (p): p is string => p !== null,
+  )
   const joined = parts.join(t('steps.sep'))
   if (joined) return joined.charAt(0).toUpperCase() + joined.slice(1)
   const thought = items.reduce((ms, i) => (i.kind === 'reasoning' && i.endedAt ? ms + i.endedAt - i.startedAt : ms), 0)
@@ -304,9 +299,52 @@ const Steps = memo(function Steps({ items, live, changed }: { items: StepItem[];
   )
 })
 
+const PLAN_STATUS: Partial<Record<ToolItem['status'], MessageKey>> = {
+  waiting: 'plan.waiting',
+  done: 'plan.approved',
+  denied: 'plan.declined',
+  stopped: 'plan.stopped',
+  error: 'plan.declined',
+}
+
+/** The plan the agent wrote in plan mode. While it waits, the prompt above the composer shows it in full. */
+function PlanCard({ item }: { item: ToolItem }) {
+  const [open, setOpen] = useState(item.status !== 'waiting')
+  const hold = useContext(HoldScroll)
+  const status = PLAN_STATUS[item.status]
+  return (
+    <div className="hx-plan">
+      <button
+        type="button"
+        className="head"
+        aria-expanded={open}
+        onClick={() => {
+          hold()
+          setOpen((o) => !o)
+        }}
+      >
+        <Icon icon={ClipboardList} size={16} />
+        <span className="title">{t('plan.title')}</span>
+        {status && <span className="status">{t(status)}</span>}
+        <span className="grow" />
+        <Icon icon={ChevronRight} size={16} className="hx-chev" />
+      </button>
+      <div className={`hx-disc ${open ? 'is-open' : ''}`}>
+        <div>
+          <div className="body">
+            <Markdown text={item.output ?? ''} streaming={false} />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ItemView({ item, isLast, session }: { item: TranscriptItem; isLast: boolean; session: SessionData }) {
   const idle = session.status === 'idle'
   switch (item.kind) {
+    case 'tool':
+      return item.name === PLAN_TOOL ? <PlanCard key={item.status === 'waiting' ? 'waiting' : 'decided'} item={item} /> : null
     case 'text':
       return item.text ? <Markdown text={item.text} streaming={item.streaming && !idle} /> : null
     case 'error':
@@ -326,12 +364,14 @@ export function Transcript({ session, changes }: { session: SessionData; changes
   const changed = useMemo(() => new Set(changes.map((c) => c.path)), [changes])
   const pending = needsPending(session.items, session.status)
   const lastIsUser = blocks[blocks.length - 1]?.type === 'user' || blocks.length === 0
+  const hasPermission = useApp((s) => s.chat?.permission != null)
+  const canRewind = session.status === 'idle' && !hasPermission
 
   return (
     <>
       {blocks.map((block, index) =>
         block.type === 'user' ? (
-          <UserMessage key={block.item.id} item={block.item} />
+          <UserMessage key={block.item.id} item={block.item} canRewind={canRewind} />
         ) : (
           <section key={block.id} className="hx-turn" aria-label={t('turn.label')}>
             {block.parts.map((part) =>
