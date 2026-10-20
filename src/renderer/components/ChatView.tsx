@@ -1,6 +1,5 @@
-import { ChevronDown, Folder, GitBranch, LayoutGrid, PanelRight, Trash2 } from 'lucide-react'
+import { ChevronDown, Folder, GitBranch, PanelRight, Trash2 } from 'lucide-react'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
-import { anyArtifacts } from '../artifacts'
 import { tildify } from '../format'
 import { t } from '../i18n'
 import { HoldScroll } from '../scroll'
@@ -23,11 +22,8 @@ function Header() {
   const loadingTitle = useApp((s) => s.sessions.find((m) => m.id === s.chatId)?.title)
   const workspace = useApp((s) => s.workspace)
   const home = useApp((s) => s.app.home)
-  const showChanges = useApp((s) => s.showChanges)
-  const hasArtifacts = useApp((s) => (s.chat ? anyArtifacts(s.chat.session.items) : false))
-  const showingArtifacts = useApp((s) => s.showChanges && s.panelTab === 'artifacts')
   // While artifacts fill the panel, this button brings back changes and files rather than hiding it.
-  const showingChanges = showChanges && !showingArtifacts
+  const showingChanges = useApp((s) => s.showChanges && s.panelTab !== 'artifacts')
   const moreRef = useRef<HTMLButtonElement>(null)
   const [menu, setMenu] = useState(false)
   const [confirm, setConfirm] = useState(false)
@@ -70,18 +66,6 @@ function Header() {
         )}
       </div>
       <div className="actions">
-        {hasArtifacts && (
-          <button
-            type="button"
-            className="btn-ghost hx-icon-btn"
-            aria-pressed={showingArtifacts}
-            aria-label={t('artifact.all')}
-            title={t('artifact.all')}
-            onClick={() => (showingArtifacts ? actions.closeArtifacts() : actions.viewArtifact(null))}
-          >
-            <Icon icon={LayoutGrid} size={18} />
-          </button>
-        )}
         <button
           type="button"
           className="btn-ghost hx-pane-btn"

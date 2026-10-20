@@ -5,11 +5,12 @@ export const pomodoroV1 = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>番茄鐘</title>
 <style>
-  :root { --ink: #2b2a27; --muted: #8a867e; --line: #e8e4dc; --accent: #c4623f; }
+  :root { --ink: #1f1f1f; --muted: #737373; --line: #e5e5e5; --accent: #1f1f1f; }
   * { box-sizing: border-box; }
-  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #faf8f4; color: var(--ink);
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #fff; color: var(--ink);
     font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", sans-serif; }
   main { width: min(360px, 90vw); text-align: center; }
   h1 { margin: 0 0 4px; font-size: 15px; font-weight: 500; color: var(--muted); }
@@ -17,10 +18,18 @@ export const pomodoroV1 = `<!doctype html>
   .bar { height: 4px; margin: 8px 0 32px; border-radius: 2px; background: var(--line); overflow: hidden; }
   .bar > div { height: 100%; width: 0; background: var(--accent); transition: width 1s linear; }
   .row { display: flex; gap: 8px; justify-content: center; }
-  button { min-width: 96px; height: 40px; padding: 0 18px; border: 1px solid var(--line); border-radius: 20px;
+  button { min-width: 96px; height: 40px; padding: 0 18px; border: 1px solid var(--line); border-radius: 14px;
     background: #fff; color: var(--ink); font: inherit; font-size: 15px; cursor: pointer; }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   .count { margin-top: 28px; font-size: 13px; color: var(--muted); }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink: #ececec; --muted: #9a9a9a; --line: #3a3a3a; --accent: #ececec; }
+    body { background: #262626; }
+    button { background: #2f2f2f; }
+    button.primary { color: #1f1f1f; }
+    .modes { background: #1f1f1f; }
+    .modes button[aria-pressed="true"] { background: #3a3a3a; box-shadow: none; }
+  }
 </style>
 </head>
 <body>
@@ -59,11 +68,11 @@ export const pomodoroV1 = `<!doctype html>
 `
 
 export const pomodoroV2 = pomodoroV1
-  .replace('border-radius: 20px;', 'border-radius: 10px;')
+  .replace('border-radius: 14px;', 'border-radius: 6px;')
   .replace(
     '.count {',
-    `.modes { display: inline-flex; gap: 2px; padding: 3px; margin-bottom: 20px; border-radius: 10px; background: #efebe4; }
-  .modes button { min-width: 0; height: 30px; padding: 0 14px; border: 0; border-radius: 8px; background: transparent; font-size: 13px; color: var(--muted); }
+    `.modes { display: inline-flex; gap: 2px; padding: 3px; margin-bottom: 20px; border-radius: 8px; background: #f0f0f0; }
+  .modes button { min-width: 0; height: 30px; padding: 0 14px; border: 0; border-radius: 6px; background: transparent; font-size: 13px; color: var(--muted); }
   .modes button[aria-pressed="true"] { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
   .count {`,
   )

@@ -1,13 +1,11 @@
-import { ChevronRight, CircleAlert, Download, FileText } from 'lucide-react'
-import { memo, useContext, useEffect, useMemo, useState } from 'react'
+import { ChevronRight, CircleAlert, FileText } from 'lucide-react'
+import { memo, useContext, useMemo, useState } from 'react'
 import { artifactIcon, isArtifact, typeLabel, type ArtifactItem } from '../artifacts'
 import type { FileChange, SessionData, TranscriptItem } from '../../shared/types'
 import { clockTime } from '../format'
 import { t, type MessageKey } from '../i18n'
 import { HoldScroll } from '../scroll'
 import { actions, getState, useApp } from '../store'
-import { saveArtifact } from './ArtifactsView'
-import { CopyButton } from './CodeBlock'
 import { RefLabel } from './Composer'
 import { Icon } from './Icon'
 import { Markdown } from './Markdown'
@@ -92,69 +90,35 @@ const ArtifactCard = memo(function ArtifactCard({ item }: { item: ArtifactItem }
   const open = useApp((s) => s.showChanges && s.panelTab === 'artifacts' && s.viewedArtifact === item.id)
   const { artifact } = item
   const title = artifact.title || t('artifact.untitled')
-  const busy = item.status === 'running'
-  const writing = busy && !item.queued
-  // Only a finished version can be copied or saved; a stopped or failed one is half written.
-  const ready = item.status === 'done'
-  const [saveError, setSaveError] = useState<string | null>(null)
-  useEffect(() => {
-    if (!saveError) return
-    const timer = window.setTimeout(() => setSaveError(null), 4000)
-    return () => window.clearTimeout(timer)
-  }, [saveError])
-  const saveLabel = saveError ? t('artifact.saveFailed', { error: saveError }) : t('artifact.save')
+  const writing = item.status === 'running' && !item.queued
+  // What is happening goes last on the line, so the kind and version never move when it ends.
+  const status = writing
+    ? t('artifact.writing')
+    : item.status === 'running'
+      ? t('artifact.queued')
+      : item.status === 'stopped'
+        ? t('artifact.stopped')
+        : item.status === 'error'
+          ? t('artifact.failed')
+          : null
   return (
-    <div className="hx-artifact-card" data-open={open}>
-      <button
-        type="button"
-        className="main"
-        aria-pressed={open}
-        aria-label={t('artifact.open', { title })}
-        onClick={() => (open ? actions.closeArtifacts() : actions.viewArtifact(item.id))}
-      >
-        <span className="glyph">
-          <Icon icon={artifactIcon(artifact.type)} size={18} />
+    <button
+      type="button"
+      className="hx-artifact-card"
+      aria-pressed={open}
+      aria-label={t('artifact.open', { title })}
+      onClick={() => (open ? actions.closeArtifacts() : actions.viewArtifact(item.id))}
+    >
+      <span className="glyph">{writing ? <ThinkingMark size={16} /> : <Icon icon={artifactIcon(artifact.type)} size={16} />}</span>
+      <span className="text">
+        <span className="title">{title}</span>
+        <span className="sub">
+          <span>{typeLabel(artifact)}</span>
+          {artifact.version > 1 && <span>{t('artifact.version', { n: artifact.version })}</span>}
+          {status && <span>{status}</span>}
         </span>
-        <span className="text">
-          <span className="title">{title}</span>
-          <span className="sub">
-            {writing ? (
-              <>
-                <ThinkingMark size={14} />
-                <Shimmer>{t('artifact.writing')}</Shimmer>
-              </>
-            ) : busy ? (
-              <span>{t('artifact.queued')}</span>
-            ) : item.status === 'stopped' ? (
-              <span>{t('artifact.stopped')}</span>
-            ) : item.status === 'error' ? (
-              <span>{t('artifact.failed')}</span>
-            ) : (
-              <>
-                <span>{typeLabel(artifact)}</span>
-                {artifact.version > 1 && <span>{t('artifact.version', { n: artifact.version })}</span>}
-              </>
-            )}
-          </span>
-        </span>
-      </button>
-      {/* The quick actions keep their place while the agent writes, so the card never changes size. */}
-      <span className="acts" data-hidden={busy || undefined}>
-        <CopyButton text={artifact.content} label={t('artifact.copy')} disabled={!ready} />
-        <button
-          type="button"
-          className="btn-ghost hx-icon-btn"
-          disabled={!ready}
-          aria-label={saveLabel}
-          title={saveLabel}
-          onClick={() => {
-            void saveArtifact(artifact).then((saved) => setSaveError(saved && !saved.ok ? saved.error : null))
-          }}
-        >
-          {saveError ? <Icon icon={CircleAlert} size={16} className="hx-danger" /> : <Icon icon={Download} size={16} />}
-        </button>
       </span>
-    </div>
+    </button>
   )
 })
 
