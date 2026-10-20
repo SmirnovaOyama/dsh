@@ -1,9 +1,9 @@
 import { ChevronLeft, Cpu, KeyRound, LoaderCircle, Shield, Sun, X, type LucideIcon } from 'lucide-react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { EFFORTS, MAX_STEPS_OPTIONS, MODELS, PERMISSION_MODES, type ConnectionResult, type Effort, type Locale, type PermissionMode, type ReplyStyle, type ThemePref } from '../../shared/types'
 import { api } from '../api'
 import { LOCALE_NAMES, t, type MessageKey } from '../i18n'
-import { actions, useApp, type SettingsSection } from '../store'
+import { actions, lastSettingsSection, useApp, type SettingsSection } from '../store'
 import { modelDesc, modelName } from '../models'
 import { Icon } from './Icon'
 import { Reserve } from './Reserve'
@@ -19,23 +19,35 @@ const SECTIONS: { id: SettingsSection; icon: LucideIcon; label: MessageKey }[] =
 
 const update = (patch: Parameters<typeof api.settings.update>[0]) => void api.settings.update(patch)
 
+const TITLES: Record<SettingsSection, MessageKey> = {
+  connection: 'settings.connection',
+  model: 'settings.model',
+  permissions: 'settings.permissions',
+  appearance: 'settings.appearance',
+}
+
 export function SettingsView() {
-  const initial = useApp((s) => s.settingsSection)
-  const [current, setCurrent] = useState<SettingsSection>(initial ?? 'connection')
+  const asked = useApp((s) => s.settingsSection)
+  // A section asked for by name wins; otherwise settings reopen where they were left.
+  const [current, setCurrent] = useState<SettingsSection>(() => asked ?? lastSettingsSection())
   const [scrolled, setScrolled] = useState(false)
   const pageRef = useRef<HTMLDivElement>(null)
+  const navRef = useRef<HTMLDivElement>(null)
   const from = useApp((s) => s.settingsFrom)
 
-  const goTo = (id: SettingsSection, smooth = true) => {
+  const goTo = (id: SettingsSection) => {
     setCurrent(id)
-    document.getElementById(`settings-${id}`)?.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant', block: 'start' })
+    actions.rememberSettingsSection(id)
+    // Each section starts at its top, like a page of its own.
+    pageRef.current?.scrollTo({ top: 0 })
+    setScrolled(false)
   }
 
   useEffect(() => {
-    if (initial) goTo(initial, false)
-    // Only on open.
+    if (asked && asked !== current) goTo(asked)
+    // Only when another part of the app asks for a section.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [asked])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -49,18 +61,14 @@ export function SettingsView() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  const onScroll = () => {
-    const page = pageRef.current
-    if (!page) return
-    setScrolled(page.scrollTop > 0)
-    // The section whose heading passed the sticky title is the current one.
-    let active: SettingsSection = SECTIONS[0].id
-    for (const section of SECTIONS) {
-      const el = document.getElementById(`settings-${section.id}`)
-      if (el && el.getBoundingClientRect().top - page.getBoundingClientRect().top < 120) active = section.id
-    }
-    if (page.scrollTop + page.clientHeight >= page.scrollHeight - 4) active = SECTIONS[SECTIONS.length - 1].id
-    setCurrent(active)
+  // Up and down move through the list, the way a sidebar list does.
+  const onNavKey = (event: ReactKeyboardEvent) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+    event.preventDefault()
+    const index = SECTIONS.findIndex((s) => s.id === current)
+    const next = SECTIONS[(index + (event.key === 'ArrowDown' ? 1 : SECTIONS.length - 1)) % SECTIONS.length].id
+    goTo(next)
+    navRef.current?.querySelector<HTMLButtonElement>(`[data-section="${next}"]`)?.focus()
   }
 
   return (
@@ -71,11 +79,12 @@ export function SettingsView() {
           <Icon icon={ChevronLeft} />
           {t(from === 'artifacts' ? 'settings.backToLibrary' : 'settings.back')}
         </button>
-        <div className="hx-settings-nav">
+        <div ref={navRef} className="hx-settings-nav" onKeyDown={onNavKey}>
           {SECTIONS.map((section) => (
             <button
               key={section.id}
               type="button"
+              data-section={section.id}
               className="oy-nav-item"
               aria-current={current === section.id ? 'page' : undefined}
               onClick={() => goTo(section.id)}
@@ -86,31 +95,20 @@ export function SettingsView() {
           ))}
         </div>
       </nav>
-      <div ref={pageRef} className="hx-page" onScroll={onScroll}>
+      <div ref={pageRef} className="hx-page" onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 0)}>
         <header className={`hx-page-head ${scrolled ? 'is-scrolled' : ''}`}>
           <div className="in">
-            <h1>{t('settings.title')}</h1>
+            <h1 id="settings-title">{t(TITLES[current])}</h1>
           </div>
         </header>
-        <div className="hx-page-body">
-          <Connection focusKey={initial === 'connection'} />
-          <ModelGroup />
-          <Permissions />
-          <Appearance />
-        </div>
+        <section className="hx-page-body hx-group" aria-labelledby="settings-title">
+          {current === 'connection' && <Connection focusKey={asked === 'connection'} />}
+          {current === 'model' && <ModelGroup />}
+          {current === 'permissions' && <Permissions />}
+          {current === 'appearance' && <Appearance />}
+        </section>
       </div>
     </>
-  )
-}
-
-function Group({ id, title, children }: { id: SettingsSection; title: string; children: ReactNode }) {
-  return (
-    <section className="hx-group" id={`settings-${id}`} aria-labelledby={`settings-${id}-title`}>
-      <h2 className="hx-group-head" id={`settings-${id}-title`}>
-        {title}
-      </h2>
-      {children}
-    </section>
   )
 }
 
@@ -188,7 +186,7 @@ function Connection({ focusKey }: { focusKey: boolean }) {
   }
 
   return (
-    <Group id="connection" title={t('settings.connection')}>
+    <>
       <div className="hx-fieldset">
         <div>
           <label className="oy-field-label" htmlFor="api-key">
@@ -286,7 +284,7 @@ function Connection({ focusKey }: { focusKey: boolean }) {
           )}
         </div>
       </div>
-    </Group>
+    </>
   )
 }
 
@@ -316,7 +314,7 @@ function CountUp({ value }: { value: number }) {
 function ModelGroup() {
   const settings = useApp((s) => s.settings)
   return (
-    <Group id="model" title={t('settings.model')}>
+    <>
       <div className="oy-section is-plain">
         <Row title={t('settings.defaultModel')}>
           <Select
@@ -353,7 +351,7 @@ function ModelGroup() {
           />
         </Row>
       </div>
-    </Group>
+    </>
   )
 }
 
@@ -367,7 +365,7 @@ function Permissions() {
     setAdding('')
   }
   return (
-    <Group id="permissions" title={t('settings.permissions')}>
+    <>
       <div className="hx-card">
         <div className="oy-section is-plain">
           <Row title={t('settings.defaultMode')}>
@@ -416,7 +414,7 @@ function Permissions() {
           </div>
         </div>
       </div>
-    </Group>
+    </>
   )
 }
 
@@ -424,7 +422,7 @@ function Appearance() {
   const settings = useApp((s) => s.settings)
   const version = useApp((s) => s.app.version)
   return (
-    <Group id="appearance" title={t('settings.appearance')}>
+    <>
       <div className="oy-section is-plain">
         <Row title={t('settings.theme')}>
           <Segmented<ThemePref>
@@ -445,6 +443,6 @@ function Appearance() {
         </Row>
       </div>
       <p className="hx-version">{`${t('app.name')} ${version}`}</p>
-    </Group>
+    </>
   )
 }

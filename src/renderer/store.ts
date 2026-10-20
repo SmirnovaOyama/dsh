@@ -89,7 +89,7 @@ export interface AppState {
 
 const PREFS_KEY = 'dsh.ui'
 
-type Prefs = { showChanges?: boolean; showSidebar?: boolean }
+type Prefs = { showChanges?: boolean; showSidebar?: boolean; settingsSection?: SettingsSection }
 
 function readPrefs(): Prefs {
   try {
@@ -105,6 +105,11 @@ function writePrefs(prefs: Prefs) {
   } catch {
     // Private windows can refuse storage; the panel just opens with its default next time.
   }
+}
+
+export function lastSettingsSection(): SettingsSection {
+  const section = readPrefs().settingsSection
+  return section && ['connection', 'model', 'permissions', 'appearance'].includes(section) ? section : 'connection'
 }
 
 let state: AppState = {
@@ -685,6 +690,11 @@ export const actions = {
   openSettings(section: SettingsSection | null = null) {
     if (state.switching) return
     set((s) => ({ view: 'settings', settingsSection: section, settingsFrom: s.view === 'settings' ? s.settingsFrom : s.view }))
+  },
+
+  /** Remembers the settings section last opened, so settings reopen there. */
+  rememberSettingsSection(section: SettingsSection) {
+    writePrefs({ settingsSection: section })
   },
 
   closeSettings() {
