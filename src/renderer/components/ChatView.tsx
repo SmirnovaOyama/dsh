@@ -1,13 +1,12 @@
-import { Ellipsis, Folder, GitBranch, LayoutGrid, PanelRight, Trash2 } from 'lucide-react'
+import { ChevronDown, Folder, GitBranch, LayoutGrid, PanelRight, Trash2 } from 'lucide-react'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { anyArtifacts } from '../artifacts'
 import { tildify } from '../format'
 import { t } from '../i18n'
-import { modelName } from '../models'
 import { HoldScroll } from '../scroll'
 import { actions, useApp } from '../store'
 import { Composer } from './Composer'
-import { NoteDoodle } from './Doodles'
+import { DiffStatsText } from './DiffView'
 import { Icon } from './Icon'
 import { Menu, MenuItem } from './Menu'
 import { Modal } from './Modal'
@@ -24,7 +23,6 @@ function Header() {
   const loadingTitle = useApp((s) => s.sessions.find((m) => m.id === s.chatId)?.title)
   const workspace = useApp((s) => s.workspace)
   const home = useApp((s) => s.app.home)
-  const draftModel = useApp((s) => s.draft.model)
   const showChanges = useApp((s) => s.showChanges)
   const hasArtifacts = useApp((s) => (s.chat ? anyArtifacts(s.chat.session.items) : false))
   const showingArtifacts = useApp((s) => s.showChanges && s.panelTab === 'artifacts')
@@ -36,27 +34,40 @@ function Header() {
 
   const title = chat?.session.title || loadingTitle || t('header.newChat')
   const path = chat?.session.workspace ?? workspace?.path
-  const model = chat?.session.model ?? draftModel
+
+  const changes = chat?.changes ?? []
+  const added = changes.reduce((n, c) => n + c.stats.added, 0)
+  const removed = changes.reduce((n, c) => n + c.stats.removed, 0)
 
   return (
     <header className="hx-header">
       <div className="heading">
-        <h1 className="title">{title}</h1>
-        <p className="sub">
-          {path && (
-            <span>
-              <Icon icon={Folder} size={14} />
-              <span className="path">{tildify(path, home)}</span>
-            </span>
-          )}
-          {workspace?.branch && (
-            <span>
-              <Icon icon={GitBranch} size={14} />
-              {workspace.branch}
-            </span>
-          )}
-          <span>{modelName(model)}</span>
-        </p>
+        {/* The title opens the conversation's menu, the way Claude Code's caret beside the title does. */}
+        <button
+          ref={moreRef}
+          type="button"
+          className="hx-title"
+          aria-haspopup="menu"
+          aria-expanded={menu}
+          title={t('header.more')}
+          disabled={!chatId}
+          onClick={() => setMenu((o) => !o)}
+        >
+          <h1>{title}</h1>
+          {chatId && <Icon icon={ChevronDown} size={14} />}
+        </button>
+        {path && (
+          <span className="sub" title={path}>
+            <Icon icon={Folder} size={14} />
+            <span className="path">{tildify(path, home)}</span>
+          </span>
+        )}
+        {workspace?.branch && (
+          <span className="sub">
+            <Icon icon={GitBranch} size={14} />
+            <span className="path">{workspace.branch}</span>
+          </span>
+        )}
       </div>
       <div className="actions">
         {hasArtifacts && (
@@ -73,32 +84,25 @@ function Header() {
         )}
         <button
           type="button"
-          className="btn-ghost hx-icon-btn"
+          className="btn-ghost hx-pane-btn"
           aria-pressed={showingChanges}
           aria-label={t(showingChanges ? 'header.hideChanges' : 'header.showChanges')}
           title={t(showingChanges ? 'header.hideChanges' : 'header.showChanges')}
           onClick={() => actions.toggleChanges()}
         >
-          <Icon icon={PanelRight} size={18} />
-        </button>
-        <button
-          ref={moreRef}
-          type="button"
-          className="btn-ghost hx-icon-btn"
-          aria-haspopup="menu"
-          aria-expanded={menu}
-          aria-label={t('header.more')}
-          title={t('header.more')}
-          disabled={!chatId}
-          onClick={() => setMenu((o) => !o)}
-        >
-          <Icon icon={Ellipsis} size={18} />
+          <Icon icon={PanelRight} />
+          <span>{t('panel.changes')}</span>
+          {changes.length > 0 && (
+            <span className="stats">
+              <DiffStatsText added={added} removed={removed} />
+            </span>
+          )}
         </button>
       </div>
-      <Menu anchor={moreRef.current} open={menu} onClose={() => setMenu(false)} label={t('header.more')} align="end" minWidth={200}>
+      <Menu anchor={moreRef.current} open={menu} onClose={() => setMenu(false)} label={t('header.more')} minWidth={200}>
         <MenuItem
           danger
-          icon={<Icon icon={Trash2} size={18} />}
+          icon={<Icon icon={Trash2} />}
           onSelect={() => {
             setMenu(false)
             setConfirm(true)
@@ -136,8 +140,7 @@ function Header() {
 
 function NewChat() {
   return (
-    <div className="hx-empty">
-      <NoteDoodle label={t('new.title')} />
+    <div className="hx-greeting">
       <h2>{t('new.title')}</h2>
       <p>{t('new.body')}</p>
     </div>
@@ -168,6 +171,8 @@ function Conversation() {
     if (!el) return
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight
     pinned.current = distance < PIN_DISTANCE
+    // The header shows its hairline only once text passes under it.
+    el.toggleAttribute('data-scrolled', el.scrollTop > 0)
     setShowJump(distance > JUMP_DISTANCE)
   }, [])
 
@@ -207,7 +212,7 @@ function Conversation() {
 
   return (
     <div ref={scrollRef} className="hx-scroll" onScroll={measure}>
-      <div ref={contentRef} className="hx-scroll-content">
+      <div ref={contentRef} className={`hx-scroll-content ${!chat && !chatId ? 'is-new' : ''}`}>
         <Header />
         <HoldScroll.Provider value={hold}>
           <div className="hx-column">{chat ? <Transcript session={chat.session} changes={chat.changes} /> : chatId ? null : <NewChat />}</div>

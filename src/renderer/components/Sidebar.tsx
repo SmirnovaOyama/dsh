@@ -1,7 +1,7 @@
 import { ChevronsUpDown, Folder, FolderOpen, Search, Settings as SettingsIcon, SquarePen, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SessionMeta } from '../../shared/types'
-import { dayGroup, modKey, sessionTime, tildify, type DayGroup } from '../format'
+import { dayGroup, modKey, tildify, type DayGroup } from '../format'
 import { t } from '../i18n'
 import { actions, useApp } from '../store'
 import { Icon } from './Icon'
@@ -11,10 +11,8 @@ const GROUPS: DayGroup[] = ['today', 'yesterday', 'week', 'earlier']
 let handledSearchTick = 0
 const GROUP_LABEL = { today: 'sidebar.today', yesterday: 'sidebar.yesterday', week: 'sidebar.week', earlier: 'sidebar.earlier' } as const
 
-function SessionRow({ meta, current, now }: { meta: SessionMeta; current: boolean; now: number }) {
-  const locale = useApp((s) => s.settings.locale)
-  const trail =
-    meta.status === 'running' ? t('status.running') : meta.status === 'waiting' ? t('status.waiting') : sessionTime(meta.updatedAt, now, locale)
+function SessionRow({ meta, current }: { meta: SessionMeta; current: boolean }) {
+  const trail = meta.status === 'running' ? t('status.running') : meta.status === 'waiting' ? t('status.waiting') : null
   return (
     <button
       type="button"
@@ -24,7 +22,7 @@ function SessionRow({ meta, current, now }: { meta: SessionMeta; current: boolea
       title={meta.title}
     >
       <span className="t">{meta.title || t('header.newChat')}</span>
-      <span className={`s ${meta.status === 'waiting' ? 'is-waiting' : meta.status === 'running' ? 'hx-shimmer' : ''}`}>{trail}</span>
+      {trail && <span className={`s ${meta.status === 'waiting' ? 'is-waiting' : meta.status === 'running' ? 'hx-shimmer' : ''}`}>{trail}</span>}
     </button>
   )
 }
@@ -134,7 +132,7 @@ export function Sidebar({ searchTick }: { searchTick: number }) {
                 }}
               />
               <button type="button" className="btn-ghost" aria-label={t('common.cancel')} onMouseDown={(event) => event.preventDefault()} onClick={closeSearch}>
-                <Icon icon={X} size={16} />
+                <Icon icon={X} size={14} />
               </button>
             </div>
           ) : (
@@ -154,7 +152,7 @@ export function Sidebar({ searchTick }: { searchTick: number }) {
             <h2 className="hx-side-head">{t(GROUP_LABEL[group])}</h2>
             <div className="hx-session-list">
               {items.map((meta) => (
-                <SessionRow key={meta.id} meta={meta} current={view === 'chat' && meta.id === chatId} now={now} />
+                <SessionRow key={meta.id} meta={meta} current={view === 'chat' && meta.id === chatId} />
               ))}
             </div>
           </div>
@@ -185,7 +183,7 @@ export function Sidebar({ searchTick }: { searchTick: number }) {
         ))}
         {recent.length > 0 && <MenuSeparator />}
         <MenuItem
-          icon={<Icon icon={FolderOpen} size={18} />}
+          icon={<Icon icon={FolderOpen} />}
           onSelect={() => {
             setProjectMenu(false)
             void actions.pickWorkspace()

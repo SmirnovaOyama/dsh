@@ -23,6 +23,22 @@ export function RefLabel({ fileRef: ref }: { fileRef: FileRef }) {
   )
 }
 
+/** How full the context is, as a small ring beside the model, like Claude Code's usage ring. Numbers on hover. */
+function UsageRing({ used, total, spent }: { used: number; total: number; spent: number }) {
+  const r = 6
+  const length = 2 * Math.PI * r
+  const share = total > 0 ? Math.min(1, used / total) : 0
+  const label = `${t('composer.context')} ${formatTokens(used)} / ${formatTokens(total)} ${t('composer.tokens')}\n${t('composer.total')} ${formatTokens(spent)} ${t('composer.tokens')}`
+  return (
+    <span className="hx-usage" role="img" aria-label={label} title={label}>
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+        <circle cx="8" cy="8" r={r} className="track" />
+        <circle cx="8" cy="8" r={r} className="fill" strokeDasharray={`${share * length} ${length}`} transform="rotate(-90 8 8)" />
+      </svg>
+    </span>
+  )
+}
+
 /** Unsent text per conversation, so switching away and back keeps it. */
 const drafts = new Map<string, string>()
 
@@ -97,7 +113,7 @@ export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
     <div className="hx-composer">
       <div className="hx-composer-inner">
         <button type="button" className="hx-jump" data-hidden={!showJump} tabIndex={showJump ? 0 : -1} onClick={onJump}>
-          <Icon icon={ArrowDown} size={16} />
+          <Icon icon={ArrowDown} size={14} />
           {t('jump.latest')}
         </button>
 
@@ -150,6 +166,20 @@ export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
           />
           <div className="bar">
             <button
+              ref={modeRef}
+              type="button"
+              className="btn-ghost"
+              aria-haspopup="menu"
+              aria-expanded={menu === 'mode'}
+              aria-label={t('composer.mode', { mode: t(`mode.${mode}`) })}
+              onClick={() => setMenu(menu === 'mode' ? null : 'mode')}
+            >
+              <Icon icon={Shield} size={14} />
+              <span className="label">{t(`mode.${mode}`)}</span>
+              <Icon icon={ChevronDown} size={14} />
+            </button>
+            <span className="grow" />
+            <button
               ref={modelRef}
               type="button"
               className="btn-ghost"
@@ -160,22 +190,9 @@ export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
             >
               <span className="label">{modelShort(model)}</span>
               <span className="label hx-quiet">{effortShort(effort)}</span>
-              <Icon icon={ChevronDown} size={16} />
+              <Icon icon={ChevronDown} size={14} />
             </button>
-            <button
-              ref={modeRef}
-              type="button"
-              className="btn-ghost"
-              aria-haspopup="menu"
-              aria-expanded={menu === 'mode'}
-              aria-label={t('composer.mode', { mode: t(`mode.${mode}`) })}
-              onClick={() => setMenu(menu === 'mode' ? null : 'mode')}
-            >
-              <Icon icon={Shield} size={16} />
-              <span className="label">{t(`mode.${mode}`)}</span>
-              <Icon icon={ChevronDown} size={16} />
-            </button>
-            <span className="grow" />
+            {chat && <UsageRing used={usage?.contextTokens ?? 0} total={contextWindow(model)} spent={(usage?.promptTokens ?? 0) + (usage?.completionTokens ?? 0)} />}
             <button
               type="button"
               className={`hx-send ${showStop && permission ? 'btn-secondary' : 'btn-primary'}`}
@@ -184,19 +201,10 @@ export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
               title={t(showStop ? 'composer.stop' : 'composer.send')}
               onClick={showStop ? () => actions.stop() : submit}
             >
-              {showStop ? <Icon icon={Square} size={14} className="hx-fill" /> : <Icon icon={ArrowUp} size={18} />}
+              {showStop ? <Icon icon={Square} size={14} className="hx-fill" /> : <Icon icon={ArrowUp} />}
             </button>
           </div>
         </div>
-
-        <p className="hx-meta">
-          <span>
-            {t('composer.context')} <b>{formatTokens(usage?.contextTokens ?? 0)}</b> / {formatTokens(contextWindow(model))} {t('composer.tokens')}
-          </span>
-          <span>
-            {t('composer.total')} <b>{formatTokens((usage?.promptTokens ?? 0) + (usage?.completionTokens ?? 0))}</b> {t('composer.tokens')}
-          </span>
-        </p>
       </div>
 
       <Menu anchor={modelRef.current} open={menu === 'model'} onClose={() => setMenu(null)} label={t('settings.model')} side="top" minWidth={280}>

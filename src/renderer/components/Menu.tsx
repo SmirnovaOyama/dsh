@@ -29,11 +29,10 @@ export function Menu({ anchor, open, onClose, label, side = 'bottom', align = 's
     if (open && anchor) setRect(anchor.getBoundingClientRect())
   }, [open, anchor])
 
-  // The menu is in the page only once it has been placed, so wait for that before wiring it up;
-  // otherwise the first click inside a freshly opened menu reads as a click outside and closes it.
-  const placed = open && rect !== null
+  // The menu renders once its anchor is measured; wire it up only then, so focus and outside clicks see it.
+  const placed = rect !== null
   useEffect(() => {
-    if (!placed) return
+    if (!open || !placed) return
     const menu = ref.current
     const items = () => Array.from(menu?.querySelectorAll<HTMLElement>(ITEMS) ?? [])
     const first = items().find((el) => el.getAttribute('aria-checked') === 'true') ?? items()[0]
@@ -77,7 +76,7 @@ export function Menu({ anchor, open, onClose, label, side = 'bottom', align = 's
       window.removeEventListener('resize', onResize)
       window.removeEventListener('blur', onResize)
     }
-  }, [placed, anchor])
+  }, [open, anchor, placed])
 
   if (!open || !rect) return null
   const style: CSSProperties = {
