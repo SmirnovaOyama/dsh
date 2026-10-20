@@ -1,7 +1,7 @@
 // Electron entry point: the window, the IPC handlers and app lifecycle.
 
 import { BrowserWindow, app, dialog, ipcMain, nativeTheme, protocol, safeStorage, session, shell } from 'electron'
-import { writeFile } from 'node:fs/promises'
+import { stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { Channels, EVENT_CHANNEL } from '../shared/ipc'
 import type { AgentEvent, ConfigureOptions, FileRead, InitialState, PermissionDecision, SaveResult, Settings, StartOptions } from '../shared/types'
@@ -97,8 +97,15 @@ function createWindow() {
   })
 }
 
+/** A folder that was moved or deleted fails to open, rather than opening as a place where nothing works. */
+async function readFolder(dir: string) {
+  const isFolder = await stat(dir).then((s) => s.isDirectory(), () => false)
+  if (!isFolder) throw new Error(`${dir} is not a folder`)
+  return readWorkspace(dir)
+}
+
 async function openWorkspace(dir: string) {
-  const info = await readWorkspace(dir)
+  const info = await readFolder(dir)
   const settings = settingsStore.get()
   const recent = [dir, ...settings.recentWorkspaces.filter((p) => p !== dir)].slice(0, 8)
   const next = await settingsStore.update({ lastWorkspace: dir, recentWorkspaces: recent })
@@ -118,7 +125,7 @@ function registerIpc() {
     let workspace = null
     if (settings.lastWorkspace) {
       try {
-        workspace = await readWorkspace(settings.lastWorkspace)
+        workspace = await readFolder(settings.lastWorkspace)
       } catch {
         workspace = null
       }
