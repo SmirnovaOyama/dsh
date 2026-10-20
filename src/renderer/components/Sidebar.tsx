@@ -1,4 +1,4 @@
-import { ChevronRight, Ellipsis, Folder, FolderOpen, FolderPlus, Plus, Search, Settings as SettingsIcon, SquarePen, X } from 'lucide-react'
+import { ChevronRight, Ellipsis, Folder, FolderOpen, FolderPlus, PanelLeft, Plus, Search, Settings as SettingsIcon, SquarePen, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SessionMeta } from '../../shared/types'
 import { modKey, sessionTime, tildify } from '../format'
@@ -200,7 +200,19 @@ export function Sidebar({ searchTick }: { searchTick: number }) {
 
   return (
     <nav className="oy-sidebar hx-sidebar" aria-label={t('sidebar.label')}>
-      <div className="hx-drag" />
+      <div className="hx-side-bar">
+        {platform === 'darwin' && (
+          <button
+            type="button"
+            className="btn-ghost hx-icon-btn"
+            aria-label={t('sidebar.hide')}
+            title={`${t('sidebar.hide')} (${mod}B)`}
+            onClick={() => actions.toggleSidebar()}
+          >
+            <Icon icon={PanelLeft} size={16} />
+          </button>
+        )}
+      </div>
       <div className="hx-sidebar-top">
         <div className="hx-nav">
           <button

@@ -97,8 +97,17 @@ input, textarea, select { font: inherit; color: inherit; }
   width: var(--sidebar-width);
   min-width: 0;
   min-height: 0;
-  padding: calc(8px + var(--titlebar-height)) 10px 10px;
+  padding: calc(4px + var(--titlebar-height)) 10px 10px;
 }
+/* The row beside the macOS window buttons: it drags the window and holds the sidebar toggle. */
+.hx-side-bar {
+  position: absolute; inset: 0 0 auto 0; height: var(--titlebar-height);
+  display: flex; align-items: center; padding-inline-start: 76px;
+  -webkit-app-region: drag;
+}
+.hx-side-bar button { -webkit-app-region: no-drag; width: 28px; height: 28px; color: var(--text-muted); }
+/* With the sidebar hidden, the header makes room for the window buttons. */
+:root[data-platform="darwin"][data-sidebar="hidden"] .hx-header { padding-inline-start: 76px; }
 .hx-sidebar-top { display: flex; flex-direction: column; gap: 4px; }
 .hx-nav { display: flex; flex-direction: column; gap: 2px; }
 .hx-project {
@@ -685,3 +694,9 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-proj-add { display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; padding: 0 10px; border-radius: var(--radius-sm); font-size: 14px; color: var(--text-muted); }
 .hx-proj-add:hover { color: var(--text); background: var(--surface-hover); }
 .hx-session .p { flex-shrink: 0; max-width: 40%; font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* The demo in a browser draws stand-ins for the macOS window buttons, so its screenshots match the app. */
+:root[data-demo][data-platform="darwin"] body::after {
+  content: ""; position: fixed; z-index: 100; top: 14px; left: 18px; width: 12px; height: 12px; border-radius: 50%;
+  background: #ff5f57; box-shadow: 20px 0 0 #febc2e, 40px 0 0 #28c840; pointer-events: none;
+}

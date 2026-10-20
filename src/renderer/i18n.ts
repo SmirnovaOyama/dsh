@@ -33,6 +33,8 @@ const zh = {
   'status.waiting': '等你允許',
 
   'header.showChanges': '顯示右側面板',
+  'sidebar.hide': '隱藏側欄',
+  'sidebar.show': '顯示側欄',
   'header.hideChanges': '收合右側面板',
   'resize.sidebar': '調整側欄寬度',
   'resize.changes': '調整右側面板寬度',
@@ -338,6 +340,8 @@ const en: Record<MessageKey, string> = {
   'status.running': 'Running',
   'status.waiting': 'Needs you',
   'header.showChanges': 'Show side panel',
+  'sidebar.hide': 'Hide sidebar',
+  'sidebar.show': 'Show sidebar',
   'header.hideChanges': 'Hide side panel',
   'resize.sidebar': 'Resize sidebar',
   'resize.changes': 'Resize side panel',

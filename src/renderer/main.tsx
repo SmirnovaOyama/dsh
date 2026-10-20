@@ -14,6 +14,8 @@ async function boot() {
     // Outside Electron (npm run dev:web) the app runs against a demo with made-up data.
     const { createMockApi } = await import('./mock')
     installApi(createMockApi())
+    // Screenshots from the demo show where the macOS window buttons sit in the real app.
+    document.documentElement.dataset.demo = ''
   }
   restorePaneWidths()
   createRoot(document.getElementById('root')!).render(

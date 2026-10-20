@@ -50,6 +50,7 @@ export interface AppState {
   view: 'chat' | 'settings'
   settingsSection: SettingsSection | null
   showChanges: boolean
+  showSidebar: boolean
   selectedFile: string | null
   /** Which view the right-hand panel shows. */
   panelTab: 'changes' | 'files'
@@ -73,7 +74,9 @@ export interface AppState {
 
 const PREFS_KEY = 'dsh.ui'
 
-function readPrefs(): { showChanges?: boolean } {
+type Prefs = { showChanges?: boolean; showSidebar?: boolean }
+
+function readPrefs(): Prefs {
   try {
     return JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}')
   } catch {
@@ -81,9 +84,9 @@ function readPrefs(): { showChanges?: boolean } {
   }
 }
 
-function writePrefs(prefs: { showChanges: boolean }) {
+function writePrefs(prefs: Prefs) {
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs))
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ ...readPrefs(), ...prefs }))
   } catch {
     // Private windows can refuse storage; the panel just opens with its default next time.
   }
@@ -102,6 +105,7 @@ let state: AppState = {
   view: 'chat',
   settingsSection: null,
   showChanges: readPrefs().showChanges ?? false,
+  showSidebar: readPrefs().showSidebar ?? true,
   selectedFile: null,
   panelTab: 'changes',
   viewedFile: null,
@@ -477,6 +481,12 @@ export const actions = {
   /** Takes a project off the sidebar. Its folder and conversations stay on disk. */
   async removeProject(path: string) {
     await api.settings.update({ projects: state.settings.projects.filter((p) => p !== path) })
+  },
+
+  toggleSidebar() {
+    const next = !state.showSidebar
+    writePrefs({ showSidebar: next })
+    set({ showSidebar: next })
   },
 
   toggleChanges(show?: boolean) {

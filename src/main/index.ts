@@ -47,7 +47,7 @@ function createWindow() {
     show: false,
     backgroundColor: backgroundFor(settingsStore.get().theme),
     titleBarStyle: isMac ? 'hiddenInset' : 'default',
-    trafficLightPosition: isMac ? { x: 18, y: 18 } : undefined,
+    trafficLightPosition: isMac ? { x: 18, y: 14 } : undefined,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.cjs'),
       contextIsolation: true,
