@@ -64,6 +64,8 @@ export interface AppState {
   draft: { model: string; effort: Effort; permissionMode: PermissionMode }
   /** Bumped to ask the composer to take focus. */
   focusTick: number
+  /** True while the library moves to another folder; other ways of moving around wait until it lands. */
+  switching: boolean
 }
 
 const PREFS_KEY = 'dsh.ui'
@@ -106,6 +108,7 @@ let state: AppState = {
   refs: [],
   draft: { model: DEFAULT_SETTINGS.model, effort: DEFAULT_SETTINGS.effort, permissionMode: DEFAULT_SETTINGS.permissionMode },
   focusTick: 0,
+  switching: false,
 }
 
 const listeners = new Set<() => void>()
@@ -237,6 +240,9 @@ function handleEvent(event: AgentEvent) {
   }
 }
 
+/** Counts artifacts opened from the library, so only the one clicked last goes through. */
+let opening = 0
+
 async function loadSessions() {
   const workspace = state.workspace
   if (!workspace) return
@@ -266,6 +272,7 @@ export const actions = {
   },
 
   newChat() {
+    if (state.switching) return
     set((s) => ({
       view: 'chat',
       chatId: null,
@@ -279,10 +286,11 @@ export const actions = {
 
   /** Opens a conversation. Says whether it opened, was gone, or was left for something opened after it. */
   async openSession(id: string): Promise<'opened' | 'missing' | 'superseded'> {
+    if (state.switching) return 'superseded'
     if (state.chatId === id && state.view === 'chat') return state.chat ? 'opened' : 'superseded'
     // Coming back from a page to the conversation already loaded keeps it as it was.
     if (state.chatId === id && state.chat) {
-      set({ view: 'chat' })
+      set((s) => ({ view: 'chat', focusTick: s.focusTick + 1 }))
       return 'opened'
     }
     // Events for this conversation are ignored until the snapshot arrives; the snapshot already contains them.
@@ -399,10 +407,12 @@ export const actions = {
   },
 
   async pickWorkspace() {
+    if (state.switching) return
     await api.workspace.pick()
   },
 
   async openWorkspace(path: string) {
+    if (state.switching) return
     const info = await api.workspace.open(path)
     if (!info) {
       // The folder is gone; drop it from the recent list.
@@ -479,11 +489,20 @@ export const actions = {
    * beside it. When the folder or the conversation is gone, nothing changes and the reason comes back.
    */
   async openArtifact(entry: LibraryArtifact): Promise<'opened' | 'folder' | 'conversation' | 'superseded'> {
-    const stillHere = () => state.view === 'artifacts'
+    if (state.switching) return 'superseded'
+    const mine = ++opening
+    const stillHere = () => opening === mine && state.view === 'artifacts'
     if (!(await api.sessions.load(entry.sessionId))) return 'conversation'
     if (!stillHere()) return 'superseded'
     if (state.workspace?.path !== entry.workspace) {
-      const info = await api.workspace.open(entry.workspace)
+      // Nothing else can move while the folder changes, so a click in the old folder never lands in the new one.
+      set({ switching: true })
+      let info: WorkspaceInfo | null = null
+      try {
+        info = await api.workspace.open(entry.workspace)
+      } finally {
+        set({ switching: false })
+      }
       if (!info) return 'folder'
       // The folder's own event may come before or after this; whichever is second changes nothing.
       handleEvent({ type: 'workspace', workspace: info })
@@ -502,10 +521,11 @@ export const actions = {
   },
 
   openSettings(section: SettingsSection | null = null) {
+    if (state.switching) return
     set((s) => ({ view: 'settings', settingsSection: section, settingsFrom: s.view === 'settings' ? s.settingsFrom : s.view }))
   },
 
   closeSettings() {
-    set((s) => ({ view: s.settingsFrom, settingsSection: null, focusTick: s.focusTick + 1 }))
+    set((s) => ({ view: s.settingsFrom, settingsSection: null, focusTick: s.settingsFrom === 'chat' ? s.focusTick + 1 : s.focusTick }))
   },
 }

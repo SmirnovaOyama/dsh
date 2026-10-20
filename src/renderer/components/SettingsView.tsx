@@ -24,6 +24,7 @@ export function SettingsView() {
   const [current, setCurrent] = useState<SettingsSection>(initial ?? 'connection')
   const [scrolled, setScrolled] = useState(false)
   const pageRef = useRef<HTMLDivElement>(null)
+  const from = useApp((s) => s.settingsFrom)
 
   const goTo = (id: SettingsSection, smooth = true) => {
     setCurrent(id)
@@ -68,7 +69,7 @@ export function SettingsView() {
         <div className="hx-drag" />
         <button type="button" className="hx-back" onClick={() => actions.closeSettings()}>
           <Icon icon={ChevronLeft} />
-          {t('settings.back')}
+          {t(from === 'artifacts' ? 'settings.backToLibrary' : 'settings.back')}
         </button>
         <div className="hx-settings-nav">
           {SECTIONS.map((section) => (

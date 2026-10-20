@@ -736,8 +736,9 @@ button.hx-tool:hover { background: var(--surface-hover); }
   .hx-artifact-head .grow { display: none; }
 }
 @container (max-width: 300px) { .hx-artifact-head .title { visibility: hidden; margin: 0; } }
-/* Once open, the artifact panel keeps room for its header controls; the conversation gives way instead. */
-.hx-changes.is-artifacts[data-motion="still"] { min-width: 248px; }
+/* In the narrowest panels the less used controls go, so copy, its menu and close always stay in reach. */
+@container (max-width: 250px) { .hx-artifact-head .hx-version-pick { display: none; } }
+@container (max-width: 190px) { .hx-artifact-head :is(.hx-iconseg, .hx-to-list) { display: none; } }
 .hx-code-lines .num.is-static { cursor: default; }
 .hx-code-lines .num.is-static:hover { color: var(--text-disabled); }
 .hx-artifact-writing { display: flex; align-items: center; gap: 6px; padding: 8px 0 0 48px; font-size: 12px; color: var(--text-muted); }
@@ -841,7 +842,9 @@ button.hx-tool:hover { background: var(--surface-hover); }
 /* ── artifacts library ───────────────────────────────────────── */
 /* The library covers the conversation instead of replacing it, so coming back finds it as it was. */
 .hx-app { position: relative; }
-.hx-library { position: absolute; inset-block: 0; inset-inline: var(--sidebar-width) 0; z-index: 5; }
+/* Opening an artifact from another folder: nothing else moves until it lands, and the pointer says so. */
+.hx-app[aria-busy='true'], .hx-app[aria-busy='true'] * { cursor: progress; }
+.hx-library { position: absolute; inset-block: 0; inset-inline: var(--sidebar-width) 0; z-index: 5; outline: none; }
 .hx-library .hx-page-head .in { max-width: 72rem; padding-bottom: 12px; }
 .hx-lib-title { display: flex; align-items: baseline; gap: 8px; }
 .hx-lib-title .count { font-size: 13px; line-height: 18px; color: var(--text-muted); font-variant-numeric: tabular-nums; }

@@ -2,7 +2,7 @@ import { FilePen, FilePlus, Terminal } from 'lucide-react'
 import type { PermissionRequest } from '../../shared/types'
 import { tildify } from '../format'
 import { t } from '../i18n'
-import { actions, useApp } from '../store'
+import { actions, getState, useApp } from '../store'
 import { DiffStatsText, DiffView } from './DiffView'
 import { Icon } from './Icon'
 
@@ -93,6 +93,7 @@ export function PermissionPanel({ request }: { request: PermissionRequest }) {
 /** Enter allows and Esc declines, unless focus is somewhere that uses those keys itself. */
 export function permissionKey(event: KeyboardEvent, composerHasText: boolean): boolean {
   if (event.isComposing || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return false
+  if (getState().view !== 'chat') return false
   // A dialog over the window, such as an expanded artifact, hides the prompt; its keys are its own.
   if (document.querySelector('[aria-modal="true"]')) return false
   const target = event.target as HTMLElement | null

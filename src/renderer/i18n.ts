@@ -275,6 +275,7 @@ const zh = {
 
   'settings.title': '設定',
   'settings.back': '返回對話',
+  'settings.backToLibrary': '返回成品',
   'settings.nav.connection': '連線',
   'settings.nav.model': '模型',
   'settings.nav.permissions': '權限',
@@ -587,6 +588,7 @@ const en: Record<MessageKey, string> = {
   'welcome.keyAction': 'Add API key',
   'settings.title': 'Settings',
   'settings.back': 'Back to conversation',
+  'settings.backToLibrary': 'Back to artifacts',
   'settings.nav.connection': 'Connection',
   'settings.nav.model': 'Model',
   'settings.nav.permissions': 'Permissions',

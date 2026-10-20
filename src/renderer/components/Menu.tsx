@@ -29,6 +29,16 @@ export function Menu({ anchor, open, onClose, label, side = 'bottom', align = 's
     if (open && anchor) setRect(anchor.getBoundingClientRect())
   }, [open, anchor])
 
+  // A choice closes the menu and takes the focused item with it; focus goes back to what opened the menu,
+  // unless the choice already sent it somewhere, so the next key never lands on the page itself.
+  useEffect(() => {
+    if (!open) return
+    return () => {
+      const lost = !document.activeElement || document.activeElement === document.body
+      if (lost && anchor?.isConnected) anchor.focus({ preventScroll: true })
+    }
+  }, [open, anchor])
+
   // The menu renders once its anchor is measured; wire it up only then, so focus and outside clicks see it.
   const placed = rect !== null
   useEffect(() => {

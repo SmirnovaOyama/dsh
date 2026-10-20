@@ -243,6 +243,12 @@ export function LibraryView() {
   const [scrolled, setScrolled] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const projectRef = useRef<HTMLButtonElement>(null)
+  const pageRef = useRef<HTMLDivElement>(null)
+
+  // Focus starts on the page, so keys go to it rather than to the conversation underneath.
+  useEffect(() => {
+    if (!pageRef.current?.contains(document.activeElement)) pageRef.current?.focus({ preventScroll: true })
+  }, [])
 
   useEffect(() => {
     let live = true
@@ -293,7 +299,7 @@ export function LibraryView() {
   }
 
   return (
-    <div className="hx-page hx-library" onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 0)}>
+    <div ref={pageRef} tabIndex={-1} className="hx-page hx-library" onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 0)}>
       <header className={`hx-page-head ${scrolled ? 'is-scrolled' : ''}`}>
         <div className="in">
           <div className="hx-lib-title">

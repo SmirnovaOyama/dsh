@@ -87,6 +87,7 @@ export function App() {
   const chat = useApp((s) => s.chat)
   const panelMotion = usePresence(panel, 220)
   const panelPane = useApp((s) => (s.panelTab === 'artifacts' ? 'artifacts' : 'changes'))
+  const switching = useApp((s) => s.switching)
   const [searchTick, setSearchTick] = useState(0)
 
   setLocale(locale)
@@ -115,7 +116,7 @@ export function App() {
   // its scroll and its running pages as they were.
   const library = view === 'artifacts'
   return (
-    <div className="hx-app">
+    <div className="hx-app" aria-busy={switching || undefined}>
       <Sidebar searchTick={searchTick} />
       <Resizer pane="sidebar" />
       <ChatView />

@@ -62,7 +62,8 @@ export function Resizer({ pane }: { pane: Pane }) {
   const maxWidth = (el: HTMLElement) => {
     const app = el.parentElement
     if (!app) return LIMITS[pane][1]
-    const others = [...app.children].filter((c) => c !== el && !c.classList.contains('hx-main'))
+    // A page laid over the conversation, such as the library, takes no room in the row.
+    const others = [...app.children].filter((c) => c !== el && !c.classList.contains('hx-main') && getComputedStyle(c).position !== 'absolute')
     const taken = others.reduce((sum, c) => sum + c.getBoundingClientRect().width, 0)
     return Math.min(LIMITS[pane][1], app.clientWidth - taken - MAIN_MIN)
   }
