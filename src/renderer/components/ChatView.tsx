@@ -1,4 +1,4 @@
-import { ChevronDown, Folder, GitBranch, PanelRight, Trash2 } from 'lucide-react'
+import { ChevronDown, Folder, GitBranch, PanelLeft, PanelRight, Trash2 } from 'lucide-react'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { tildify } from '../format'
 import { t } from '../i18n'
@@ -9,6 +9,7 @@ import { DiffStatsText } from './DiffView'
 import { Icon } from './Icon'
 import { Menu, MenuItem } from './Menu'
 import { Modal } from './Modal'
+import { RewindDialog } from './Rewind'
 import { Transcript } from './Transcript'
 import { NoFolder, NoKey } from './Welcome'
 
@@ -24,6 +25,7 @@ function Header() {
   const home = useApp((s) => s.app.home)
   // While artifacts fill the panel, this button brings back changes and files rather than hiding it.
   const showingChanges = useApp((s) => s.showChanges && s.panelTab !== 'artifacts')
+  const showSidebar = useApp((s) => s.showSidebar)
   const moreRef = useRef<HTMLButtonElement>(null)
   const [menu, setMenu] = useState(false)
   const [confirm, setConfirm] = useState(false)
@@ -37,6 +39,17 @@ function Header() {
 
   return (
     <header className="hx-header">
+      {!showSidebar && (
+        <button
+          type="button"
+          className="btn-ghost hx-icon-btn"
+          aria-label={t('sidebar.show')}
+          title={t('sidebar.show')}
+          onClick={() => actions.toggleSidebar()}
+        >
+          <Icon icon={PanelLeft} size={18} />
+        </button>
+      )}
       <div className="heading">
         {/* The title opens the conversation's menu, the way Claude Code's caret beside the title does. */}
         <button
@@ -204,6 +217,7 @@ function Conversation() {
         </HoldScroll.Provider>
         <Composer chat={chat} showJump={showJump} onJump={() => toBottom(true)} onSent={() => toBottom()} />
       </div>
+      <RewindDialog />
     </div>
   )
 }

@@ -10,6 +10,7 @@ import { actions, useApp } from '../store'
 import { Icon } from './Icon'
 import { Markdown } from './Markdown'
 import { Menu, MenuItem, MenuSeparator } from './Menu'
+import { PageHead } from './PageHead'
 
 const folderName = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path
 const keyOf = (entry: LibraryArtifact) => `${entry.sessionId}:${entry.artifact.id || entry.itemId}`
@@ -300,13 +301,11 @@ export function LibraryView() {
 
   return (
     <div ref={pageRef} tabIndex={-1} className="hx-page hx-library" onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 0)}>
-      <header className={`hx-page-head ${scrolled ? 'is-scrolled' : ''}`}>
-        <div className="in">
-          <div className="hx-lib-title">
-            <h1>{t('library.title')}</h1>
-            {entries && entries.length > 0 && <span className="count">{t('library.count', { n: entries.length })}</span>}
-          </div>
-          {entries && entries.length > 0 && (
+      <PageHead
+        title={t('library.title')}
+        scrolled={scrolled}
+        below={
+          entries && entries.length > 0 ? (
             <div className="hx-lib-tools">
               <label className="hx-lib-search">
                 <Icon icon={Search} />
@@ -348,9 +347,11 @@ export function LibraryView() {
                 </span>
               )}
             </div>
-          )}
-        </div>
-      </header>
+          ) : null
+        }
+      >
+        {entries && entries.length > 0 && <span className="hx-lib-count">{t('library.count', { n: entries.length })}</span>}
+      </PageHead>
 
       <div className="hx-lib-body">
         {entries && entries.length === 0 && (

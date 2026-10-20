@@ -14,9 +14,14 @@ import {
   type PermissionDecision,
   type PermissionMode,
   type PermissionRequest,
+  type QueuedMessage,
+  type RewindMode,
+  type ScheduledTask,
+  type ScheduledTaskInput,
   type SessionData,
   type SessionMeta,
   type Settings,
+  type SlashCommand,
   type TranscriptItem,
   type WorkspaceInfo,
 } from '../shared/types'
@@ -27,6 +32,8 @@ export interface ChatState {
   session: SessionData
   changes: FileChange[]
   permission: PermissionRequest | null
+  /** Messages typed while the agent works, waiting for its next step. */
+  queue: QueuedMessage[]
 }
 
 export type SettingsSection = 'connection' | 'model' | 'permissions' | 'appearance'
@@ -37,18 +44,22 @@ export interface AppState {
   hasApiKey: boolean
   app: AppInfo
   workspace: WorkspaceInfo | null
-  /** Conversations in this folder, most recently used first. */
+  /** Conversations in every project, most recently used first. */
   sessions: SessionMeta[]
   /** When each conversation was last opened for work; the list sorts and groups by it, so it never reshuffles on its own. */
   activeAt: Record<string, number>
   /** The selected conversation; null with chatId set means it is still loading. */
   chatId: string | null
   chat: ChatState | null
-  view: 'chat' | 'settings' | 'artifacts'
+  /** The main column: a conversation, or one of the pages the sidebar opens. */
+  view: 'chat' | 'settings' | 'scheduled' | 'artifacts'
+  /** Scheduled tasks; null until loaded. */
+  schedules: ScheduledTask[] | null
   settingsSection: SettingsSection | null
   /** The page Settings goes back to. */
-  settingsFrom: 'chat' | 'artifacts'
+  settingsFrom: 'chat' | 'scheduled' | 'artifacts'
   showChanges: boolean
+  showSidebar: boolean
   selectedFile: string | null
   /** Which view the right-hand panel shows. */
   panelTab: 'changes' | 'files' | 'artifacts'
@@ -66,11 +77,21 @@ export interface AppState {
   focusTick: number
   /** True while the library moves to another folder; other ways of moving around wait until it lands. */
   switching: boolean
+  /** Text to put in the composer, such as a message taken back by rewinding; `tick` makes each one new. */
+  fill: { text: string; append: boolean; tick: number } | null
+  /** The project's own slash commands. */
+  commands: SlashCommand[]
+  /** Files in the open folder, for the @ picker; null until first asked for. */
+  files: string[] | null
+  /** The message the rewind dialog is open for, or '' to pick one. */
+  rewindFor: string | null
 }
 
 const PREFS_KEY = 'dsh.ui'
 
-function readPrefs(): { showChanges?: boolean } {
+type Prefs = { showChanges?: boolean; showSidebar?: boolean }
+
+function readPrefs(): Prefs {
   try {
     return JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}')
   } catch {
@@ -78,9 +99,9 @@ function readPrefs(): { showChanges?: boolean } {
   }
 }
 
-function writePrefs(prefs: { showChanges: boolean }) {
+function writePrefs(prefs: Prefs) {
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs))
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ ...readPrefs(), ...prefs }))
   } catch {
     // Private windows can refuse storage; the panel just opens with its default next time.
   }
@@ -97,9 +118,11 @@ let state: AppState = {
   chatId: null,
   chat: null,
   view: 'chat',
+  schedules: null,
   settingsSection: null,
   settingsFrom: 'chat',
   showChanges: readPrefs().showChanges ?? false,
+  showSidebar: readPrefs().showSidebar ?? true,
   selectedFile: null,
   panelTab: 'changes',
   viewedArtifact: null,
@@ -109,6 +132,10 @@ let state: AppState = {
   draft: { model: DEFAULT_SETTINGS.model, effort: DEFAULT_SETTINGS.effort, permissionMode: DEFAULT_SETTINGS.permissionMode },
   focusTick: 0,
   switching: false,
+  fill: null,
+  commands: [],
+  files: null,
+  rewindFor: null,
 }
 
 const listeners = new Set<() => void>()
@@ -205,7 +232,7 @@ function handleEvent(event: AgentEvent) {
       break
     case 'meta':
       set((s) => ({
-        sessions: s.workspace && event.meta.workspace === s.workspace.path ? placeMeta(s.sessions, event.meta, false) : s.sessions,
+        sessions: placeMeta(s.sessions, event.meta, false),
         activeAt: event.meta.id in s.activeAt ? s.activeAt : { ...s.activeAt, [event.meta.id]: event.meta.updatedAt },
         chat: s.chat && s.chat.session.id === event.meta.id ? { ...s.chat, session: { ...s.chat.session, ...event.meta } } : s.chat,
       }))
@@ -222,36 +249,70 @@ function handleEvent(event: AgentEvent) {
         return selectedFile === s.selectedFile ? {} : { selectedFile }
       })
       break
+    case 'todos':
+      updateChat(event.sessionId, (chat) => ({ session: { ...chat.session, todos: event.todos.length ? event.todos : undefined } }))
+      break
+    case 'queue':
+      updateChat(event.sessionId, () => ({ queue: event.queue }))
+      break
     case 'usage':
       updateChat(event.sessionId, (chat) => ({ session: { ...chat.session, usage: event.usage } }))
       break
-    case 'settings':
+    case 'settings': {
+      const projectsChanged = event.settings.projects.join('\n') !== state.settings.projects.join('\n')
       set({ settings: event.settings, hasApiKey: event.hasApiKey })
-      break
-    case 'workspace': {
-      const changed = event.workspace?.path !== state.workspace?.path
-      set({ workspace: event.workspace })
-      if (changed) {
-        set((s) => ({ chatId: null, chat: null, sessions: [], activeAt: {}, selectedFile: null, viewedFile: null, refs: [], ...leaveArtifacts(s) }))
-        void loadSessions()
-      }
+      if (projectsChanged) void loadSessions()
       break
     }
+    case 'schedules':
+      set({ schedules: event.tasks })
+      break
+    case 'workspace':
+      if (event.workspace?.path !== state.workspace?.path) switchedTo(event.workspace)
+      else set({ workspace: event.workspace })
+      break
   }
 }
 
 /** Counts artifacts opened from the library, so only the one clicked last goes through. */
 let opening = 0
 
+/** Folder-specific state starts over in a new folder; a conversation that belongs to it stays open. */
+function switchedTo(workspace: WorkspaceInfo | null) {
+  set((s) => ({
+    workspace,
+    ...(s.chat && s.chat.session.workspace !== workspace?.path ? { chatId: null, chat: null, ...leaveArtifacts(s) } : {}),
+    selectedFile: null,
+    viewedFile: null,
+    refs: [],
+    commands: [],
+    files: null,
+  }))
+  void loadCommands()
+}
+
+/** Projects in the sidebar: the saved list, plus the open folder if it is somehow not on it. */
+export function projectPaths(projects: string[], workspace: WorkspaceInfo | null): string[] {
+  return workspace && !projects.includes(workspace.path) ? [workspace.path, ...projects] : projects
+}
+
+let loadSeq = 0
 async function loadSessions() {
+  const seq = ++loadSeq
+  const lists = await Promise.all(projectPaths(state.settings.projects, state.workspace).map((path) => api.sessions.list(path)))
+  if (seq !== loadSeq) return
+  const sessions = lists.flat().sort((a, b) => b.updatedAt - a.updatedAt)
+  set((s) => ({
+    sessions,
+    activeAt: { ...Object.fromEntries(sessions.map((m) => [m.id, m.updatedAt])), ...s.activeAt },
+  }))
+}
+
+async function loadCommands() {
   const workspace = state.workspace
   if (!workspace) return
-  const sessions = await api.sessions.list(workspace.path)
-  if (state.workspace?.path !== workspace.path) return
-  set({
-    sessions: [...sessions].sort((a, b) => b.updatedAt - a.updatedAt),
-    activeAt: Object.fromEntries(sessions.map((m) => [m.id, m.updatedAt])),
-  })
+  const commands = await api.workspace.commands()
+  if (state.workspace?.path === workspace.path) set({ commands })
 }
 
 // ── actions ────────────────────────────────────────────────────
@@ -268,11 +329,38 @@ export const actions = {
       workspace: initial.workspace,
       draft: { model: initial.settings.model, effort: initial.settings.effort, permissionMode: initial.settings.permissionMode },
     })
-    await loadSessions()
+    await Promise.all([loadSessions(), loadCommands(), api.schedules.list().then((schedules) => set({ schedules }))])
   },
 
-  newChat() {
+  /** Opens a page from the top of the sidebar, keeping the open conversation for when you come back. */
+  openPage(view: 'scheduled' | 'artifacts') {
     if (state.switching) return
+    set({ view })
+  },
+
+  async saveSchedule(task: ScheduledTaskInput) {
+    return api.schedules.save(task)
+  },
+
+  async removeSchedule(id: string) {
+    await api.schedules.remove(id)
+  },
+
+  async runSchedule(id: string) {
+    const task = state.schedules?.find((t) => t.id === id)
+    const sessionId = await api.schedules.runNow(id)
+    if (!sessionId || !task) return sessionId
+    // The run belongs to the task's project, which may not be the open one.
+    if (task.workspace !== state.workspace?.path && !(await actions.openWorkspace(task.workspace))) return sessionId
+    await loadSessions()
+    await actions.openSession(sessionId)
+    return sessionId
+  },
+
+  /** A new conversation, in the given project or the open one. */
+  async newChat(project?: string) {
+    if (state.switching) return
+    if (project && project !== state.workspace?.path && !(await actions.openWorkspace(project))) return
     set((s) => ({
       view: 'chat',
       chatId: null,
@@ -293,6 +381,9 @@ export const actions = {
       set((s) => ({ view: 'chat', focusTick: s.focusTick + 1 }))
       return 'opened'
     }
+    // A conversation in another project opens that project first.
+    const meta = state.sessions.find((m) => m.id === id)
+    if (meta && meta.workspace !== state.workspace?.path && !(await actions.openWorkspace(meta.workspace))) return 'missing'
     // Events for this conversation are ignored until the snapshot arrives; the snapshot already contains them.
     set((s) => ({ view: 'chat', chatId: id, chat: null, selectedFile: null, ...leaveArtifacts(s) }))
     const snapshot = await api.sessions.load(id)
@@ -302,7 +393,7 @@ export const actions = {
       return 'missing'
     }
     set((s) => ({
-      chat: { session: snapshot.session, changes: snapshot.changes, permission: snapshot.permission },
+      chat: { session: snapshot.session, changes: snapshot.changes, permission: snapshot.permission, queue: snapshot.queue ?? [] },
       selectedFile: snapshot.changes[0]?.path ?? null,
       focusTick: s.focusTick + 1,
     }))
@@ -350,7 +441,7 @@ export const actions = {
     }
     set((s) => ({
       chatId: id,
-      chat: { session, changes: [], permission: null },
+      chat: { session, changes: [], permission: null, queue: [] },
       sessions: placeMeta(s.sessions, metaOf(session), true),
       activeAt: { ...s.activeAt, [id]: now },
     }))
@@ -358,8 +449,65 @@ export const actions = {
     await api.agent.start(workspace.path, trimmed, { id, model: draft.model, effort: draft.effort, permissionMode: draft.permissionMode }, refs)
   },
 
-  stop() {
-    if (state.chat) void api.agent.stop(state.chat.session.id)
+  /** Stopping also takes back queued messages and puts them in the composer, as Claude Code does. */
+  async stop() {
+    const chat = state.chat
+    if (!chat) return
+    if (chat.queue.length) {
+      const taken = await api.agent.unqueue(chat.session.id)
+      if (taken.length) actions.fillComposer(taken.map((m) => m.text).join('\n\n'), true)
+    }
+    void api.agent.stop(chat.session.id)
+  },
+
+  async unqueue(messageId: string) {
+    const chat = state.chat
+    if (!chat) return
+    updateChat(chat.session.id, (c) => ({ queue: c.queue.filter((m) => m.id !== messageId) }))
+    await api.agent.unqueue(chat.session.id, messageId)
+  },
+
+  /** Puts text in the composer; `append` keeps what is already typed in front of it. */
+  fillComposer(text: string, append = false) {
+    set((s) => ({ fill: { text, append, tick: (s.fill?.tick ?? 0) + 1 }, focusTick: s.focusTick + 1 }))
+  },
+
+  openRewind(itemId = '') {
+    set({ rewindFor: itemId })
+  },
+
+  closeRewind() {
+    set((s) => ({ rewindFor: null, focusTick: s.focusTick + 1 }))
+  },
+
+  async rewind(itemId: string, mode: RewindMode) {
+    const chat = state.chat
+    if (!chat) return { ok: false as const, error: 'no-session' }
+    const result = await api.agent.rewind(chat.session.id, itemId, mode)
+    if (!result.ok) return result
+    if (mode !== 'code') {
+      const snapshot = await api.sessions.load(chat.session.id)
+      if (snapshot && state.chat?.session.id === chat.session.id) {
+        set({ chat: { session: snapshot.session, changes: snapshot.changes, permission: snapshot.permission, queue: snapshot.queue ?? [] } })
+      }
+      // The message goes back in the composer so it can be changed and sent again.
+      set({ refs: result.refs ?? [] })
+      actions.fillComposer(result.text)
+    }
+    return result
+  },
+
+  /** Loads the folder's files for the @ picker, once per folder. */
+  async loadFiles() {
+    if (state.files !== null || !state.workspace) return
+    const path = state.workspace.path
+    set({ files: [] })
+    const list = await api.workspace.files()
+    if (state.workspace?.path === path) set({ files: list.files })
+  },
+
+  reloadCommands() {
+    void loadCommands()
   },
 
   retry() {
@@ -411,14 +559,28 @@ export const actions = {
     await api.workspace.pick()
   },
 
-  async openWorkspace(path: string) {
-    if (state.switching) return
+  /** Opens a project folder. Returns false when the folder is gone, and drops it from the lists. */
+  async openWorkspace(path: string): Promise<boolean> {
+    if (state.switching) return false
     const info = await api.workspace.open(path)
     if (!info) {
-      // The folder is gone; drop it from the recent list.
-      const recent = state.settings.recentWorkspaces.filter((p) => p !== path)
-      await api.settings.update({ recentWorkspaces: recent })
+      const { recentWorkspaces, projects } = state.settings
+      await api.settings.update({ recentWorkspaces: recentWorkspaces.filter((p) => p !== path), projects: projects.filter((p) => p !== path) })
+      return false
     }
+    if (info.path !== state.workspace?.path) switchedTo(info)
+    return true
+  },
+
+  /** Takes a project off the sidebar. Its folder and conversations stay on disk. */
+  async removeProject(path: string) {
+    await api.settings.update({ projects: state.settings.projects.filter((p) => p !== path) })
+  },
+
+  toggleSidebar() {
+    const next = !state.showSidebar
+    writePrefs({ showSidebar: next })
+    set({ showSidebar: next })
   },
 
   toggleChanges(show?: boolean) {

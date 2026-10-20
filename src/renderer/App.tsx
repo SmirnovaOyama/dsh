@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChangesPanel } from './components/ChangesPanel'
 import { Resizer } from './components/Resizer'
+import { ScheduledView } from './components/ScheduledView'
 import { ChatView } from './components/ChatView'
 import { LibraryView } from './components/LibraryView'
 import { SettingsView } from './components/SettingsView'
@@ -40,6 +41,9 @@ function useShortcuts(onSearch: () => void) {
         event.preventDefault()
         if (getState().view === 'settings') actions.closeSettings()
         onSearch()
+      } else if (key === 'b') {
+        event.preventDefault()
+        actions.toggleSidebar()
       } else if (key === ',') {
         event.preventDefault()
         actions.openSettings()
@@ -88,6 +92,7 @@ export function App() {
   const panelMotion = usePresence(panel, 220)
   const panelPane = useApp((s) => (s.panelTab === 'artifacts' ? 'artifacts' : 'changes'))
   const switching = useApp((s) => s.switching)
+  const showSidebar = useApp((s) => s.showSidebar)
   const [searchTick, setSearchTick] = useState(0)
 
   setLocale(locale)
@@ -98,7 +103,10 @@ export function App() {
     document.documentElement.dataset.platform = platform
   }, [platform])
   useEffect(() => {
-    const name = view === 'artifacts' ? t('library.title') : title
+    document.documentElement.dataset.sidebar = showSidebar ? 'shown' : 'hidden'
+  }, [showSidebar])
+  useEffect(() => {
+    const name = view === 'artifacts' ? t('library.title') : view === 'scheduled' ? t('scheduled.title') : title
     document.title = name ? `${name} - ${t('app.name')}` : t('app.name')
   }, [title, view, locale])
 
@@ -117,11 +125,11 @@ export function App() {
   const library = view === 'artifacts'
   return (
     <div className="hx-app" aria-busy={switching || undefined}>
-      <Sidebar searchTick={searchTick} />
-      <Resizer pane="sidebar" />
-      <ChatView />
-      {panelMotion && panelMotion !== 'out' && !library && <Resizer key={panelPane} pane={panelPane} />}
-      {panelMotion && <ChangesPanel chat={chat} motion={panelMotion} />}
+      {showSidebar && <Sidebar searchTick={searchTick} />}
+      {showSidebar && <Resizer pane="sidebar" />}
+      {view === 'scheduled' ? <ScheduledView /> : <ChatView />}
+      {view !== 'scheduled' && panelMotion && panelMotion !== 'out' && !library && <Resizer key={panelPane} pane={panelPane} />}
+      {view !== 'scheduled' && panelMotion && <ChangesPanel chat={chat} motion={panelMotion} />}
       {library && <LibraryView />}
     </div>
   )

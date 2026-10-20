@@ -1,18 +1,21 @@
 // Electron entry point: the window, the IPC handlers and app lifecycle.
 
 import { BrowserWindow, app, dialog, ipcMain, nativeTheme, protocol, safeStorage, session, shell } from 'electron'
+import { randomUUID } from 'node:crypto'
 import { stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { Channels, EVENT_CHANNEL } from '../shared/ipc'
-import type { AgentEvent, ConfigureOptions, FileRead, InitialState, PermissionDecision, SaveResult, Settings, StartOptions } from '../shared/types'
+import type { AgentEvent, ConfigureOptions, FileRead, InitialState, PermissionDecision, SaveResult, ScheduledTaskInput, Settings, StartOptions } from '../shared/types'
 import { saveToFolder, safeFileName, writeTempPage } from './artifactFiles'
 import { PREVIEW_SCHEME, PreviewPages, withPolicy } from './artifactPreview'
 import { PreviewGate, gateProxy } from './previewNetwork'
 import { Controller, readWorkspace } from './controller'
 import { DeepSeekError, checkConnection } from './deepseek'
+import { listCommands } from './commands'
 import { cleanRefs } from './refs'
 import { listWorkspaceFiles, readTextFile } from './tools/files'
 import { resolveInWorkspace } from './tools/paths'
+import { Scheduler } from './schedules'
 import { SessionStore, SettingsStore, type KeyCipher } from './store'
 
 const devServerUrl = process.env.DSH_DEV_SERVER_URL
@@ -43,6 +46,24 @@ protocol.registerSchemesAsPrivileged([{ scheme: PREVIEW_SCHEME, privileges: { st
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
+const scheduler = new Scheduler(app.getPath('userData'), {
+  settings: () => settingsStore.get(),
+  emit: (tasks) => emit({ type: 'schedules', tasks }),
+  async run(task) {
+    // Short codes the renderer turns into words.
+    if (!settingsStore.hasApiKey()) throw new Error('no-key')
+    const folder = await stat(task.workspace).catch(() => null)
+    if (!folder?.isDirectory()) throw new Error('no-folder')
+    const meta = await controller.start(task.workspace, task.prompt, {
+      id: randomUUID(),
+      model: task.model,
+      effort: task.effort,
+      permissionMode: task.permissionMode,
+    })
+    return meta.id
+  },
+})
+
 function backgroundFor(theme: Settings['theme']) {
   const dark = theme === 'dark' || (theme === 'system' && nativeTheme.shouldUseDarkColors)
   // The page colour, so the window never flashes a different shade before the first paint.
@@ -59,7 +80,7 @@ function createWindow() {
     show: false,
     backgroundColor: backgroundFor(settingsStore.get().theme),
     titleBarStyle: isMac ? 'hiddenInset' : 'default',
-    trafficLightPosition: isMac ? { x: 18, y: 18 } : undefined,
+    trafficLightPosition: isMac ? { x: 18, y: 14 } : undefined,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.cjs'),
       contextIsolation: true,
@@ -108,7 +129,9 @@ async function openWorkspace(dir: string) {
   const info = await readFolder(dir)
   const settings = settingsStore.get()
   const recent = [dir, ...settings.recentWorkspaces.filter((p) => p !== dir)].slice(0, 8)
-  const next = await settingsStore.update({ lastWorkspace: dir, recentWorkspaces: recent })
+  // A folder opened for the first time becomes a project at the top of the sidebar.
+  const projects = settings.projects.includes(dir) ? settings.projects : [dir, ...settings.projects]
+  const next = await settingsStore.update({ lastWorkspace: dir, recentWorkspaces: recent, projects })
   emit({ type: 'settings', settings: next, hasApiKey: settingsStore.hasApiKey() })
   emit({ type: 'workspace', workspace: info })
   return info
@@ -200,6 +223,11 @@ function registerIpc() {
     }
   })
 
+  handle('workspaceCommands', async () => {
+    const dir = settingsStore.get().lastWorkspace
+    return dir ? listCommands(dir) : []
+  })
+
   handle('sessionsList', (workspace: string) => sessionStore.list(workspace))
   handle('sessionsLoad', (id: string) => controller.snapshot(id))
   handle('sessionsRemove', (id: string) => controller.remove(id))
@@ -208,11 +236,20 @@ function registerIpc() {
     controller.start(workspace, text, opts, cleanRefs(refs)),
   )
   handle('agentSend', (id: string, text: string, refs?: unknown) => controller.send(id, text, cleanRefs(refs)))
+  handle('agentUnqueue', (id: string, messageId?: string) => controller.unqueue(id, typeof messageId === 'string' ? messageId : undefined))
+  handle('agentRewind', (id: string, itemId: string, mode: unknown) =>
+    controller.rewind(id, itemId, mode === 'conversation' || mode === 'code' ? mode : 'both'),
+  )
   handle('agentStop', (id: string) => controller.stop(id))
   handle('agentRetry', (id: string) => controller.retry(id))
   handle('agentCompact', (id: string, focus?: string) => controller.compact(id, focus))
   handle('agentRespond', (id: string, requestId: string, decision: PermissionDecision) => controller.respond(id, requestId, decision))
   handle('agentConfigure', (id: string, opts: ConfigureOptions) => controller.configure(id, opts))
+
+  handle('schedulesList', () => scheduler.list())
+  handle('schedulesSave', (task: ScheduledTaskInput) => scheduler.save(task))
+  handle('schedulesRemove', (id: string) => scheduler.remove(id))
+  handle('schedulesRunNow', (id: string) => scheduler.runNow(id))
 
   handle('changesRevertAll', (id: string) => controller.revertAll(id))
   handle('changesCommit', (id: string, message: string) => controller.commit(id, message))
@@ -273,8 +310,9 @@ app.whenReady().then(async () => {
   await session.defaultSession
     .setProxy(gateProxy(port, devServerUrl ? new URL(devServerUrl).hostname : undefined))
     .then(() => (fenced = true), () => undefined)
-  await Promise.all([settingsStore.load(), sessionStore.load()])
+  await Promise.all([settingsStore.load(), sessionStore.load(), scheduler.load()])
   registerIpc()
+  scheduler.start()
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -286,6 +324,7 @@ app.on('before-quit', (event) => {
   if (flushed) return
   // Write unsaved conversations before the process exits.
   event.preventDefault()
+  scheduler.stop()
   controller.stopAll()
   void sessionStore.flush().finally(() => {
     flushed = true

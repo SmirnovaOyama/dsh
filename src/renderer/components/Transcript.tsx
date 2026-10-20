@@ -1,4 +1,4 @@
-import { ChevronRight, CircleAlert, FileText } from 'lucide-react'
+import { ChevronRight, CircleAlert, ClipboardList, FileText, Undo2 } from 'lucide-react'
 import { memo, useContext, useMemo, useState } from 'react'
 import { artifactIcon, isArtifact, typeLabel, type ArtifactItem } from '../artifacts'
 import type { FileChange, SessionData, TranscriptItem } from '../../shared/types'
@@ -36,7 +36,8 @@ function group(items: TranscriptItem[]): Block[] {
     }
     const last = turn.parts[turn.parts.length - 1]
     // A finished or live artifact stands on its own as a card; one that failed folds in with the steps.
-    if (item.kind === 'reasoning' || (item.kind === 'tool' && (!item.artifact || item.status === 'error'))) {
+    // A plan is something to read, like an answer, so it never folds away with the steps.
+    if (item.kind === 'reasoning' || (item.kind === 'tool' && item.name !== PLAN_TOOL && (!item.artifact || item.status === 'error'))) {
       if (last?.type === 'steps') last.items.push(item)
       else turn.parts.push({ type: 'steps', id: item.id, items: [item] })
     } else {
@@ -45,6 +46,8 @@ function group(items: TranscriptItem[]): Block[] {
   }
   return blocks
 }
+
+const PLAN_TOOL = 'exit_plan_mode'
 
 function isLive(item: StepItem): boolean {
   return item.kind === 'reasoning' ? item.endedAt === undefined : item.status === 'running' || item.status === 'waiting'
@@ -62,10 +65,21 @@ function needsPending(items: TranscriptItem[], status: SessionData['status']): b
   return last.kind === 'user'
 }
 
-const UserMessage = memo(function UserMessage({ item }: { item: Extract<TranscriptItem, { kind: 'user' }> }) {
+const UserMessage = memo(function UserMessage({ item, canRewind }: { item: Extract<TranscriptItem, { kind: 'user' }>; canRewind: boolean }) {
   return (
     <div className="hx-user">
       <div className="body">
+        {canRewind && (
+          <button
+            type="button"
+            className="btn-ghost hx-icon-btn hx-rewind"
+            aria-label={t('rewind.here')}
+            title={t('rewind.here')}
+            onClick={() => actions.openRewind(item.id)}
+          >
+            <Icon icon={Undo2} size={16} />
+          </button>
+        )}
         <p>{item.text}</p>
         {item.refs && item.refs.length > 0 && (
           <ul className="refs" aria-label={t('ref.label')}>
@@ -189,12 +203,23 @@ function count(key: string, n: number): string | null {
 function stepsLabel(items: StepItem[]): string {
   const tools = items.filter((i): i is ToolItem => i.kind === 'tool')
   const kindOf = (i: ToolItem) =>
-    i.name === 'run_command' ? 'commands' : EDITS.has(i.name) ? 'edits' : READS.has(i.name) ? 'reads' : SEARCHES.has(i.name) ? 'searches' : 'others'
+    i.name === 'run_command'
+      ? 'commands'
+      : i.name === 'todo_write'
+        ? 'todos'
+        : EDITS.has(i.name)
+          ? 'edits'
+          : READS.has(i.name)
+            ? 'reads'
+            : SEARCHES.has(i.name)
+              ? 'searches'
+              : 'others'
   const counts = {
     commands: tools.filter((i) => kindOf(i) === 'commands').length,
     edits: new Set(tools.filter((i) => kindOf(i) === 'edits').map((i) => i.path ?? i.target)).size,
     reads: tools.filter((i) => kindOf(i) === 'reads').length,
     searches: tools.filter((i) => kindOf(i) === 'searches').length,
+    todos: tools.some((i) => kindOf(i) === 'todos') ? 1 : 0,
     others: tools.filter((i) => kindOf(i) === 'others').length,
   }
   // Listed in the order the agent did them, so the line reads like the rows it folds.
@@ -274,9 +299,52 @@ const Steps = memo(function Steps({ items, live, changed }: { items: StepItem[];
   )
 })
 
+const PLAN_STATUS: Partial<Record<ToolItem['status'], MessageKey>> = {
+  waiting: 'plan.waiting',
+  done: 'plan.approved',
+  denied: 'plan.declined',
+  stopped: 'plan.stopped',
+  error: 'plan.declined',
+}
+
+/** The plan the agent wrote in plan mode. While it waits, the prompt above the composer shows it in full. */
+function PlanCard({ item }: { item: ToolItem }) {
+  const [open, setOpen] = useState(item.status !== 'waiting')
+  const hold = useContext(HoldScroll)
+  const status = PLAN_STATUS[item.status]
+  return (
+    <div className="hx-plan">
+      <button
+        type="button"
+        className="head"
+        aria-expanded={open}
+        onClick={() => {
+          hold()
+          setOpen((o) => !o)
+        }}
+      >
+        <Icon icon={ClipboardList} size={16} />
+        <span className="title">{t('plan.title')}</span>
+        {status && <span className="status">{t(status)}</span>}
+        <span className="grow" />
+        <Icon icon={ChevronRight} size={16} className="hx-chev" />
+      </button>
+      <div className={`hx-disc ${open ? 'is-open' : ''}`}>
+        <div>
+          <div className="body">
+            <Markdown text={item.output ?? ''} streaming={false} />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ItemView({ item, isLast, session }: { item: TranscriptItem; isLast: boolean; session: SessionData }) {
   const idle = session.status === 'idle'
   switch (item.kind) {
+    case 'tool':
+      return item.name === PLAN_TOOL ? <PlanCard key={item.status === 'waiting' ? 'waiting' : 'decided'} item={item} /> : null
     case 'text':
       return item.text ? <Markdown text={item.text} streaming={item.streaming && !idle} /> : null
     case 'error':
@@ -296,12 +364,14 @@ export function Transcript({ session, changes }: { session: SessionData; changes
   const changed = useMemo(() => new Set(changes.map((c) => c.path)), [changes])
   const pending = needsPending(session.items, session.status)
   const lastIsUser = blocks[blocks.length - 1]?.type === 'user' || blocks.length === 0
+  const hasPermission = useApp((s) => s.chat?.permission != null)
+  const canRewind = session.status === 'idle' && !hasPermission
 
   return (
     <>
       {blocks.map((block, index) =>
         block.type === 'user' ? (
-          <UserMessage key={block.item.id} item={block.item} />
+          <UserMessage key={block.item.id} item={block.item} canRewind={canRewind} />
         ) : (
           <section key={block.id} className="hx-turn" aria-label={t('turn.label')}>
             {block.parts.map((part) =>

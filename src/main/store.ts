@@ -3,7 +3,7 @@
 import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { currentModel, DEFAULT_SETTINGS, type SessionData, type SessionMeta, type Settings } from '../shared/types'
-import type { Snapshots } from './changes'
+import type { Checkpoint, Snapshots } from './changes'
 import type { ChatMessage } from './deepseek'
 
 /** Writes through a temporary file so a crash never leaves half a JSON file behind. */
@@ -47,6 +47,8 @@ export class SettingsStore {
   async load(): Promise<void> {
     const stored = await readJson<Partial<StoredSettings>>(this.file)
     this.data = { ...DEFAULT_SETTINGS, ...stored }
+    // Settings saved before projects existed: the folders opened lately become the projects.
+    if (!Array.isArray(stored?.projects)) this.data.projects = [...this.data.recentWorkspaces]
     // Settings saved before the V4 models carry a retired model name and no effort.
     Object.assign(this.data, currentModel(this.data.model, stored?.effort))
   }
@@ -103,6 +105,9 @@ export interface StoredSession {
   snapshots: Snapshots
   allowEdits: boolean
   allowedPrefixes: string[]
+  /** Added with rewinding; older files have neither. */
+  checkpoints?: Checkpoint[]
+  marks?: Record<string, number>
 }
 
 export class SessionStore {
@@ -187,6 +192,6 @@ export class SessionStore {
 }
 
 export function metaOf(data: SessionData): SessionMeta {
-  const { items: _items, usage: _usage, ...meta } = data
+  const { items: _items, usage: _usage, todos: _todos, ...meta } = data
   return { ...meta, ...currentModel(meta.model, meta.effort) }
 }

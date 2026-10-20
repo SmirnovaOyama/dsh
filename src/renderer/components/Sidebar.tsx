@@ -1,17 +1,37 @@
-import { ChevronsUpDown, Folder, FolderOpen, Search, Settings as SettingsIcon, Shapes, SquarePen, X } from 'lucide-react'
+import { ChevronRight, Clock, Ellipsis, Folder, FolderOpen, FolderPlus, PanelLeft, Plus, Search, Settings as SettingsIcon, Shapes, SquarePen, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SessionMeta } from '../../shared/types'
-import { dayGroup, modKey, tildify, type DayGroup } from '../format'
+import { modKey, tildify } from '../format'
 import { t } from '../i18n'
-import { actions, useApp } from '../store'
+import { actions, projectPaths, useApp } from '../store'
 import { Icon } from './Icon'
-import { Menu, MenuItem, MenuSeparator } from './Menu'
+import { Menu, MenuItem } from './Menu'
 
-const GROUPS: DayGroup[] = ['today', 'yesterday', 'week', 'earlier']
 let handledSearchTick = 0
-const GROUP_LABEL = { today: 'sidebar.today', yesterday: 'sidebar.yesterday', week: 'sidebar.week', earlier: 'sidebar.earlier' } as const
+/** A project shows this many conversations until "show more". */
+const SHOW = 5
+const FOLDED_KEY = 'dsh.projects.folded'
 
-function SessionRow({ meta, current }: { meta: SessionMeta; current: boolean }) {
+function readFolded(): string[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(FOLDED_KEY) ?? '[]')
+    return Array.isArray(value) ? value : []
+  } catch {
+    return []
+  }
+}
+
+function writeFolded(paths: string[]) {
+  try {
+    localStorage.setItem(FOLDED_KEY, JSON.stringify(paths))
+  } catch {
+    // Without storage the projects just open unfolded next time.
+  }
+}
+
+const baseName = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path
+
+function SessionRow({ meta, current, project }: { meta: SessionMeta; current: boolean; project?: string }) {
   const trail = meta.status === 'running' ? t('status.running') : meta.status === 'waiting' ? t('status.waiting') : null
   return (
     <button
@@ -22,19 +42,91 @@ function SessionRow({ meta, current }: { meta: SessionMeta; current: boolean }) 
       title={meta.title}
     >
       <span className="t">{meta.title || t('header.newChat')}</span>
+      {project && <span className="p">{project}</span>}
       {trail && <span className={`s ${meta.status === 'waiting' ? 'is-waiting' : meta.status === 'running' ? 'hx-shimmer' : ''}`}>{trail}</span>}
     </button>
   )
 }
 
-/** Re-renders once a minute so "today" and "yesterday" stay true past midnight. */
-function useMinute(): number {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 60_000)
-    return () => window.clearInterval(timer)
-  }, [])
-  return now
+
+interface ProjectProps {
+  path: string
+  sessions: SessionMeta[]
+  open: boolean
+  current: boolean
+  chatId: string | null
+  onToggle(): void
+}
+
+/** One project: its name, then its conversations, most recent first. */
+function Project({ path, sessions, open, current, chatId, onToggle }: ProjectProps) {
+  const home = useApp((s) => s.app.home)
+  const [all, setAll] = useState(false)
+  const [menu, setMenu] = useState(false)
+  const moreRef = useRef<HTMLButtonElement>(null)
+  const name = baseName(path)
+  const shown = all ? sessions : sessions.slice(0, SHOW)
+  const listId = `hx-project-${path.replace(/[^\w-]/g, '_')}`
+  return (
+    <section className="hx-proj" data-current={current || undefined}>
+      <div className="hx-proj-row">
+        <button type="button" className="hx-proj-name" aria-expanded={open} aria-controls={listId} title={tildify(path, home)} onClick={onToggle}>
+          <Icon icon={current ? FolderOpen : Folder} size={16} />
+          <span className="n">{name}</span>
+          <Icon icon={ChevronRight} size={14} className="hx-chev" />
+        </button>
+        <span className="acts">
+          <button
+            ref={moreRef}
+            type="button"
+            className="btn-ghost"
+            aria-haspopup="menu"
+            aria-expanded={menu}
+            aria-label={t('project.more', { name })}
+            title={t('project.more', { name })}
+            onClick={() => setMenu((o) => !o)}
+          >
+            <Icon icon={Ellipsis} size={16} />
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
+            aria-label={t('project.newChat', { name })}
+            title={t('project.newChat', { name })}
+            onClick={() => void actions.newChat(path)}
+          >
+            <Icon icon={Plus} size={16} />
+          </button>
+        </span>
+      </div>
+      <div className={`hx-disc ${open ? 'is-open' : ''}`} id={listId}>
+        <div>
+          <div className="hx-session-list">
+            {sessions.length === 0 && <p className="hx-proj-empty">{t('project.empty')}</p>}
+            {shown.map((meta) => (
+              <SessionRow key={meta.id} meta={meta} current={meta.id === chatId} />
+            ))}
+            {sessions.length > SHOW && (
+              <button type="button" className="hx-proj-more" onClick={() => setAll((a) => !a)}>
+                {all ? t('project.less') : t('project.moreChats', { n: sessions.length - SHOW })}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+      <Menu anchor={moreRef.current} open={menu} onClose={() => setMenu(false)} label={name} minWidth={200}>
+        <MenuItem
+          icon={<Icon icon={X} />}
+          onSelect={() => {
+            setMenu(false)
+            void actions.removeProject(path)
+          }}
+        >
+          {t('project.remove')}
+        </MenuItem>
+      </Menu>
+    </section>
+  )
 }
 
 export function Sidebar({ searchTick }: { searchTick: number }) {
@@ -43,16 +135,13 @@ export function Sidebar({ searchTick }: { searchTick: number }) {
   const activeAt = useApp((s) => s.activeAt)
   const chatId = useApp((s) => s.chatId)
   const view = useApp((s) => s.view)
-  const recent = useApp((s) => s.settings.recentWorkspaces)
-  const home = useApp((s) => s.app.home)
+  const saved = useApp((s) => s.settings.projects)
   const platform = useApp((s) => s.app.platform)
-  const now = useMinute()
 
-  const projectRef = useRef<HTMLButtonElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
-  const [projectMenu, setProjectMenu] = useState(false)
   const [searching, setSearching] = useState(false)
   const [query, setQuery] = useState('')
+  const [folded, setFolded] = useState(readFolded)
 
   useEffect(() => {
     // The sidebar remounts after Settings; only a new shortcut press opens search.
@@ -70,42 +159,55 @@ export function Sidebar({ searchTick }: { searchTick: number }) {
     setQuery('')
   }
 
-  const groups = useMemo(() => {
+  const projects = useMemo(() => projectPaths(saved, workspace), [saved, workspace])
+
+  const byProject = useMemo(() => {
+    const map = new Map<string, SessionMeta[]>()
+    const ordered = [...sessions].sort((a, b) => (activeAt[b.id] ?? b.updatedAt) - (activeAt[a.id] ?? a.updatedAt))
+    for (const meta of ordered) map.set(meta.workspace, [...(map.get(meta.workspace) ?? []), meta])
+    return map
+  }, [sessions, activeAt])
+
+  const results = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const list = q ? sessions.filter((s) => s.title.toLowerCase().includes(q)) : sessions
-    const byGroup = new Map<DayGroup, SessionMeta[]>()
-    for (const meta of list) {
-      const group = dayGroup(activeAt[meta.id] ?? meta.updatedAt, now)
-      byGroup.set(group, [...(byGroup.get(group) ?? []), meta])
-    }
-    return GROUPS.filter((g) => byGroup.has(g)).map((g) => ({ group: g, items: byGroup.get(g)! }))
-  }, [sessions, activeAt, query, now])
+    if (!q) return null
+    return [...sessions]
+      .filter((s) => s.title.toLowerCase().includes(q) && projects.includes(s.workspace))
+      .sort((a, b) => (activeAt[b.id] ?? b.updatedAt) - (activeAt[a.id] ?? a.updatedAt))
+  }, [sessions, activeAt, query, projects])
+
+  const toggle = (path: string) => {
+    const next = folded.includes(path) ? folded.filter((p) => p !== path) : [...folded, path]
+    setFolded(next)
+    writeFolded(next)
+  }
 
   const mod = modKey(platform)
+  const currentChat = view === 'chat' ? chatId : null
 
   return (
     <nav className="oy-sidebar hx-sidebar" aria-label={t('sidebar.label')}>
-      <div className="hx-drag" />
+      <div className="hx-side-bar">
+        {platform === 'darwin' && (
+          <button
+            type="button"
+            className="btn-ghost hx-icon-btn"
+            aria-label={t('sidebar.hide')}
+            title={`${t('sidebar.hide')} (${mod}B)`}
+            onClick={() => actions.toggleSidebar()}
+          >
+            <Icon icon={PanelLeft} size={16} />
+          </button>
+        )}
+      </div>
       <div className="hx-sidebar-top">
-        <button
-          ref={projectRef}
-          type="button"
-          className="hx-project"
-          aria-haspopup="menu"
-          aria-expanded={projectMenu}
-          aria-label={workspace ? t('sidebar.project', { name: workspace.name }) : t('sidebar.noProject')}
-          onClick={() => setProjectMenu((o) => !o)}
-        >
-          <Icon icon={Folder} />
-          <span className="text">
-            <span className="name">{workspace?.name ?? t('sidebar.noProject')}</span>
-            <span className="path">{workspace ? tildify(workspace.path, home) : t('welcome.folderAction')}</span>
-          </span>
-          <Icon icon={ChevronsUpDown} size={16} />
-        </button>
-
         <div className="hx-nav">
-          <button type="button" className="oy-nav-item" aria-current={view === 'chat' && !chatId ? 'page' : undefined} onClick={() => actions.newChat()}>
+          <button
+            type="button"
+            className="oy-nav-item"
+            aria-current={view === 'chat' && !chatId ? 'page' : undefined}
+            onClick={() => (workspace ? void actions.newChat() : void actions.pickWorkspace())}
+          >
             <Icon icon={SquarePen} />
             <span>{t('sidebar.new')}</span>
             <span className="hx-nav-trail">{t('shortcut.new', { mod })}</span>
@@ -142,25 +244,71 @@ export function Sidebar({ searchTick }: { searchTick: number }) {
               <span className="hx-nav-trail">{t('shortcut.search', { mod })}</span>
             </button>
           )}
-          <button type="button" className="oy-nav-item" aria-current={view === 'artifacts' ? 'page' : undefined} onClick={() => actions.openLibrary()}>
+          <button
+            type="button"
+            className="oy-nav-item"
+            aria-current={view === 'artifacts' ? 'page' : undefined}
+            onClick={() => actions.openLibrary()}
+          >
             <Icon icon={Shapes} />
             <span>{t('library.title')}</span>
+          </button>
+          <button
+            type="button"
+            className="oy-nav-item"
+            aria-current={view === 'scheduled' ? 'page' : undefined}
+            onClick={() => actions.openPage('scheduled')}
+          >
+            <Icon icon={Clock} />
+            <span>{t('sidebar.scheduled')}</span>
           </button>
         </div>
       </div>
 
       <div className="hx-sessions">
-        {groups.length === 0 && workspace && <p className="hx-side-note">{query ? t('sidebar.noResults') : t('sidebar.empty')}</p>}
-        {groups.map(({ group, items }) => (
-          <div key={group}>
-            <h2 className="hx-side-head">{t(GROUP_LABEL[group])}</h2>
+        {results ? (
+          <>
+            <h2 className="hx-side-head">{t('sidebar.results')}</h2>
+            {results.length === 0 && <p className="hx-side-note">{t('sidebar.noResults')}</p>}
             <div className="hx-session-list">
-              {items.map((meta) => (
-                <SessionRow key={meta.id} meta={meta} current={view === 'chat' && meta.id === chatId} />
+              {results.map((meta) => (
+                <SessionRow key={meta.id} meta={meta} current={meta.id === currentChat} project={baseName(meta.workspace)} />
               ))}
             </div>
-          </div>
-        ))}
+          </>
+        ) : (
+          <>
+            <div className="hx-side-head hx-projects-head">
+              <h2>{t('sidebar.projects')}</h2>
+              <button
+                type="button"
+                className="btn-ghost"
+                aria-label={t('project.add')}
+                title={t('project.add')}
+                onClick={() => void actions.pickWorkspace()}
+              >
+                <Icon icon={FolderPlus} size={16} />
+              </button>
+            </div>
+            {projects.length === 0 && (
+              <button type="button" className="hx-proj-add" onClick={() => void actions.pickWorkspace()}>
+                <Icon icon={FolderPlus} size={16} />
+                {t('project.add')}
+              </button>
+            )}
+            {projects.map((path) => (
+              <Project
+                key={path}
+                path={path}
+                sessions={byProject.get(path) ?? []}
+                open={!folded.includes(path)}
+                current={path === workspace?.path}
+                chatId={currentChat}
+                onToggle={() => toggle(path)}
+              />
+            ))}
+          </>
+        )}
       </div>
 
       <div className="hx-side-foot">
@@ -170,32 +318,6 @@ export function Sidebar({ searchTick }: { searchTick: number }) {
           <span className="hx-nav-trail">{`${mod},`}</span>
         </button>
       </div>
-
-      <Menu anchor={projectRef.current} open={projectMenu} onClose={() => setProjectMenu(false)} label={t('sidebar.recent')} matchWidth minWidth={236}>
-        {recent.map((path) => (
-          <MenuItem
-            key={path}
-            checked={path === workspace?.path}
-            sub={tildify(path, home)}
-            onSelect={() => {
-              setProjectMenu(false)
-              if (path !== workspace?.path) void actions.openWorkspace(path)
-            }}
-          >
-            {path.split(/[\\/]/).filter(Boolean).pop() ?? path}
-          </MenuItem>
-        ))}
-        {recent.length > 0 && <MenuSeparator />}
-        <MenuItem
-          icon={<Icon icon={FolderOpen} />}
-          onSelect={() => {
-            setProjectMenu(false)
-            void actions.pickWorkspace()
-          }}
-        >
-          {t('sidebar.openOther')}
-        </MenuItem>
-      </Menu>
     </nav>
   )
 }
