@@ -1,4 +1,4 @@
-import { Clock, Ellipsis, Pencil, Play, Plus, Trash2 } from 'lucide-react'
+import { CirclePause, Clock, Ellipsis, Pencil, Play, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { MODELS, PERMISSION_MODES, SCHEDULE_KINDS, type Locale, type Schedule, type ScheduledTask, type ScheduledTaskInput } from '../../shared/types'
 import { clockTime } from '../format'
@@ -48,23 +48,20 @@ export function ScheduledView() {
   const tasks = useApp((s) => s.schedules)
   const [editing, setEditing] = useState<ScheduledTask | 'new' | null>(null)
   const [removing, setRemoving] = useState<ScheduledTask | null>(null)
+  const [scrolled, setScrolled] = useState(false)
   const now = useNow()
 
   return (
-    <main className="hx-main">
-      <PageHead title={t('scheduled.title')} sub={t('scheduled.intro')}>
+    <main className="hx-page" onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}>
+      <PageHead title={t('scheduled.title')} scrolled={scrolled}>
         <button type="button" className="btn-secondary hx-page-btn" onClick={() => setEditing('new')}>
           <Icon icon={Plus} size={16} />
           {t('scheduled.new')}
         </button>
       </PageHead>
-      <div className="hx-page-list">
-        {tasks && tasks.length === 0 && (
-          <div className="hx-page-empty">
-            <Icon icon={Clock} size={20} />
-            <p>{t('scheduled.empty')}</p>
-          </div>
-        )}
+      <div className="hx-page-body">
+        <p className="hx-page-intro">{t('scheduled.intro')}</p>
+        {tasks && tasks.length === 0 && <p className="hx-page-empty">{t('scheduled.empty')}</p>}
         {tasks && tasks.length > 0 && (
           <ul className="hx-sched-list">
             {tasks.map((task) => (
@@ -72,6 +69,7 @@ export function ScheduledView() {
             ))}
           </ul>
         )}
+        <p className="hx-page-foot">{t('scheduled.openOnly')}</p>
       </div>
       {editing && <TaskEditor task={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
       <Modal
@@ -101,31 +99,32 @@ export function ScheduledView() {
   )
 }
 
+/** The last run in a few words; when it started a conversation, the words open it. */
 function LastRun({ task, now }: { task: ScheduledTask; now: number }) {
   const locale = useApp((s) => s.settings.locale)
   const meta = useApp((s) => (task.lastRun?.sessionId ? s.sessions.find((m) => m.id === task.lastRun?.sessionId) : undefined))
   const run = task.lastRun
-  if (!run) return <span>{t('scheduled.never')}</span>
-  const when = t('scheduled.last', { when: describeWhen(run.at, now, locale) })
+  if (!run) return <span className="last">{t('scheduled.never')}</span>
+  const when = describeWhen(run.at, now, locale)
   if (run.error) {
-    const key = `scheduled.failed.${run.error}` as MessageKey
-    const known = run.error === 'no-key' || run.error === 'no-folder'
+    const reason = run.error === 'no-key' || run.error === 'no-folder' ? t(`scheduled.failed.${run.error}` as MessageKey) : t('scheduled.failed')
     return (
-      <span>
-        {when} <span className="is-error">{known ? t(key) : t('scheduled.failed')}</span>
+      <span className="last is-error" title={`${t('scheduled.last', { when })}\n${reason}`}>
+        {t('scheduled.lastFailed')}
       </span>
     )
   }
-  const status = meta?.status === 'running' ? t('scheduled.running') : meta?.status === 'waiting' ? t('scheduled.waiting') : t('scheduled.done')
+  const label =
+    meta?.status === 'running' ? t('scheduled.lastRunning') : meta?.status === 'waiting' ? t('scheduled.lastWaiting') : t('scheduled.lastDone')
   return (
-    <span>
-      {when} <span className={meta?.status === 'waiting' ? 'is-waiting' : undefined}>{status}</span>
-      {run.sessionId && (
-        <button type="button" className="hx-link" onClick={() => void actions.openSession(run.sessionId!)}>
-          {t('scheduled.open')}
-        </button>
-      )}
-    </span>
+    <button
+      type="button"
+      className={`last hx-last-link ${meta?.status === 'waiting' ? 'is-waiting' : ''}`}
+      title={`${t('scheduled.last', { when })}\n${t('scheduled.open')}`}
+      onClick={() => void actions.openSession(run.sessionId!)}
+    >
+      {label}
+    </button>
   )
 }
 
@@ -133,45 +132,46 @@ function TaskRow({ task, now, onEdit, onRemove }: { task: ScheduledTask; now: nu
   const locale = useApp((s) => s.settings.locale)
   const moreRef = useRef<HTMLButtonElement>(null)
   const [menu, setMenu] = useState(false)
-  const toggle = () => void actions.saveSchedule({ ...task, enabled: !task.enabled })
   const next =
     task.schedule.kind === 'manual'
       ? t('scheduled.manualOnly')
       : !task.enabled
         ? t('scheduled.off')
         : task.nextRun
-          ? t('scheduled.next', { when: describeWhen(task.nextRun, now, locale) })
+          ? describeWhen(task.nextRun, now, locale)
           : ''
+  const item = (icon: typeof Play, label: string, run: () => void, danger = false) => (
+    <MenuItem
+      danger={danger}
+      icon={<Icon icon={icon} size={16} />}
+      onSelect={() => {
+        setMenu(false)
+        run()
+      }}
+    >
+      {label}
+    </MenuItem>
+  )
   return (
-    <li className="hx-sched" data-off={!task.enabled || undefined}>
-      <button
-        type="button"
-        role="switch"
-        className="oy-switch hx-switch"
-        aria-checked={task.enabled}
-        aria-label={t('scheduled.enabled', { name: task.name })}
-        onClick={toggle}
-      >
-        <span className="switch-knob" />
-      </button>
+    <li className="hx-sched" data-off={!task.enabled || undefined} data-menu={menu || undefined}>
       <button type="button" className="main" onClick={onEdit}>
-        <span className="line">
+        <Icon icon={task.enabled ? Clock : CirclePause} size={16} />
+        <span className="text">
           <span className="name">{task.name}</span>
-          <span className="when">{describeSchedule(task.schedule, locale)}</span>
+          <span className="sub">
+            <span>{describeSchedule(task.schedule, locale)}</span>
+            <span>{baseName(task.workspace)}</span>
+          </span>
         </span>
-        <span className="prompt">{task.prompt}</span>
       </button>
-      <span className="facts">
-        <span className="proj">{baseName(task.workspace)}</span>
+      <span className="side">
         <span className="next">{next}</span>
-        <span className="last">
-          <LastRun task={task} now={now} />
-        </span>
+        <LastRun task={task} now={now} />
       </span>
       <button
         ref={moreRef}
         type="button"
-        className="btn-ghost hx-icon-btn"
+        className="btn-ghost hx-icon-btn more"
         aria-haspopup="menu"
         aria-expanded={menu}
         aria-label={t('scheduled.more', { name: task.name })}
@@ -181,40 +181,20 @@ function TaskRow({ task, now, onEdit, onRemove }: { task: ScheduledTask; now: nu
         <Icon icon={Ellipsis} size={16} />
       </button>
       <Menu anchor={moreRef.current} open={menu} onClose={() => setMenu(false)} label={task.name} align="end" minWidth={180}>
-        <MenuItem
-          icon={<Icon icon={Play} size={16} />}
-          onSelect={() => {
-            setMenu(false)
-            void actions.runSchedule(task.id)
-          }}
-        >
-          {t('scheduled.runNow')}
-        </MenuItem>
-        <MenuItem
-          icon={<Icon icon={Pencil} size={16} />}
-          onSelect={() => {
-            setMenu(false)
-            onEdit()
-          }}
-        >
-          {t('scheduled.edit')}
-        </MenuItem>
-        <MenuItem
-          danger
-          icon={<Icon icon={Trash2} size={16} />}
-          onSelect={() => {
-            setMenu(false)
-            onRemove()
-          }}
-        >
-          {t('scheduled.remove')}
-        </MenuItem>
+        {item(Play, t('scheduled.runNow'), () => void actions.runSchedule(task.id))}
+        {item(Pencil, t('scheduled.edit'), onEdit)}
+        {task.schedule.kind !== 'manual' &&
+          item(task.enabled ? CirclePause : Clock, t(task.enabled ? 'scheduled.pause' : 'scheduled.resume'), () =>
+            void actions.saveSchedule({ ...task, enabled: !task.enabled }),
+          )}
+        {item(Trash2, t('scheduled.remove'), onRemove, true)}
       </Menu>
     </li>
   )
 }
 
 const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5)
+const HOURS = Array.from({ length: 24 }, (_, i) => i)
 
 function TaskEditor({ task, onClose }: { task: ScheduledTask | null; onClose(): void }) {
   const settings = useApp((s) => s.settings)
@@ -303,6 +283,15 @@ function TaskEditor({ task, onClose }: { task: ScheduledTask | null; onClose(): 
             />
           </div>
           <div>
+            <span className="oy-field-label">{t('scheduled.permission')}</span>
+            <Select
+              label={t('scheduled.permission')}
+              value={draft.permissionMode}
+              options={PERMISSION_MODES.map((m) => ({ value: m, label: t(`mode.${m}` as MessageKey), desc: t(`mode.${m}.desc` as MessageKey) }))}
+              onChange={(value) => patch({ permissionMode: value })}
+            />
+          </div>
+          <div>
             <span className="oy-field-label">{t('scheduled.frequency')}</span>
             <Select
               label={t('scheduled.frequency')}
@@ -311,43 +300,33 @@ function TaskEditor({ task, onClose }: { task: ScheduledTask | null; onClose(): 
               onChange={(value) => setSchedule({ kind: value })}
             />
           </div>
-          {kind === 'weekly' && (
+          {kind !== 'manual' && (
             <div>
-              <span className="oy-field-label">{t('scheduled.weekday')}</span>
-              <Select
-                label={t('scheduled.weekday')}
-                value={draft.schedule.weekday}
-                options={[1, 2, 3, 4, 5, 6, 0].map((d) => ({ value: d, label: weekdayName(d, locale) }))}
-                onChange={(value) => setSchedule({ weekday: value })}
-              />
-            </div>
-          )}
-          {kind === 'hourly' && (
-            <div>
-              <span className="oy-field-label">{t('scheduled.minute')}</span>
-              <Select
-                label={t('scheduled.minute')}
-                value={draft.schedule.minute}
-                options={minutes.map((m) => ({ value: m, label: `:${pad(m)}` }))}
-                onChange={(value) => setSchedule({ minute: value })}
-              />
-            </div>
-          )}
-          {(kind === 'daily' || kind === 'weekdays' || kind === 'weekly') && (
-            <div>
-              <label className="oy-field-label" htmlFor="sched-time">
-                {t('scheduled.time')}
-              </label>
-              <input
-                id="sched-time"
-                className="input-base hx-tabular"
-                type="time"
-                value={`${pad(draft.schedule.hour)}:${pad(draft.schedule.minute)}`}
-                onChange={(e) => {
-                  const [h, m] = e.target.value.split(':').map(Number)
-                  if (Number.isInteger(h) && Number.isInteger(m)) setSchedule({ hour: h, minute: m })
-                }}
-              />
+              <span className="oy-field-label">{t('scheduled.time')}</span>
+              <div className="hx-time">
+                {kind === 'weekly' && (
+                  <Select
+                    label={t('scheduled.weekday')}
+                    value={draft.schedule.weekday}
+                    options={[1, 2, 3, 4, 5, 6, 0].map((d) => ({ value: d, label: weekdayName(d, locale) }))}
+                    onChange={(value) => setSchedule({ weekday: value })}
+                  />
+                )}
+                {kind !== 'hourly' && (
+                  <Select
+                    label={t('scheduled.hour')}
+                    value={draft.schedule.hour}
+                    options={HOURS.map((h) => ({ value: h, label: pad(h) }))}
+                    onChange={(value) => setSchedule({ hour: value })}
+                  />
+                )}
+                <Select
+                  label={t('scheduled.minute')}
+                  value={draft.schedule.minute}
+                  options={minutes.map((m) => ({ value: m, label: kind === 'hourly' ? `:${pad(m)}` : pad(m) }))}
+                  onChange={(value) => setSchedule({ minute: value })}
+                />
+              </div>
             </div>
           )}
           <div>
@@ -357,15 +336,6 @@ function TaskEditor({ task, onClose }: { task: ScheduledTask | null; onClose(): 
               value={draft.model}
               options={MODELS.map((m) => ({ value: m as string, label: modelName(m) }))}
               onChange={(value) => patch({ model: value })}
-            />
-          </div>
-          <div>
-            <span className="oy-field-label">{t('scheduled.permission')}</span>
-            <Select
-              label={t('scheduled.permission')}
-              value={draft.permissionMode}
-              options={PERMISSION_MODES.map((m) => ({ value: m, label: t(`mode.${m}` as MessageKey), desc: t(`mode.${m}.desc` as MessageKey) }))}
-              onChange={(value) => patch({ permissionMode: value })}
             />
           </div>
         </div>
