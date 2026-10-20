@@ -27,6 +27,7 @@ export const Channels = {
   artifactsSave: 'dsh:artifacts:save',
   artifactsSaveToProject: 'dsh:artifacts:save-to-project',
   artifactsOpenInBrowser: 'dsh:artifacts:open-in-browser',
+  artifactsLibrary: 'dsh:artifacts:library',
   changesRevertAll: 'dsh:changes:revert-all',
   changesCommit: 'dsh:changes:commit',
   openExternal: 'dsh:open-external',

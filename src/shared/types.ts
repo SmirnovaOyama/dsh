@@ -145,6 +145,17 @@ export interface ArtifactVersion {
   version: number
 }
 
+/** The newest finished version of one artifact, with the conversation and folder it was made in. */
+export interface LibraryArtifact {
+  sessionId: string
+  sessionTitle: string
+  workspace: string
+  /** The transcript item holding this version, so the viewer can open it. */
+  itemId: string
+  artifact: ArtifactVersion
+  updatedAt: number
+}
+
 /** A file, or a range of its lines, that the person points the agent at. Lines count from 1. */
 export interface FileRef {
   path: string
@@ -318,6 +329,8 @@ export interface DshApi {
     saveToProject(name: string, content: string): Promise<SaveResult>
     /** Opens a page in the person's browser from a private temporary file. */
     openInBrowser(name: string, html: string): Promise<SaveResult>
+    /** Every finished artifact in every folder, newest first. */
+    library(): Promise<LibraryArtifact[]>
   }
   changes: {
     revertAll(sessionId: string): Promise<void>

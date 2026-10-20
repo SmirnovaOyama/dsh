@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ChangesPanel } from './components/ChangesPanel'
 import { Resizer } from './components/Resizer'
 import { ChatView } from './components/ChatView'
+import { LibraryView } from './components/LibraryView'
 import { SettingsView } from './components/SettingsView'
 import { Sidebar } from './components/Sidebar'
 import { setLocale, t } from './i18n'
@@ -94,8 +95,9 @@ export function App() {
     document.documentElement.dataset.platform = platform
   }, [platform])
   useEffect(() => {
-    document.title = title ? `${title} - ${t('app.name')}` : t('app.name')
-  }, [title, locale])
+    const name = view === 'artifacts' ? t('library.title') : title
+    document.title = name ? `${name} - ${t('app.name')}` : t('app.name')
+  }, [title, view, locale])
 
   // Nothing renders until the saved state is in, so the first frame is already the right one.
   if (!ready) return null
@@ -104,6 +106,15 @@ export function App() {
     return (
       <div className="hx-app">
         <SettingsView />
+      </div>
+    )
+  }
+  if (view === 'artifacts') {
+    return (
+      <div className="hx-app">
+        <Sidebar searchTick={searchTick} />
+        <Resizer pane="sidebar" />
+        <LibraryView />
       </div>
     )
   }

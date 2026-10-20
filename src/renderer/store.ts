@@ -10,6 +10,7 @@ import {
   type AppInfo,
   type FileChange,
   type FileRef,
+  type LibraryArtifact,
   type PermissionDecision,
   type PermissionMode,
   type PermissionRequest,
@@ -43,7 +44,7 @@ export interface AppState {
   /** The selected conversation; null with chatId set means it is still loading. */
   chatId: string | null
   chat: ChatState | null
-  view: 'chat' | 'settings'
+  view: 'chat' | 'settings' | 'artifacts'
   settingsSection: SettingsSection | null
   showChanges: boolean
   selectedFile: string | null
@@ -275,6 +276,11 @@ export const actions = {
 
   async openSession(id: string) {
     if (state.chatId === id && state.view === 'chat') return
+    // Coming back from a page to the conversation already loaded keeps it as it was.
+    if (state.chatId === id && state.chat) {
+      set({ view: 'chat' })
+      return
+    }
     // Events for this conversation are ignored until the snapshot arrives; the snapshot already contains them.
     set((s) => ({ view: 'chat', chatId: id, chat: null, selectedFile: null, ...leaveArtifacts(s) }))
     const snapshot = await api.sessions.load(id)
@@ -456,6 +462,33 @@ export const actions = {
 
   removeRef(index: number) {
     set((s) => ({ refs: s.refs.filter((_, i) => i !== index) }))
+  },
+
+  /** The page listing every artifact in every folder. */
+  openLibrary() {
+    set({ view: 'artifacts' })
+  },
+
+  /**
+   * Opens an artifact from the library where it was made: its folder, its conversation, and the viewer
+   * beside it. Resolves false when the folder or the conversation is gone.
+   */
+  async openArtifact(entry: LibraryArtifact): Promise<boolean> {
+    if (state.workspace?.path !== entry.workspace) {
+      const info = await api.workspace.open(entry.workspace)
+      if (!info) return false
+      // The folder's own event may come before or after this; whichever is second changes nothing.
+      handleEvent({ type: 'workspace', workspace: info })
+    }
+    await actions.openSession(entry.sessionId)
+    if (state.chat?.session.id !== entry.sessionId) {
+      // The conversation is gone; back to the library, which no longer lists it.
+      if (state.chatId === null && state.view === 'chat') set({ view: 'artifacts' })
+      return false
+    }
+    const item = state.chat.session.items.find((i) => i.id === entry.itemId)
+    actions.viewArtifact(item ? entry.itemId : null)
+    return true
   },
 
   openSettings(section: SettingsSection | null = null) {

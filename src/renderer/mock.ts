@@ -6,6 +6,7 @@ import {
   DEFAULT_SETTINGS,
   EMPTY_USAGE,
   type AgentEvent,
+  type ArtifactVersion,
   type DiffLine,
   type DshApi,
   type FileChange,
@@ -18,7 +19,8 @@ import {
   type TranscriptItem,
   type WorkspaceInfo,
 } from '../shared/types'
-import { pomodoroGuide, pomodoroV1, pomodoroV2, tomatoSvg } from './mockArtifacts'
+import { artifactsIn, byNewest } from '../shared/library'
+import { darkPalette, errorGuide, pnpmScript, pomodoroGuide, pomodoroV1, pomodoroV2, readingNotes, syncFlow, tomatoSvg, weeklyProgress } from './mockArtifacts'
 
 const params = new URLSearchParams(location.search)
 const HOME = '/Users/anya'
@@ -358,6 +360,18 @@ function artifactSession(): SessionData {
 }
 
 const day = 24 * 60 * MIN
+
+/** A short conversation that ends with the agent making one artifact, for the library page. */
+function madeSession(sid: string, workspace: string, title: string, updatedAt: number, artifact: ArtifactVersion): SessionData {
+  const data = shortSession(sid, title, updatedAt)
+  data.workspace = workspace
+  data.items.push(
+    { kind: 'tool', id: id(), callId: `${sid}-a`, name: 'artifact', target: artifact.title, status: 'done', startedAt: updatedAt - 60_000, endedAt: updatedAt - 50_000, artifact },
+    { kind: 'text', id: id(), text: `做好了，「${artifact.title}」放在右邊`, streaming: false },
+  )
+  return data
+}
+
 const sessions = new Map<string, { data: SessionData; changes: FileChange[]; permission: PermissionRequest | null }>()
 function addSession(data: SessionData, changes: FileChange[] = [], permission: PermissionRequest | null = null) {
   sessions.set(data.id, { data, changes, permission })
@@ -374,11 +388,14 @@ addSession(main, params.get('perm') === 'edit' ? [] : mainChanges, mainPermissio
 addSession(artifactSession())
 addSession(shortSession('s2', '把設定頁拆成小元件', now - 40 * MIN, 'idle'))
 addSession(shortSession('s3', '更新 README 的安裝步驟', now - 90 * MIN))
-addSession(shortSession('s4', '加上深色模式', now - day - 3 * 60 * MIN))
+addSession(madeSession('s4', DSH, '加上深色模式', now - day - 3 * 60 * MIN, { id: 'dark-palette', title: '深色模式色票', type: 'html', content: darkPalette, version: 1 }))
 addSession(shortSession('s5', '查打包後的白畫面', now - day - 6 * 60 * MIN))
-addSession(shortSession('s6', '改用 pnpm 管理套件', now - 3 * day))
+addSession(madeSession('s6', DSH, '改用 pnpm 管理套件', now - 3 * day, { id: 'pnpm-migrate', title: '換成 pnpm 的腳本', type: 'code', language: 'bash', content: pnpmScript, version: 1 }))
 addSession(shortSession('s7', '設定 ESLint 和 Prettier', now - 4 * day))
-addSession(shortSession('s8', '整理 API 錯誤訊息的寫法', now - 12 * day))
+addSession(madeSession('s8', DSH, '整理 API 錯誤訊息的寫法', now - 12 * day, { id: 'error-guide', title: 'API 錯誤訊息的寫法', type: 'markdown', content: errorGuide, version: 1 }))
+addSession(madeSession('t1', `${HOME}/Projects/oyama-tracker`, '畫出這週的任務進度', now - 3 * 60 * MIN, { id: 'weekly', title: '這週任務進度', type: 'html', content: weeklyProgress, version: 1 }))
+addSession(madeSession('t2', `${HOME}/Projects/oyama-tracker`, '說明離線同步怎麼運作', now - 5 * day, { id: 'sync-flow', title: '離線同步流程', type: 'svg', content: syncFlow, version: 1 }))
+addSession(madeSession('n1', `${HOME}/Documents/notes`, '把這個月的讀書筆記整理成一頁', now - day - 5 * 60 * MIN, { id: 'reading', title: '十月讀書筆記', type: 'markdown', content: readingNotes, version: 1 }))
 
 const metaOf = ({ items: _i, usage: _u, ...meta }: SessionData): SessionMeta => meta
 const snapshot = (sid: string) => {
@@ -629,6 +646,8 @@ export function createMockApi(): DshApi {
         window.open(URL.createObjectURL(new Blob([html], { type: 'text/html' })), '_blank', 'noopener')
         return { ok: true as const, path: name }
       },
+      // ?nolibrary shows the page before anything was made.
+      library: () => later(params.has('nolibrary') ? [] : structuredClone([...sessions.values()].flatMap((s) => artifactsIn(s.data)).sort(byNewest)), 80),
     },
     changes: {
       async revertAll(sid) {

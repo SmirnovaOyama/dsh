@@ -12,6 +12,7 @@ import {
   type AgentEvent,
   type CommitResult,
   type FileRef,
+  type LibraryArtifact,
   type PermissionDecision,
   type PermissionRequest,
   type SessionMeta,
@@ -20,6 +21,7 @@ import {
   type WorkspaceInfo,
 } from '../shared/types'
 import { Agent, type AgentHost, type SessionState } from './agent'
+import { artifactsIn, byNewest } from '../shared/library'
 import { ChangeTracker } from './changes'
 import type { streamChat } from './deepseek'
 import { buildSystemPrompt } from './prompt'
@@ -67,6 +69,8 @@ interface Pending {
 export class Controller {
   private readonly states = new Map<string, SessionState>()
   private readonly pending = new Map<string, Pending>()
+  /** Artifacts of conversations read from disk, kept until the conversation changes. */
+  private readonly library = new Map<string, { updatedAt: number; artifacts: LibraryArtifact[] }>()
   private readonly agent: Agent
   private readonly now: () => number
 
@@ -122,6 +126,26 @@ export class Controller {
       changes,
       permission: this.pending.get(id)?.request ?? null,
     }
+  }
+
+  /** Every finished artifact in every folder, newest first. Open conversations are read as they are now. */
+  async artifacts(): Promise<LibraryArtifact[]> {
+    const all: LibraryArtifact[] = []
+    for (const meta of this.options.sessions.all()) {
+      const live = this.states.get(meta.id)
+      if (live) {
+        all.push(...artifactsIn(live.data))
+        continue
+      }
+      let cached = this.library.get(meta.id)
+      if (cached?.updatedAt !== meta.updatedAt) {
+        const stored = await this.options.sessions.read(meta.id)
+        cached = { updatedAt: meta.updatedAt, artifacts: stored ? artifactsIn(stored.data) : [] }
+        this.library.set(meta.id, cached)
+      }
+      all.push(...cached.artifacts)
+    }
+    return all.sort(byNewest)
   }
 
   async start(workspace: string, text: string, opts: StartOptions, refs: FileRef[] = []): Promise<SessionMeta> {
@@ -221,6 +245,7 @@ export class Controller {
     const state = this.states.get(id)
     if (state) this.agent.stop(state)
     this.states.delete(id)
+    this.library.delete(id)
     await this.options.sessions.remove(id)
   }
 

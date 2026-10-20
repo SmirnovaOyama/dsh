@@ -495,6 +495,40 @@ describe('artifacts in the agent loop', () => {
     await idle(controller, meta.id)
     expect(drafted().some((a) => a.queued)).toBe(false)
   })
+  it('lists the newest finished version of every artifact for the library, also after a restart', async () => {
+    const notes = { ...create, id: 'notes', title: 'Notes', type: 'markdown', content: '# hi' }
+    const { controller, sessions } = await setup([
+      { toolCalls: [call('c1', create)] },
+      { toolCalls: [call('c2', { command: 'rewrite', id: 'timer', content: '<b>05:00</b>' })] },
+      { content: 'ok' },
+      { toolCalls: [call('c3', notes)] },
+      { content: 'ok' },
+    ])
+    const first = await controller.start(ws, 'timer', opts('ask'))
+    await idle(controller, first.id)
+    await new Promise((r) => setTimeout(r, 5))
+    const second = await controller.start(ws, 'notes', opts('ask'))
+    await idle(controller, second.id)
+
+    const listed = await controller.artifacts()
+    expect(listed.map((a) => [a.sessionId, a.artifact.id, a.artifact.version, a.workspace])).toEqual([
+      [second.id, 'notes', 1, ws],
+      [first.id, 'timer', 2, ws],
+    ])
+    await sessions.flush()
+
+    const reloaded = new SessionStore(root)
+    await reloaded.load()
+    const settings = new SettingsStore(root, plainCipher)
+    await settings.load()
+    const fresh = new Controller({ settings, sessions: reloaded, emit: () => {} })
+    expect((await fresh.artifacts()).map((a) => [a.artifact.id, a.artifact.version])).toEqual([
+      ['notes', 1],
+      ['timer', 2],
+    ])
+    await fresh.remove(second.id)
+    expect((await fresh.artifacts()).map((a) => a.artifact.id)).toEqual(['timer'])
+  })
 })
 
 describe('the output limit', () => {

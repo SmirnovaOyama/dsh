@@ -238,6 +238,7 @@ function registerIpc() {
       return { ok: false, error: errorText(error) }
     }
   })
+  handle('artifactsLibrary', () => controller.artifacts())
 
   handle('openExternal', async (url: string) => {
     if (/^https?:\/\//.test(url)) await shell.openExternal(url)
