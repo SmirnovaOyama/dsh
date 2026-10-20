@@ -1,11 +1,12 @@
 import { ArrowDown, ArrowUp, ChevronDown, FileText, Shield, Square, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { CONTEXT_WINDOW, MODELS, type FileRef, type PermissionMode } from '../../shared/types'
+import { contextWindow, EFFORTS, MODELS, type FileRef, type PermissionMode } from '../../shared/types'
 import { formatTokens } from '../format'
-import { t, type MessageKey } from '../i18n'
+import { t } from '../i18n'
+import { effortShort, modelDesc, modelName, modelShort } from '../models'
 import { actions, useApp, type ChatState } from '../store'
 import { Icon } from './Icon'
-import { Menu, MenuItem } from './Menu'
+import { Menu, MenuItem, MenuLabel, MenuSeparator } from './Menu'
 import { PermissionPanel, permissionKey } from './PermissionPanel'
 
 const MODES: PermissionMode[] = ['ask', 'acceptEdits', 'auto']
@@ -65,6 +66,7 @@ export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
   const status = chat?.session.status ?? 'idle'
   const busy = status === 'running' && !permission
   const model = chat?.session.model ?? draft.model
+  const effort = chat?.session.effort ?? draft.effort
   const mode = chat?.session.permissionMode ?? draft.permissionMode
   const usage = chat?.session.usage
   const hasText = text.trim().length > 0
@@ -153,10 +155,11 @@ export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
               className="btn-ghost"
               aria-haspopup="menu"
               aria-expanded={menu === 'model'}
-              aria-label={t('composer.model', { model })}
+              aria-label={t('composer.model', { model: `${modelName(model)}, ${effortShort(effort)}` })}
               onClick={() => setMenu(menu === 'model' ? null : 'model')}
             >
-              <span className="label">{model}</span>
+              <span className="label">{modelShort(model)}</span>
+              <span className="label hx-quiet">{effortShort(effort)}</span>
               <Icon icon={ChevronDown} size={16} />
             </button>
             <button
@@ -188,7 +191,7 @@ export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
 
         <p className="hx-meta">
           <span>
-            {t('composer.context')} <b>{formatTokens(usage?.contextTokens ?? 0)}</b> / {formatTokens(CONTEXT_WINDOW)} {t('composer.tokens')}
+            {t('composer.context')} <b>{formatTokens(usage?.contextTokens ?? 0)}</b> / {formatTokens(contextWindow(model))} {t('composer.tokens')}
           </span>
           <span>
             {t('composer.total')} <b>{formatTokens((usage?.promptTokens ?? 0) + (usage?.completionTokens ?? 0))}</b> {t('composer.tokens')}
@@ -201,14 +204,29 @@ export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
           <MenuItem
             key={m}
             checked={m === model}
-            desc={t(`model.${m}` as MessageKey)}
+            desc={modelDesc(m)}
             onSelect={() => {
               setMenu(null)
               void actions.configure({ model: m })
               areaRef.current?.focus()
             }}
           >
-            {m}
+            {modelName(m)}
+          </MenuItem>
+        ))}
+        <MenuSeparator />
+        <MenuLabel>{t('effort.label')}</MenuLabel>
+        {EFFORTS.map((e) => (
+          <MenuItem
+            key={e}
+            checked={e === effort}
+            onSelect={() => {
+              setMenu(null)
+              void actions.configure({ effort: e })
+              areaRef.current?.focus()
+            }}
+          >
+            {t(`effort.${e}`)}
           </MenuItem>
         ))}
       </Menu>

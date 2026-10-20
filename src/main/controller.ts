@@ -6,12 +6,13 @@ import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import {
+  currentModel,
   EMPTY_USAGE,
+  type ConfigureOptions,
   type AgentEvent,
   type CommitResult,
   type FileRef,
   type PermissionDecision,
-  type PermissionMode,
   type PermissionRequest,
   type SessionMeta,
   type SessionSnapshot,
@@ -100,7 +101,7 @@ export class Controller {
           : item,
     )
     const state: SessionState = {
-      data: { ...stored.data, items, status: 'idle' },
+      data: { ...stored.data, ...currentModel(stored.data.model, stored.data.effort), items, status: 'idle' },
       messages: stored.messages,
       tracker: new ChangeTracker(stored.data.workspace, stored.snapshots),
       allowEdits: stored.allowEdits,
@@ -133,7 +134,7 @@ export class Controller {
         workspace,
         createdAt: now,
         updatedAt: now,
-        model: opts.model,
+        ...currentModel(opts.model, opts.effort),
         permissionMode: opts.permissionMode,
         status: 'idle',
         items: [],
@@ -178,10 +179,10 @@ export class Controller {
     pending.resolve(decision)
   }
 
-  async configure(id: string, opts: { model?: string; permissionMode?: PermissionMode }): Promise<SessionMeta | null> {
+  async configure(id: string, opts: ConfigureOptions): Promise<SessionMeta | null> {
     const state = await this.open(id)
     if (!state) return null
-    if (opts.model) state.data.model = opts.model
+    if (opts.model || opts.effort) Object.assign(state.data, currentModel(opts.model ?? state.data.model, opts.effort ?? state.data.effort))
     if (opts.permissionMode) state.data.permissionMode = opts.permissionMode
     this.persist(state)
     const meta = metaOf(state.data)

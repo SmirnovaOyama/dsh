@@ -5,13 +5,63 @@ export type ThemePref = 'system' | 'light' | 'dark'
 export type Locale = 'zh-Hant' | 'en'
 export type ReplyStyle = 'precise' | 'balanced' | 'varied'
 
-export const MODELS = ['deepseek-chat', 'deepseek-reasoner'] as const
-export const CONTEXT_WINDOW = 128_000
+/** The model ids DeepSeek's API takes, from https://api-docs.deepseek.com/quick_start/pricing */
+export const MODELS = ['deepseek-flash', 'deepseek-v4-pro'] as const
+export type ModelId = (typeof MODELS)[number]
+
+/** How long the model thinks before answering. `none` turns thinking off. */
+export const EFFORTS = ['none', 'low', 'high', 'max'] as const
+export type Effort = (typeof EFFORTS)[number]
+
+export interface ModelInfo {
+  /** "DeepSeek V4.1 Flash" */
+  name: string
+  /** What the composer button shows: "V4.1 Flash" */
+  short: string
+  /** The version the id points to today, as DeepSeek's docs name it. */
+  version: string
+  /** Input and output together, in tokens. */
+  contextWindow: number
+}
+
+export const MODEL_INFO: Record<ModelId, ModelInfo> = {
+  'deepseek-flash': { name: 'DeepSeek V4.1 Flash', short: 'V4.1 Flash', version: 'DeepSeek-V4.1-Flash-1017', contextWindow: 1_000_000 },
+  'deepseek-v4-pro': { name: 'DeepSeek V4 Pro', short: 'V4 Pro', version: 'DeepSeek-V4-Pro-0813', contextWindow: 1_000_000 },
+}
+
+export function modelInfo(model: string): ModelInfo | null {
+  return (MODEL_INFO as Record<string, ModelInfo | undefined>)[model] ?? null
+}
+
+/** A model id someone typed in by hand still gets a window, the smallest DeepSeek has offered lately. */
+export function contextWindow(model: string): number {
+  return modelInfo(model)?.contextWindow ?? 128_000
+}
+
+/**
+ * Names DeepSeek has retired, mapped to what they point to now. `deepseek-chat` and
+ * `deepseek-reasoner` were V4 Flash without and with thinking, so the choice someone made is kept.
+ */
+const LEGACY: Record<string, { model: ModelId; effort?: Effort }> = {
+  'deepseek-chat': { model: 'deepseek-flash', effort: 'none' },
+  'deepseek-reasoner': { model: 'deepseek-flash', effort: 'high' },
+  'deepseek-v4-flash': { model: 'deepseek-flash' },
+  'deepseek-v4-flash-vision-exp': { model: 'deepseek-flash' },
+}
+
+export const DEFAULT_EFFORT: Effort = 'high'
+
+export function currentModel(model: string, effort: Effort | undefined): { model: string; effort: Effort } {
+  const legacy = LEGACY[model]
+  if (legacy) return { model: legacy.model, effort: legacy.effort ?? effort ?? DEFAULT_EFFORT }
+  return { model, effort: effort && (EFFORTS as readonly string[]).includes(effort) ? effort : DEFAULT_EFFORT }
+}
 export const MAX_STEPS_OPTIONS = [20, 50, 100, 200] as const
 
 export interface Settings {
   baseUrl: string
   model: string
+  effort: Effort
   replyStyle: ReplyStyle
   maxSteps: number
   permissionMode: PermissionMode
@@ -54,6 +104,7 @@ export interface SessionMeta {
   createdAt: number
   updatedAt: number
   model: string
+  effort: Effort
   permissionMode: PermissionMode
   status: SessionStatus
 }
@@ -220,8 +271,11 @@ export interface SessionSnapshot {
 export interface StartOptions {
   id: string
   model: string
+  effort: Effort
   permissionMode: PermissionMode
 }
+
+export type ConfigureOptions = { model?: string; effort?: Effort; permissionMode?: PermissionMode }
 
 export interface DshApi {
   getInitialState(): Promise<InitialState>
@@ -253,7 +307,7 @@ export interface DshApi {
     /** Replaces the conversation the model sees with a summary, keeping the transcript on screen. */
     compact(sessionId: string, focus?: string): Promise<void>
     respond(sessionId: string, requestId: string, decision: PermissionDecision): Promise<void>
-    configure(sessionId: string, opts: { model?: string; permissionMode?: PermissionMode }): Promise<SessionMeta | null>
+    configure(sessionId: string, opts: ConfigureOptions): Promise<SessionMeta | null>
   }
   artifacts: {
     /** Hands a page to the preview frame, served under a policy of its own, and returns the address to load. */
@@ -275,7 +329,8 @@ export interface DshApi {
 
 export const DEFAULT_SETTINGS: Settings = {
   baseUrl: 'https://api.deepseek.com',
-  model: 'deepseek-chat',
+  model: 'deepseek-flash',
+  effort: DEFAULT_EFFORT,
   replyStyle: 'precise',
   maxSteps: 50,
   permissionMode: 'ask',
