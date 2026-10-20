@@ -214,6 +214,8 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
     setFull(false)
     moreRef.current?.focus({ preventScroll: true })
   }
+  // A choice from the menu leaves focus on the arrow that opened it, once the menu has gone.
+  const keepFocus = () => requestAnimationFrame(() => moreRef.current?.focus({ preventScroll: true }))
 
   // Expanded, the artifact is a dialog over the window: Escape shrinks it before anything else hears
   // the key, and nothing behind it can take focus. It stays where it is in the page, so it keeps running.
@@ -470,6 +472,7 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
             onSelect={() => {
               setMenu(null)
               setFull(true)
+              keepFocus()
             }}
           >
             {t('artifact.expand')}
@@ -488,6 +491,7 @@ function ArtifactViewer({ item }: { item: ArtifactItem }) {
                 setMenu(null)
                 setDevice(d.value)
                 setMode('preview')
+                keepFocus()
               }}
             >
               {t(d.label)}

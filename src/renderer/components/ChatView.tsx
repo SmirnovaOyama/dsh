@@ -135,8 +135,9 @@ export function ChatView() {
   const hasChat = useApp((s) => s.chat !== null || s.chatId !== null)
   const hasApiKey = useApp((s) => s.hasApiKey)
   const hasWorkspace = useApp((s) => s.workspace !== null)
+  const covered = useApp((s) => s.view === 'artifacts')
   return (
-    <main className="hx-main">{!hasChat && !hasApiKey ? <NoKey /> : !hasChat && !hasWorkspace ? <NoFolder /> : <Conversation />}</main>
+    <main className="hx-main" inert={covered}>{!hasChat && !hasApiKey ? <NoKey /> : !hasChat && !hasWorkspace ? <NoFolder /> : <Conversation />}</main>
   )
 }
 

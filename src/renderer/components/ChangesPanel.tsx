@@ -17,6 +17,7 @@ export function ChangesPanel({ chat, motion }: { chat: ChatState | null; motion:
   const tab = useApp((s) => s.panelTab)
   const isGitRepo = useApp((s) => s.workspace?.isGitRepo ?? false)
   const changes = chat?.changes ?? []
+  const covered = useApp((s) => s.view === 'artifacts')
 
   const running = chat ? chat.session.status !== 'idle' : false
   const added = changes.reduce((n, c) => n + c.stats.added, 0)
@@ -62,14 +63,14 @@ export function ChangesPanel({ chat, motion }: { chat: ChatState | null; motion:
   // An artifact takes the whole panel, with its own title bar, as it does in Claude.
   if (tab === 'artifacts') {
     return (
-      <aside className="hx-changes is-artifacts" data-motion={motion} aria-label={t('artifact.label')} inert={motion === 'out'}>
+      <aside className="hx-changes is-artifacts" data-motion={motion} aria-label={t('artifact.label')} inert={motion === 'out' || covered}>
         <ArtifactsView />
       </aside>
     )
   }
 
   return (
-    <aside className="hx-changes" data-motion={motion} aria-label={t('changes.label')} inert={motion === 'out'}>
+    <aside className="hx-changes" data-motion={motion} aria-label={t('changes.label')} inert={motion === 'out' || covered}>
       <div className="hx-changes-head">
         <div className="hx-tabs" role="tablist" aria-label={t('changes.label')}>
           {(['changes', 'files'] as const).map((id) => (

@@ -66,7 +66,9 @@ function usePresence(shown: boolean, ms: number): Motion | null {
     }
     if (shown) {
       setMotion('in')
-      return
+      // Once open, the pane settles, so it never plays the opening again when it is drawn anew.
+      const timer = setTimeout(() => setMotion('still'), 400)
+      return () => clearTimeout(timer)
     }
     setMotion((m) => (m === null ? null : 'out'))
     const timer = setTimeout(() => setMotion(null), ms)
@@ -109,22 +111,17 @@ export function App() {
       </div>
     )
   }
-  if (view === 'artifacts') {
-    return (
-      <div className="hx-app">
-        <Sidebar searchTick={searchTick} />
-        <Resizer pane="sidebar" />
-        <LibraryView />
-      </div>
-    )
-  }
+  // The library covers the conversation rather than replacing it, so coming back finds the conversation,
+  // its scroll and its running pages as they were.
+  const library = view === 'artifacts'
   return (
     <div className="hx-app">
       <Sidebar searchTick={searchTick} />
       <Resizer pane="sidebar" />
       <ChatView />
-      {panelMotion && panelMotion !== 'out' && <Resizer key={panelPane} pane={panelPane} />}
+      {panelMotion && panelMotion !== 'out' && !library && <Resizer key={panelPane} pane={panelPane} />}
       {panelMotion && <ChangesPanel chat={chat} motion={panelMotion} />}
+      {library && <LibraryView />}
     </div>
   )
 }

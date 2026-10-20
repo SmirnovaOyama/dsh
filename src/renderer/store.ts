@@ -46,6 +46,8 @@ export interface AppState {
   chat: ChatState | null
   view: 'chat' | 'settings' | 'artifacts'
   settingsSection: SettingsSection | null
+  /** The page Settings goes back to. */
+  settingsFrom: 'chat' | 'artifacts'
   showChanges: boolean
   selectedFile: string | null
   /** Which view the right-hand panel shows. */
@@ -94,6 +96,7 @@ let state: AppState = {
   chat: null,
   view: 'chat',
   settingsSection: null,
+  settingsFrom: 'chat',
   showChanges: readPrefs().showChanges ?? false,
   selectedFile: null,
   panelTab: 'changes',
@@ -274,26 +277,28 @@ export const actions = {
     }))
   },
 
-  async openSession(id: string) {
-    if (state.chatId === id && state.view === 'chat') return
+  /** Opens a conversation. Says whether it opened, was gone, or was left for something opened after it. */
+  async openSession(id: string): Promise<'opened' | 'missing' | 'superseded'> {
+    if (state.chatId === id && state.view === 'chat') return state.chat ? 'opened' : 'superseded'
     // Coming back from a page to the conversation already loaded keeps it as it was.
     if (state.chatId === id && state.chat) {
       set({ view: 'chat' })
-      return
+      return 'opened'
     }
     // Events for this conversation are ignored until the snapshot arrives; the snapshot already contains them.
     set((s) => ({ view: 'chat', chatId: id, chat: null, selectedFile: null, ...leaveArtifacts(s) }))
     const snapshot = await api.sessions.load(id)
-    if (state.chatId !== id) return
+    if (state.chatId !== id) return 'superseded'
     if (!snapshot) {
       set((s) => ({ chatId: null, sessions: s.sessions.filter((m) => m.id !== id) }))
-      return
+      return 'missing'
     }
     set((s) => ({
       chat: { session: snapshot.session, changes: snapshot.changes, permission: snapshot.permission },
       selectedFile: snapshot.changes[0]?.path ?? null,
       focusTick: s.focusTick + 1,
     }))
+    return 'opened'
   },
 
   /** Sends a message. Pointed-at files go with it, unless the message comes from somewhere other than the composer. */
@@ -471,31 +476,36 @@ export const actions = {
 
   /**
    * Opens an artifact from the library where it was made: its folder, its conversation, and the viewer
-   * beside it. Resolves false when the folder or the conversation is gone.
+   * beside it. When the folder or the conversation is gone, nothing changes and the reason comes back.
    */
-  async openArtifact(entry: LibraryArtifact): Promise<boolean> {
+  async openArtifact(entry: LibraryArtifact): Promise<'opened' | 'folder' | 'conversation' | 'superseded'> {
+    const stillHere = () => state.view === 'artifacts'
+    if (!(await api.sessions.load(entry.sessionId))) return 'conversation'
+    if (!stillHere()) return 'superseded'
     if (state.workspace?.path !== entry.workspace) {
       const info = await api.workspace.open(entry.workspace)
-      if (!info) return false
+      if (!info) return 'folder'
       // The folder's own event may come before or after this; whichever is second changes nothing.
       handleEvent({ type: 'workspace', workspace: info })
+      if (!stillHere()) return 'superseded'
     }
-    await actions.openSession(entry.sessionId)
-    if (state.chat?.session.id !== entry.sessionId) {
-      // The conversation is gone; back to the library, which no longer lists it.
-      if (state.chatId === null && state.view === 'chat') set({ view: 'artifacts' })
-      return false
+    const outcome = await actions.openSession(entry.sessionId)
+    if (outcome === 'missing') {
+      // Gone in the moment since the check: back to the library, which no longer lists it.
+      set({ view: 'artifacts' })
+      return 'conversation'
     }
+    if (outcome !== 'opened' || state.chat?.session.id !== entry.sessionId) return 'superseded'
     const item = state.chat.session.items.find((i) => i.id === entry.itemId)
     actions.viewArtifact(item ? entry.itemId : null)
-    return true
+    return 'opened'
   },
 
   openSettings(section: SettingsSection | null = null) {
-    set({ view: 'settings', settingsSection: section })
+    set((s) => ({ view: 'settings', settingsSection: section, settingsFrom: s.view === 'settings' ? s.settingsFrom : s.view }))
   },
 
   closeSettings() {
-    set((s) => ({ view: 'chat', settingsSection: null, focusTick: s.focusTick + 1 }))
+    set((s) => ({ view: s.settingsFrom, settingsSection: null, focusTick: s.focusTick + 1 }))
   },
 }

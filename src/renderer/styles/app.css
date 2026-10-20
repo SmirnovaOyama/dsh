@@ -735,7 +735,9 @@ button.hx-tool:hover { background: var(--surface-hover); }
   .hx-artifact-head .title { flex: 1 1 0; min-width: 0; }
   .hx-artifact-head .grow { display: none; }
 }
-@container (max-width: 300px) { .hx-artifact-head .title { visibility: hidden; } }
+@container (max-width: 300px) { .hx-artifact-head .title { visibility: hidden; margin: 0; } }
+/* Once open, the artifact panel keeps room for its header controls; the conversation gives way instead. */
+.hx-changes.is-artifacts[data-motion="still"] { min-width: 248px; }
 .hx-code-lines .num.is-static { cursor: default; }
 .hx-code-lines .num.is-static:hover { color: var(--text-disabled); }
 .hx-artifact-writing { display: flex; align-items: center; gap: 6px; padding: 8px 0 0 48px; font-size: 12px; color: var(--text-muted); }
@@ -837,6 +839,9 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-artifact-doc .hx-prose { font-size: 15px; line-height: 24px; }
 
 /* ── artifacts library ───────────────────────────────────────── */
+/* The library covers the conversation instead of replacing it, so coming back finds it as it was. */
+.hx-app { position: relative; }
+.hx-library { position: absolute; inset-block: 0; inset-inline: var(--sidebar-width) 0; z-index: 5; }
 .hx-library .hx-page-head .in { max-width: 72rem; padding-bottom: 12px; }
 .hx-lib-title { display: flex; align-items: baseline; gap: 8px; }
 .hx-lib-title .count { font-size: 13px; line-height: 18px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
@@ -873,7 +878,7 @@ button.hx-tool:hover { background: var(--surface-hover); }
 }
 .hx-lib-card:hover .thumb::after { box-shadow: inset 0 0 0 1px var(--border-strong); }
 .hx-lib-card .scaled { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-.hx-lib-card .page { position: absolute; inset: 0; background: Canvas; }
+.hx-lib-card .page { position: absolute; inset: 0; background: var(--surface); }
 .hx-lib-card iframe {
   display: block; width: 100%; height: 100%; border: 0; background: Canvas; pointer-events: none;
   opacity: 0; transition: opacity var(--duration-base) var(--ease-standard);
@@ -881,7 +886,8 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-lib-card iframe.is-shown { opacity: 1; }
 .hx-lib-card .glyph { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-disabled); transition: opacity var(--duration-base) var(--ease-standard); }
 .hx-lib-card .glyph.is-hidden { opacity: 0; }
-.hx-lib-card .picture { position: absolute; inset: 0; width: 100%; height: 100%; padding: 12%; box-sizing: border-box; object-fit: contain; background: Canvas; }
+/* A drawing sits on white, as it does in the viewer, so dark lines stay visible in dark mode. */
+.hx-lib-card .picture { position: absolute; inset: 0; width: 100%; height: 100%; padding: 12%; box-sizing: border-box; object-fit: contain; background: #fff; }
 .hx-lib-card .doc { padding: 28px 40px; }
 .hx-lib-card .doc .hx-prose { font-size: 15px; line-height: 24px; }
 .hx-lib-card .code { margin: 0; padding: 24px 28px; font-family: var(--font-mono); font-size: 14px; line-height: 22px; color: var(--text); white-space: pre; tab-size: 4; }

@@ -140,7 +140,8 @@ export class Controller {
       let cached = this.library.get(meta.id)
       if (cached?.updatedAt !== meta.updatedAt) {
         const stored = await this.options.sessions.read(meta.id)
-        cached = { updatedAt: meta.updatedAt, artifacts: stored ? artifactsIn(stored.data) : [] }
+        if (!stored) continue
+        cached = { updatedAt: meta.updatedAt, artifacts: artifactsIn(stored.data) }
         this.library.set(meta.id, cached)
       }
       all.push(...cached.artifacts)

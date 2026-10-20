@@ -2,7 +2,7 @@ import { ChevronDown, Search, X } from 'lucide-react'
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ArtifactVersion, LibraryArtifact } from '../../shared/types'
 import { api } from '../api'
-import { artifactIcon, pageFor, typeLabel } from '../artifacts'
+import { artifactIcon, pageFor, svgPage, typeLabel } from '../artifacts'
 import { tildify, timeAgo } from '../format'
 import { highlight } from '../highlight'
 import { t } from '../i18n'
@@ -12,6 +12,18 @@ import { Markdown } from './Markdown'
 import { Menu, MenuItem, MenuSeparator } from './Menu'
 
 const folderName = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path
+const keyOf = (entry: LibraryArtifact) => `${entry.sessionId}:${entry.artifact.id || entry.itemId}`
+
+/** Keeps the entries that did not change, so their previews are not loaded again. */
+function keepSame(old: LibraryArtifact[] | null, next: LibraryArtifact[]): LibraryArtifact[] {
+  if (!old) return next
+  const before = new Map(old.map((e) => [keyOf(e), e]))
+  return next.map((e) => {
+    const was = before.get(keyOf(e))
+    const same = was && was.itemId === e.itemId && was.updatedAt === e.updatedAt && was.sessionTitle === e.sessionTitle && was.workspace === e.workspace
+    return same ? was : e
+  })
+}
 
 // ── thumbnails ─────────────────────────────────────────────────
 
@@ -70,6 +82,7 @@ function Scaled({ width, children }: { width: number; children: ReactNode }) {
 /** A live page, started only once it scrolls near and its turn comes. */
 function PageThumb({ artifact }: { artifact: ArtifactVersion }) {
   const ref = useRef<HTMLDivElement>(null)
+  const html = useMemo(() => pageFor(artifact), [artifact.type, artifact.content])
   const [near, setNear] = useState(false)
   const [src, setSrc] = useState<string | null>(null)
   const [shown, setShown] = useState(false)
@@ -78,11 +91,15 @@ function PageThumb({ artifact }: { artifact: ArtifactVersion }) {
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    const observer = new IntersectionObserver(([entry]) => {
-      if (!entry.isIntersecting) return
-      setNear(true)
-      observer.disconnect()
-    }, { rootMargin: '240px' })
+    // Measured against the scrolling page, so the margin starts a page a little before it shows.
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return
+        setNear(true)
+        observer.disconnect()
+      },
+      { root: el.closest('.hx-library'), rootMargin: '240px' },
+    )
     observer.observe(el)
     return () => observer.disconnect()
   }, [])
@@ -91,7 +108,6 @@ function PageThumb({ artifact }: { artifact: ArtifactVersion }) {
     if (!near) return
     let live = true
     let timer = 0
-    const html = pageFor(artifact)
     const done = takeTurn(() => {
       // A page that never says it loaded still gives its turn up.
       timer = window.setTimeout(() => done(), 4000)
@@ -106,7 +122,7 @@ function PageThumb({ artifact }: { artifact: ArtifactVersion }) {
       window.clearTimeout(timer)
       done()
     }
-  }, [near, artifact])
+  }, [near, html])
 
   return (
     <div ref={ref} className="page">
@@ -140,11 +156,27 @@ function Glyph({ artifact, hidden }: { artifact: ArtifactVersion; hidden?: boole
   )
 }
 
+/**
+ * The drawing as a standalone SVG file. The viewer reads it as HTML, which forgives a missing xmlns and
+ * named entities; an image does not, so it is read the same way here and written back out as XML.
+ */
+function svgFile(content: string): string | null {
+  const svg = new DOMParser().parseFromString(svgPage(content), 'text/html').querySelector('svg')
+  return svg ? new XMLSerializer().serializeToString(svg) : null
+}
+
+function SvgThumb({ artifact }: { artifact: ArtifactVersion }) {
+  const file = useMemo(() => svgFile(artifact.content), [artifact.content])
+  const [broken, setBroken] = useState(false)
+  if (!file || broken) return <Glyph artifact={artifact} />
+  // An image never runs the drawing's scripts.
+  return <img className="picture" alt="" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(file)}`} onError={() => setBroken(true)} />
+}
+
 const Thumb = memo(function Thumb({ artifact }: { artifact: ArtifactVersion }) {
   switch (artifact.type) {
     case 'svg':
-      // An image never runs the drawing's scripts.
-      return <img className="picture" alt="" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(artifact.content)}`} />
+      return <SvgThumb artifact={artifact} />
     case 'markdown':
       return (
         <Scaled width={560}>
@@ -174,21 +206,22 @@ const Card = memo(function Card({ entry, now, onOpen }: { entry: LibraryArtifact
   const locale = useApp((s) => s.settings.locale)
   const { artifact } = entry
   const title = artifact.title || t('artifact.untitled')
+  const chat = entry.sessionTitle || t('header.newChat')
   return (
     <li className="hx-lib-card">
-      <div className="thumb" aria-hidden>
+      <div className="thumb" aria-hidden inert>
         <Thumb artifact={artifact} />
       </div>
-      <button type="button" className="name" title={title} onClick={() => onOpen(entry)}>
+      <button type="button" className="name" title={`${title}\n${folderName(entry.workspace)} / ${chat}`} onClick={() => onOpen(entry)}>
         {title}
       </button>
       <span className="sub">
         <span>{typeLabel(artifact)}</span>
         <span>{timeAgo(entry.updatedAt, now, locale)}</span>
       </span>
-      <span className="from" title={`${folderName(entry.workspace)}\n${entry.sessionTitle}`}>
+      <span className="from">
         <span className="project">{folderName(entry.workspace)}</span>
-        <span className="chat">{entry.sessionTitle || t('header.newChat')}</span>
+        <span className="chat">{chat}</span>
       </span>
     </li>
   )
@@ -206,7 +239,7 @@ export function LibraryView() {
   const [query, setQuery] = useState('')
   const [project, setProject] = useState<string | null>(null)
   const [menu, setMenu] = useState(false)
-  const [missing, setMissing] = useState<string | null>(null)
+  const [note, setNote] = useState<string | null>(null)
   const [scrolled, setScrolled] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const projectRef = useRef<HTMLButtonElement>(null)
@@ -217,7 +250,7 @@ export function LibraryView() {
       api.artifacts.library().then(
         (list) => {
           if (!live) return
-          setEntries(list)
+          setEntries((old) => keepSame(old, list))
           setNow(Date.now())
         },
         () => live && setEntries((list) => list ?? []),
@@ -233,10 +266,10 @@ export function LibraryView() {
   }, [])
 
   useEffect(() => {
-    if (!missing) return
-    const timer = window.setTimeout(() => setMissing(null), 5000)
+    if (!note) return
+    const timer = window.setTimeout(() => setNote(null), 5000)
     return () => window.clearTimeout(timer)
-  }, [missing])
+  }, [note])
 
   const projects = useMemo(() => [...new Set((entries ?? []).map((e) => e.workspace))], [entries])
   const shownProject = project && projects.includes(project) ? project : null
@@ -251,8 +284,12 @@ export function LibraryView() {
   }, [entries, query, shownProject])
 
   const open = async (entry: LibraryArtifact) => {
-    const opened = await actions.openArtifact(entry)
-    if (!opened && entry.workspace) setMissing(folderName(entry.workspace))
+    const outcome = await actions.openArtifact(entry)
+    if (outcome === 'folder') setNote(t('library.missing', { name: folderName(entry.workspace) }))
+    else if (outcome === 'conversation') {
+      setNote(t('library.gone'))
+      setEntries((list) => list && list.filter((e) => e.sessionId !== entry.sessionId))
+    }
   }
 
   return (
@@ -281,7 +318,7 @@ export function LibraryView() {
                   }}
                 />
                 {query && (
-                  <button type="button" className="btn-ghost" aria-label={t('common.cancel')} onClick={() => setQuery('')}>
+                  <button type="button" className="btn-ghost" aria-label={t('library.clear')} title={t('library.clear')} onClick={() => setQuery('')}>
                     <Icon icon={X} size={14} />
                   </button>
                 )}
@@ -299,9 +336,9 @@ export function LibraryView() {
                   <Icon icon={ChevronDown} size={14} />
                 </button>
               )}
-              {missing && (
+              {note && (
                 <span className="hx-lib-note" role="status">
-                  {t('library.missing', { name: missing })}
+                  {note}
                 </span>
               )}
             </div>
