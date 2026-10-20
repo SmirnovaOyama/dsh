@@ -622,20 +622,31 @@ button.hx-tool:hover { background: var(--surface-hover); }
 }
 
 /* ── thinking ────────────────────────────────────────────────── */
-/* The sparkle turns and breathes in place; the small one twinkles. Nothing glows and nothing travels. */
+/* A thought cloud: its puffs swell in turn, left to right, and the trail under it fades in from the
+   far circle to the near one. Nothing glows and nothing travels. */
 .hx-think { flex-shrink: 0; overflow: visible; color: var(--accent); }
-.hx-think path { fill: currentColor; transform-box: view-box; }
-.hx-think .big { transform-origin: 11px 13px; animation: hx-think-turn 2600ms var(--ease-standard) infinite; }
-.hx-think .small { transform-origin: 19px 4.5px; color: var(--accent-ink); animation: hx-think-twinkle 2600ms var(--ease-standard) infinite; }
-@keyframes hx-think-turn {
-  0% { transform: rotate(0deg) scale(1); }
-  50% { transform: rotate(45deg) scale(0.78); }
-  100% { transform: rotate(90deg) scale(1); }
+/* The cloud is drawn a little larger than the 16px slot it shares with the chevron, so it stays readable. */
+.hx-lead > .hx-think, .hx-thinking > .hx-think { margin: -2px; }
+.hx-think :is(.cloud, .trail) { fill: currentColor; }
+.hx-think :is(.puff, .trail) { transform-box: fill-box; transform-origin: center; }
+/* Puffs grow upward from their bottom edge, so the flat underside of the cloud never bulges. */
+.hx-think .puff { transform-origin: 50% 100%; }
+.hx-think .puff { animation: hx-think-puff 1800ms var(--ease-standard) infinite both; }
+.hx-think .trail { animation: hx-think-fade 1800ms var(--ease-standard) infinite both; }
+/* One beat: far circle, near circle, then the puffs left to right. */
+.hx-think .trail.near { animation-delay: 180ms; }
+.hx-think .puff.p1 { animation-delay: 400ms; }
+.hx-think .puff.p2 { animation-delay: 580ms; }
+.hx-think .puff.p3 { animation-delay: 760ms; }
+@keyframes hx-think-puff {
+  0%, 55%, 100% { transform: scale(1); }
+  25% { transform: scale(1.12); }
 }
-@keyframes hx-think-twinkle {
-  0%, 100% { opacity: 0.2; transform: scale(0.55); }
-  50% { opacity: 1; transform: scale(1); }
+@keyframes hx-think-fade {
+  0%, 60%, 100% { opacity: 0.25; transform: scale(0.75); }
+  25% { opacity: 1; transform: scale(1); }
 }
+
 /* A soft band of light sweeps across a label while the work goes on. */
 .hx-shimmer {
   color: var(--text-muted);
@@ -648,7 +659,7 @@ button.hx-tool:hover { background: var(--surface-hover); }
 .hx-thinking { display: flex; align-items: center; gap: 8px; min-height: 32px; font-size: 14px; line-height: 20px; animation: hx-fade-in var(--duration-base) var(--ease-standard) both; }
 @media (prefers-reduced-motion: reduce) {
   .hx-shimmer { -webkit-text-fill-color: currentColor; background: none; }
-  .hx-think .small { opacity: 0.6; }
+  .hx-think :is(.puff, .trail) { animation: none; opacity: 1; transform: none; }
 }
 .hx-scroll-content { flex: 1 0 auto; display: flex; flex-direction: column; }
 .oy-icon.hx-fill { fill: currentColor; stroke: none; }

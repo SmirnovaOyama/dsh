@@ -344,15 +344,14 @@ function ItemView({ item, isLast, session }: { item: TranscriptItem; isLast: boo
   const idle = session.status === 'idle'
   switch (item.kind) {
     case 'tool':
-      return item.name === PLAN_TOOL ? <PlanCard key={item.status === 'waiting' ? 'waiting' : 'decided'} item={item} /> : null
+      if (item.name === PLAN_TOOL) return <PlanCard key={item.status === 'waiting' ? 'waiting' : 'decided'} item={item} />
+      return isArtifact(item) ? <ArtifactCard item={item} /> : null
     case 'text':
       return item.text ? <Markdown text={item.text} streaming={item.streaming && !idle} /> : null
     case 'error':
       return <ErrorBlock item={item} active={isLast && idle} />
     case 'notice':
       return <Notice item={item} active={isLast && idle} />
-    case 'tool':
-      return isArtifact(item) ? <ArtifactCard item={item} /> : null
     default:
       return null
   }

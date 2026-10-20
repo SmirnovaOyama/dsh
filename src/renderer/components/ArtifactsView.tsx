@@ -597,7 +597,7 @@ const ArtifactCode = memo(function ArtifactCode({ item, follow }: { item: Artifa
       </div>
       {follow && (
         <p className="hx-artifact-writing">
-          <ThinkingMark size={14} />
+          <ThinkingMark size={16} />
           <span>{t('artifact.writing')}</span>
         </p>
       )}
@@ -728,7 +728,7 @@ function Frame(props: {
         waiting &&
         (slow || !covered) && (
           <p className={slow ? 'hx-artifact-loading is-late' : 'hx-artifact-loading'} role="status">
-            <ThinkingMark size={14} />
+            <ThinkingMark size={16} />
             <span>{t('artifact.loading')}</span>
           </p>
         )

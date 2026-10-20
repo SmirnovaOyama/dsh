@@ -1,15 +1,39 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { t } from '../i18n'
 
+const LOBES = [
+  { cx: 8, cy: 13, r: 4.5 },
+  { cx: 13, cy: 10, r: 5.5 },
+  { cx: 17.5, cy: 13.5, r: 4 },
+]
+const BASE = { x: 8, y: 12, width: 9.5, height: 5.5 }
+const LINE = 1.75
+
 /**
- * The mark shown while the agent thinks: a four-point sparkle that slowly turns and breathes,
- * with a small one beside it that twinkles. Only opacity, scale and rotation move; nothing travels.
+ * The mark shown while the agent thinks: a little thought cloud. Its three puffs swell one after
+ * another, left to right, and the two small circles under it fade in from the far one to the near
+ * one. The outline is the edge of the puffs drawn through a mask, so it stays one clean line while
+ * they swell. Only opacity and scale change; nothing moves across the screen.
  */
-export function ThinkingMark({ size = 16 }: { size?: number }) {
+export function ThinkingMark({ size = 20 }: { size?: number }) {
+  // useId has characters a url(#…) reference would need escaped; a plain id avoids that.
+  const mask = `hx-think-${useId().replace(/[^\w-]/g, '')}`
   return (
     <svg className="hx-think" viewBox="0 0 24 24" width={size} height={size} aria-hidden="true">
-      <path className="big" d="M11 5C11.6 10.4 13.6 12.4 19 13C13.6 13.6 11.6 15.6 11 21C10.4 15.6 8.4 13.6 3 13C8.4 12.4 10.4 10.4 11 5Z" />
-      <path className="small" d="M19 1.5C19.25 3.9 19.6 4.25 22 4.5C19.6 4.75 19.25 5.1 19 7.5C18.75 5.1 18.4 4.75 16 4.5C18.4 4.25 18.75 3.9 19 1.5Z" />
+      <mask id={mask} maskUnits="userSpaceOnUse" x="-2" y="-2" width="28" height="28">
+        {/* The puffs grown by the line width, with the puffs themselves cut out, leave just the outline. */}
+        {LOBES.map((l, i) => (
+          <circle key={i} className={`puff p${i + 1}`} cx={l.cx} cy={l.cy} r={l.r + LINE} fill="white" />
+        ))}
+        <rect x={BASE.x} y={BASE.y} width={BASE.width} height={BASE.height + LINE} fill="white" />
+        {LOBES.map((l, i) => (
+          <circle key={i} className={`puff p${i + 1}`} cx={l.cx} cy={l.cy} r={l.r} fill="black" />
+        ))}
+        <rect {...BASE} fill="black" />
+      </mask>
+      <rect className="cloud" x="-2" y="-2" width="28" height="28" mask={`url(#${mask})`} />
+      <circle className="trail near" cx="5" cy="20.75" r="1.6" />
+      <circle className="trail far" cx="2.25" cy="23" r="1" />
     </svg>
   )
 }
