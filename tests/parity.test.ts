@@ -268,3 +268,16 @@ describe('slash commands', () => {
     expect(parseCommand('x', '---\nmodel: a\n---\n\nDo it\n')).toEqual({ name: 'x', description: 'Do it', body: 'Do it' })
   })
 })
+
+describe('projects', () => {
+  it('turns the folders opened lately into projects for older settings', async () => {
+    await writeFile(path.join(root, 'settings.json'), JSON.stringify({ recentWorkspaces: ['/a', '/b'] }))
+    const settings = new SettingsStore(root, plainCipher)
+    await settings.load()
+    expect(settings.get().projects).toEqual(['/a', '/b'])
+    await settings.update({ projects: [] })
+    const again = new SettingsStore(root, plainCipher)
+    await again.load()
+    expect(again.get().projects).toEqual([])
+  })
+})

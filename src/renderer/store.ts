@@ -40,7 +40,7 @@ export interface AppState {
   hasApiKey: boolean
   app: AppInfo
   workspace: WorkspaceInfo | null
-  /** Conversations in this folder, most recently used first. */
+  /** Conversations in every project, most recently used first. */
   sessions: SessionMeta[]
   /** When each conversation was last opened for work; the list sorts and groups by it, so it never reshuffles on its own. */
   activeAt: Record<string, number>
@@ -180,7 +180,7 @@ function handleEvent(event: AgentEvent) {
       break
     case 'meta':
       set((s) => ({
-        sessions: s.workspace && event.meta.workspace === s.workspace.path ? placeMeta(s.sessions, event.meta, false) : s.sessions,
+        sessions: placeMeta(s.sessions, event.meta, false),
         activeAt: event.meta.id in s.activeAt ? s.activeAt : { ...s.activeAt, [event.meta.id]: event.meta.updatedAt },
         chat: s.chat && s.chat.session.id === event.meta.id ? { ...s.chat, session: { ...s.chat.session, ...event.meta } } : s.chat,
       }))
@@ -206,31 +206,48 @@ function handleEvent(event: AgentEvent) {
     case 'usage':
       updateChat(event.sessionId, (chat) => ({ session: { ...chat.session, usage: event.usage } }))
       break
-    case 'settings':
+    case 'settings': {
+      const projectsChanged = event.settings.projects.join('\n') !== state.settings.projects.join('\n')
       set({ settings: event.settings, hasApiKey: event.hasApiKey })
-      break
-    case 'workspace': {
-      const changed = event.workspace?.path !== state.workspace?.path
-      set({ workspace: event.workspace })
-      if (changed) {
-        set({ chatId: null, chat: null, sessions: [], activeAt: {}, selectedFile: null, viewedFile: null, refs: [], commands: [], files: null })
-        void loadSessions()
-        void loadCommands()
-      }
+      if (projectsChanged) void loadSessions()
       break
     }
+    case 'workspace':
+      if (event.workspace?.path !== state.workspace?.path) switchedTo(event.workspace)
+      else set({ workspace: event.workspace })
+      break
   }
 }
 
+/** Folder-specific state starts over in a new folder; a conversation that belongs to it stays open. */
+function switchedTo(workspace: WorkspaceInfo | null) {
+  set((s) => ({
+    workspace,
+    ...(s.chat && s.chat.session.workspace !== workspace?.path ? { chatId: null, chat: null } : {}),
+    selectedFile: null,
+    viewedFile: null,
+    refs: [],
+    commands: [],
+    files: null,
+  }))
+  void loadCommands()
+}
+
+/** Projects in the sidebar: the saved list, plus the open folder if it is somehow not on it. */
+export function projectPaths(projects: string[], workspace: WorkspaceInfo | null): string[] {
+  return workspace && !projects.includes(workspace.path) ? [workspace.path, ...projects] : projects
+}
+
+let loadSeq = 0
 async function loadSessions() {
-  const workspace = state.workspace
-  if (!workspace) return
-  const sessions = await api.sessions.list(workspace.path)
-  if (state.workspace?.path !== workspace.path) return
-  set({
-    sessions: [...sessions].sort((a, b) => b.updatedAt - a.updatedAt),
-    activeAt: Object.fromEntries(sessions.map((m) => [m.id, m.updatedAt])),
-  })
+  const seq = ++loadSeq
+  const lists = await Promise.all(projectPaths(state.settings.projects, state.workspace).map((path) => api.sessions.list(path)))
+  if (seq !== loadSeq) return
+  const sessions = lists.flat().sort((a, b) => b.updatedAt - a.updatedAt)
+  set((s) => ({
+    sessions,
+    activeAt: { ...Object.fromEntries(sessions.map((m) => [m.id, m.updatedAt])), ...s.activeAt },
+  }))
 }
 
 async function loadCommands() {
@@ -257,7 +274,9 @@ export const actions = {
     await Promise.all([loadSessions(), loadCommands()])
   },
 
-  newChat() {
+  /** A new conversation, in the given project or the open one. */
+  async newChat(project?: string) {
+    if (project && project !== state.workspace?.path && !(await actions.openWorkspace(project))) return
     set((s) => ({
       view: 'chat',
       chatId: null,
@@ -270,6 +289,9 @@ export const actions = {
 
   async openSession(id: string) {
     if (state.chatId === id && state.view === 'chat') return
+    // A conversation in another project opens that project first.
+    const meta = state.sessions.find((m) => m.id === id)
+    if (meta && meta.workspace !== state.workspace?.path && !(await actions.openWorkspace(meta.workspace))) return
     // Events for this conversation are ignored until the snapshot arrives; the snapshot already contains them.
     set({ view: 'chat', chatId: id, chat: null, selectedFile: null })
     const snapshot = await api.sessions.load(id)
@@ -440,13 +462,21 @@ export const actions = {
     await api.workspace.pick()
   },
 
-  async openWorkspace(path: string) {
+  /** Opens a project folder. Returns false when the folder is gone, and drops it from the lists. */
+  async openWorkspace(path: string): Promise<boolean> {
     const info = await api.workspace.open(path)
     if (!info) {
-      // The folder is gone; drop it from the recent list.
-      const recent = state.settings.recentWorkspaces.filter((p) => p !== path)
-      await api.settings.update({ recentWorkspaces: recent })
+      const { recentWorkspaces, projects } = state.settings
+      await api.settings.update({ recentWorkspaces: recentWorkspaces.filter((p) => p !== path), projects: projects.filter((p) => p !== path) })
+      return false
     }
+    if (info.path !== state.workspace?.path) switchedTo(info)
+    return true
+  },
+
+  /** Takes a project off the sidebar. Its folder and conversations stay on disk. */
+  async removeProject(path: string) {
+    await api.settings.update({ projects: state.settings.projects.filter((p) => p !== path) })
   },
 
   toggleChanges(show?: boolean) {

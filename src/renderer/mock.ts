@@ -38,6 +38,7 @@ let settings: Settings = {
   theme: params.get('theme') === 'dark' ? 'dark' : params.get('theme') === 'light' ? 'light' : DEFAULT_SETTINGS.theme,
   locale: params.get('lang') === 'en' ? 'en' : 'zh-Hant',
   recentWorkspaces: Object.keys(workspaces),
+  projects: Object.keys(workspaces),
   lastWorkspace: params.has('nofolder') ? null : DSH,
 }
 let apiKey: string | null = params.has('nokey') ? null : 'sk-3f9c1a7e2b4d6c8e0a1b'
@@ -328,11 +329,11 @@ function planSession(t0: number): SessionData {
   }
 }
 
-function shortSession(sid: string, title: string, updatedAt: number, status: SessionMeta['status'] = 'idle'): SessionData {
+function shortSession(sid: string, title: string, updatedAt: number, status: SessionMeta['status'] = 'idle', workspace = DSH): SessionData {
   return {
     id: sid,
     title,
-    workspace: DSH,
+    workspace,
     createdAt: updatedAt - 20 * MIN,
     updatedAt,
     model: 'deepseek-flash',
@@ -372,6 +373,10 @@ addSession(shortSession('s5', '查打包後的白畫面', now - day - 6 * 60 * M
 addSession(shortSession('s6', '改用 pnpm 管理套件', now - 3 * day))
 addSession(shortSession('s7', '設定 ESLint 和 Prettier', now - 4 * day))
 addSession(shortSession('s8', '整理 API 錯誤訊息的寫法', now - 12 * day))
+const TRACKER = `${HOME}/Projects/oyama-tracker`
+addSession(shortSession('t1', '圖表的日期軸對不齊', now - 3 * 60 * MIN, 'idle', TRACKER))
+addSession(shortSession('t2', '匯出 CSV 時亂碼', now - 2 * day, 'idle', TRACKER))
+addSession(shortSession('n1', '整理讀書筆記的目錄', now - 5 * day, 'idle', `${HOME}/Documents/notes`))
 
 const metaOf = ({ items: _i, usage: _u, ...meta }: SessionData): SessionMeta => meta
 const snapshot = (sid: string) => {
@@ -606,7 +611,12 @@ export function createMockApi(): DshApi {
         const info = workspaces[path] ?? null
         if (!info) return null
         workspace = info
-        settings = { ...settings, lastWorkspace: path, recentWorkspaces: [path, ...settings.recentWorkspaces.filter((p) => p !== path)] }
+        settings = {
+          ...settings,
+          lastWorkspace: path,
+          recentWorkspaces: [path, ...settings.recentWorkspaces.filter((p) => p !== path)],
+          projects: settings.projects.includes(path) ? settings.projects : [path, ...settings.projects],
+        }
         emit({ type: 'settings', settings, hasApiKey: apiKey !== null })
         emit({ type: 'workspace', workspace: info })
         return info

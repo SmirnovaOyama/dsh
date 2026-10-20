@@ -71,6 +71,8 @@ export interface Settings {
   theme: ThemePref
   locale: Locale
   recentWorkspaces: string[]
+  /** Folders kept in the sidebar as projects, in the order they were added, newest first. */
+  projects: string[]
   lastWorkspace: string | null
 }
 
@@ -357,6 +359,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   locale: 'zh-Hant',
   recentWorkspaces: [],
+  projects: [],
   lastWorkspace: null,
 }
 

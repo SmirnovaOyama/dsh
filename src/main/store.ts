@@ -47,6 +47,8 @@ export class SettingsStore {
   async load(): Promise<void> {
     const stored = await readJson<Partial<StoredSettings>>(this.file)
     this.data = { ...DEFAULT_SETTINGS, ...stored }
+    // Settings saved before projects existed: the folders opened lately become the projects.
+    if (!Array.isArray(stored?.projects)) this.data.projects = [...this.data.recentWorkspaces]
     // Settings saved before the V4 models carry a retired model name and no effort.
     Object.assign(this.data, currentModel(this.data.model, stored?.effort))
   }

@@ -82,7 +82,9 @@ async function openWorkspace(dir: string) {
   const info = await readWorkspace(dir)
   const settings = settingsStore.get()
   const recent = [dir, ...settings.recentWorkspaces.filter((p) => p !== dir)].slice(0, 8)
-  const next = await settingsStore.update({ lastWorkspace: dir, recentWorkspaces: recent })
+  // A folder opened for the first time becomes a project at the top of the sidebar.
+  const projects = settings.projects.includes(dir) ? settings.projects : [dir, ...settings.projects]
+  const next = await settingsStore.update({ lastWorkspace: dir, recentWorkspaces: recent, projects })
   emit({ type: 'settings', settings: next, hasApiKey: settingsStore.hasApiKey() })
   emit({ type: 'workspace', workspace: info })
   return info
