@@ -17,10 +17,12 @@ import {
   type SessionMeta,
   type Settings,
   type SlashCommand,
+  type ScheduledTask,
   type Todo,
   type TranscriptItem,
   type WorkspaceInfo,
 } from '../shared/types'
+import { nextRun } from '../shared/schedule'
 
 const params = new URLSearchParams(location.search)
 const HOME = '/Users/anya'
@@ -377,6 +379,69 @@ const TRACKER = `${HOME}/Projects/oyama-tracker`
 addSession(shortSession('t1', '圖表的日期軸對不齊', now - 3 * 60 * MIN, 'idle', TRACKER))
 addSession(shortSession('t2', '匯出 CSV 時亂碼', now - 2 * day, 'idle', TRACKER))
 addSession(shortSession('n1', '整理讀書筆記的目錄', now - 5 * day, 'idle', `${HOME}/Documents/notes`))
+addSession(shortSession('r1', '跑測試並修好失敗的', now - 150 * MIN))
+addSession(shortSession('r2', '檢查相依套件有沒有新版', now - 3 * day, 'waiting', TRACKER))
+
+// Scheduled tasks; ?noschedules starts with none.
+const NOTES = `${HOME}/Documents/notes`
+const scheduled = (task: Omit<ScheduledTask, 'nextRun' | 'createdAt' | 'model' | 'effort' | 'permissionMode'>): ScheduledTask => ({
+  ...task,
+  model: settings.model,
+  effort: settings.effort,
+  permissionMode: 'acceptEdits',
+  createdAt: now - 20 * day,
+  nextRun: task.enabled ? nextRun(task.schedule, now) : null,
+})
+let schedules: ScheduledTask[] = params.has('noschedules')
+  ? []
+  : [
+      scheduled({
+        id: 'k1',
+        name: '每天跑一次測試',
+        workspace: DSH,
+        prompt: '跑一次 npm test，有失敗的話找出原因並修好，最後告訴我改了什麼',
+        schedule: { kind: 'weekdays', hour: 9, minute: 0, weekday: 1 },
+        enabled: true,
+        lastRun: { at: now - 150 * MIN, sessionId: 'r1' },
+      }),
+      scheduled({
+        id: 'k2',
+        name: '檢查相依套件',
+        workspace: TRACKER,
+        prompt: '看看 package.json 裡的套件有沒有新版，列出有安全性更新的，先不要升級',
+        schedule: { kind: 'weekly', hour: 10, minute: 30, weekday: 1 },
+        enabled: true,
+        lastRun: { at: now - 3 * day, sessionId: 'r2' },
+      }),
+      scheduled({
+        id: 'k3',
+        name: '整理今天的筆記',
+        workspace: NOTES,
+        prompt: '把今天新增的筆記整理進目錄，標題統一格式',
+        schedule: { kind: 'daily', hour: 22, minute: 30, weekday: 1 },
+        enabled: false,
+        lastRun: { at: now - 2 * day, sessionId: null, error: 'no-key' },
+      }),
+      scheduled({
+        id: 'k4',
+        name: '看一下 CI',
+        workspace: DSH,
+        prompt: '看最近一次 CI 的結果，失敗的話告訴我是哪一步',
+        schedule: { kind: 'hourly', hour: 9, minute: 15, weekday: 1 },
+        enabled: true,
+        lastRun: null,
+      }),
+      scheduled({
+        id: 'k5',
+        name: '寫這週的更新紀錄',
+        workspace: DSH,
+        prompt: '根據這週的 commit 寫一段給使用者看的更新紀錄',
+        schedule: { kind: 'manual', hour: 9, minute: 0, weekday: 5 },
+        enabled: true,
+        lastRun: null,
+      }),
+    ]
+const emitSchedules = () => emit({ type: 'schedules', tasks: structuredClone(schedules) })
 
 const metaOf = ({ items: _i, usage: _u, ...meta }: SessionData): SessionMeta => meta
 const snapshot = (sid: string) => {
@@ -578,7 +643,7 @@ async function runAgent(sid: string, text: string, refs: FileRef[] = []) {
 const later = <T>(value: T, ms = 60) => new Promise<T>((resolve) => setTimeout(() => resolve(value), ms))
 
 export function createMockApi(): DshApi {
-  return {
+  const this_: DshApi = {
     getInitialState: () =>
       later({
         settings,
@@ -727,6 +792,42 @@ export function createMockApi(): DshApi {
         return metaOf(entry.data)
       },
     },
+    schedules: {
+      list: async () => structuredClone(schedules),
+      async save(input) {
+        if (!input.prompt.trim() || !settings.projects.includes(input.workspace)) return null
+        const existing = schedules.find((t) => t.id === input.id)
+        const task: ScheduledTask = {
+          ...input,
+          id: existing?.id ?? id(),
+          name: input.name.trim() || input.prompt.trim().split('\n')[0].slice(0, 40),
+          prompt: input.prompt.trim(),
+          createdAt: existing?.createdAt ?? Date.now(),
+          lastRun: existing?.lastRun ?? null,
+          nextRun: input.enabled ? nextRun(input.schedule, Date.now()) : null,
+        }
+        schedules = existing ? schedules.map((t) => (t.id === task.id ? task : t)) : [...schedules, task]
+        emitSchedules()
+        return structuredClone(task)
+      },
+      async remove(taskId) {
+        schedules = schedules.filter((t) => t.id !== taskId)
+        emitSchedules()
+      },
+      async runNow(taskId) {
+        const task = schedules.find((t) => t.id === taskId)
+        if (!task) return null
+        const meta = await this_.agent.start(task.workspace, task.prompt, {
+          id: crypto.randomUUID(),
+          model: task.model,
+          effort: task.effort,
+          permissionMode: task.permissionMode,
+        })
+        task.lastRun = { at: Date.now(), sessionId: meta.id }
+        emitSchedules()
+        return meta.id
+      },
+    },
     changes: {
       async revertAll(sid) {
         const entry = sessions.get(sid)
@@ -750,4 +851,5 @@ export function createMockApi(): DshApi {
       return () => listeners.delete(listener)
     },
   }
+  return this_
 }

@@ -41,6 +41,12 @@ const api: DshApi = {
     respond: invoke(Channels.agentRespond) as DshApi['agent']['respond'],
     configure: invoke(Channels.agentConfigure) as DshApi['agent']['configure'],
   },
+  schedules: {
+    list: invoke(Channels.schedulesList) as DshApi['schedules']['list'],
+    save: invoke(Channels.schedulesSave) as DshApi['schedules']['save'],
+    remove: invoke(Channels.schedulesRemove) as DshApi['schedules']['remove'],
+    runNow: invoke(Channels.schedulesRunNow) as DshApi['schedules']['runNow'],
+  },
   changes: {
     revertAll: invoke(Channels.changesRevertAll) as DshApi['changes']['revertAll'],
     commit: invoke(Channels.changesCommit) as DshApi['changes']['commit'],

@@ -273,6 +273,7 @@ export type AgentEvent =
   | { type: 'workspace'; workspace: WorkspaceInfo | null }
   | { type: 'todos'; sessionId: string; todos: Todo[] }
   | { type: 'queue'; sessionId: string; queue: QueuedMessage[] }
+  | { type: 'schedules'; tasks: ScheduledTask[] }
 
 export interface ConnectionResult {
   ok: boolean
@@ -290,6 +291,47 @@ export interface SessionSnapshot {
   changes: FileChange[]
   permission: PermissionRequest | null
   queue: QueuedMessage[]
+}
+
+/** How often a scheduled task runs. Times are the computer's local time. */
+export type ScheduleKind = 'manual' | 'hourly' | 'daily' | 'weekdays' | 'weekly'
+export const SCHEDULE_KINDS: ScheduleKind[] = ['manual', 'hourly', 'daily', 'weekdays', 'weekly']
+
+export interface Schedule {
+  kind: ScheduleKind
+  /** Hour and minute of the day, for daily, weekdays and weekly; only the minute counts for hourly. */
+  hour: number
+  minute: number
+  /** 0 is Sunday, for weekly. */
+  weekday: number
+}
+
+export interface ScheduledRun {
+  at: number
+  /** The conversation the run started, or null when it could not start. */
+  sessionId: string | null
+  error?: string
+}
+
+/** A prompt that starts a new conversation in a project on a schedule, while dsh is open. */
+export interface ScheduledTask {
+  id: string
+  name: string
+  workspace: string
+  prompt: string
+  schedule: Schedule
+  enabled: boolean
+  model: string
+  effort: Effort
+  permissionMode: PermissionMode
+  createdAt: number
+  lastRun: ScheduledRun | null
+  /** When it runs next, or null when it is off or runs only by hand. */
+  nextRun: number | null
+}
+
+export type ScheduledTaskInput = Pick<ScheduledTask, 'name' | 'workspace' | 'prompt' | 'schedule' | 'enabled' | 'model' | 'effort' | 'permissionMode'> & {
+  id?: string
 }
 
 export interface StartOptions {
@@ -339,6 +381,13 @@ export interface DshApi {
     compact(sessionId: string, focus?: string): Promise<void>
     respond(sessionId: string, requestId: string, decision: PermissionDecision): Promise<void>
     configure(sessionId: string, opts: ConfigureOptions): Promise<SessionMeta | null>
+  }
+  schedules: {
+    list(): Promise<ScheduledTask[]>
+    save(task: ScheduledTaskInput): Promise<ScheduledTask | null>
+    remove(id: string): Promise<void>
+    /** Runs the task now, whatever its schedule; returns the conversation it started. */
+    runNow(id: string): Promise<string | null>
   }
   changes: {
     revertAll(sessionId: string): Promise<void>

@@ -700,3 +700,48 @@ button.hx-tool:hover { background: var(--surface-hover); }
   content: ""; position: fixed; z-index: 100; top: 14px; left: 18px; width: 12px; height: 12px; border-radius: 50%;
   background: #ff5f57; box-shadow: 20px 0 0 #febc2e, 40px 0 0 #28c840; pointer-events: none;
 }
+
+/* ── pages the sidebar opens: scheduled tasks and artifacts ──── */
+.hx-page-title .sub { white-space: normal; }
+.hx-page-btn { height: 32px; padding: 0 12px; gap: 6px; font-size: 13px; }
+.hx-page-list { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; padding: 8px 12px 48px; }
+.hx-page-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 360px; margin: 96px auto 0; text-align: center; color: var(--text-muted); font-size: 13px; line-height: 20px; }
+.hx-page-empty p { margin: 0; }
+
+.hx-sched-list { list-style: none; margin: 0; padding: 0; }
+.hx-sched {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 19rem) auto; align-items: center; gap: 16px;
+  padding: 8px 4px 8px 8px; border-radius: var(--radius-sm);
+}
+.hx-sched + .hx-sched { box-shadow: 0 -1px 0 var(--border); }
+.hx-sched:hover { background: var(--surface-hover); box-shadow: none; }
+.hx-sched:hover + .hx-sched { box-shadow: none; }
+.hx-sched .main { display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: start; }
+.hx-sched .line { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.hx-sched .name { font-size: 13px; line-height: 20px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-sched .when { flex-shrink: 0; font-size: 12px; line-height: 16px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.hx-sched .prompt { font-size: 12px; line-height: 18px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-sched .facts { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; font-size: 12px; line-height: 18px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.hx-sched .proj { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+.hx-sched .next { text-align: end; white-space: nowrap; }
+.hx-sched .last { grid-column: 1 / -1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-sched .is-error { color: var(--danger); }
+.hx-sched .is-waiting { color: var(--warning); }
+.hx-sched .hx-icon-btn { width: 28px; height: 28px; color: var(--text-muted); }
+.hx-sched[data-off] :is(.name, .proj) { color: var(--text-muted); }
+.hx-link { margin-inline-start: 8px; padding: 0; font-size: inherit; color: var(--text); text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 2px; }
+.hx-link:hover { text-decoration-color: currentColor; }
+
+/* A small black-and-white switch for dense rows. */
+.oy-switch.hx-switch { width: 30px; height: 18px; background: var(--border-strong); transition: background-color var(--duration-base) var(--ease-standard); }
+.oy-switch.hx-switch[aria-checked="true"] { background: var(--text); }
+.oy-switch.hx-switch .switch-knob { width: 14px; height: 14px; background: var(--surface); box-shadow: none; translate: 2px 0; transition: translate var(--duration-base) var(--ease-standard); }
+.oy-switch.hx-switch[aria-checked="true"] .switch-knob { translate: 14px 0; }
+
+.modal-shell:has(.hx-sched-form) { max-width: 36rem; }
+.hx-sched-form { display: flex; flex-direction: column; margin-top: 12px; }
+.hx-sched-form > .input-base { width: 100%; margin-bottom: 14px; font-size: 13px; }
+.hx-sched-form textarea.input-base { min-height: 88px; line-height: 20px; }
+.hx-sched-form .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 12px; }
+.hx-sched-form .grid .oy-select, .hx-sched-form .grid .input-base { width: 100%; font-size: 13px; }
+.hx-sched-form .note { margin: 14px 0 0; font-size: 12px; line-height: 18px; color: var(--text-muted); }

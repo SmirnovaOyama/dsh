@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import { LibraryView } from './components/LibraryView'
 import { ChangesPanel } from './components/ChangesPanel'
 import { Resizer } from './components/Resizer'
+import { ScheduledView } from './components/ScheduledView'
 import { ChatView } from './components/ChatView'
 import { SettingsView } from './components/SettingsView'
 import { Sidebar } from './components/Sidebar'
@@ -117,9 +119,9 @@ export function App() {
     <div className="hx-app">
       {showSidebar && <Sidebar searchTick={searchTick} />}
       {showSidebar && <Resizer pane="sidebar" />}
-      <ChatView />
-      {panelMotion && panelMotion !== 'out' && <Resizer pane="changes" />}
-      {panelMotion && <ChangesPanel chat={chat} motion={panelMotion} />}
+      {view === 'scheduled' ? <ScheduledView /> : view === 'artifacts' ? <LibraryView /> : <ChatView />}
+      {view === 'chat' && panelMotion && panelMotion !== 'out' && <Resizer pane="changes" />}
+      {view === 'chat' && panelMotion && <ChangesPanel chat={chat} motion={panelMotion} />}
     </div>
   )
 }

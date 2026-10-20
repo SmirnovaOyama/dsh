@@ -15,6 +15,8 @@ import {
   type PermissionRequest,
   type QueuedMessage,
   type RewindMode,
+  type ScheduledTask,
+  type ScheduledTaskInput,
   type SessionData,
   type SessionMeta,
   type Settings,
@@ -47,7 +49,10 @@ export interface AppState {
   /** The selected conversation; null with chatId set means it is still loading. */
   chatId: string | null
   chat: ChatState | null
-  view: 'chat' | 'settings'
+  /** The main column: a conversation, or one of the pages the sidebar opens. */
+  view: 'chat' | 'settings' | 'scheduled' | 'artifacts'
+  /** Scheduled tasks; null until loaded. */
+  schedules: ScheduledTask[] | null
   settingsSection: SettingsSection | null
   showChanges: boolean
   showSidebar: boolean
@@ -103,6 +108,7 @@ let state: AppState = {
   chatId: null,
   chat: null,
   view: 'chat',
+  schedules: null,
   settingsSection: null,
   showChanges: readPrefs().showChanges ?? false,
   showSidebar: readPrefs().showSidebar ?? true,
@@ -216,6 +222,9 @@ function handleEvent(event: AgentEvent) {
       if (projectsChanged) void loadSessions()
       break
     }
+    case 'schedules':
+      set({ schedules: event.tasks })
+      break
     case 'workspace':
       if (event.workspace?.path !== state.workspace?.path) switchedTo(event.workspace)
       else set({ workspace: event.workspace })
@@ -275,7 +284,36 @@ export const actions = {
       workspace: initial.workspace,
       draft: { model: initial.settings.model, effort: initial.settings.effort, permissionMode: initial.settings.permissionMode },
     })
-    await Promise.all([loadSessions(), loadCommands()])
+    await Promise.all([loadSessions(), loadCommands(), api.schedules.list().then((schedules) => set({ schedules }))])
+  },
+
+  /** Opens a page from the top of the sidebar, keeping the open conversation for when you come back. */
+  openPage(view: 'scheduled' | 'artifacts') {
+    set({ view })
+  },
+
+  /** Every artifact across conversations. */
+  openLibrary() {
+    set({ view: 'artifacts' })
+  },
+
+  async saveSchedule(task: ScheduledTaskInput) {
+    return api.schedules.save(task)
+  },
+
+  async removeSchedule(id: string) {
+    await api.schedules.remove(id)
+  },
+
+  async runSchedule(id: string) {
+    const task = state.schedules?.find((t) => t.id === id)
+    const sessionId = await api.schedules.runNow(id)
+    if (!sessionId || !task) return sessionId
+    // The run belongs to the task's project, which may not be the open one.
+    if (task.workspace !== state.workspace?.path && !(await actions.openWorkspace(task.workspace))) return sessionId
+    await loadSessions()
+    await actions.openSession(sessionId)
+    return sessionId
   },
 
   /** A new conversation, in the given project or the open one. */
