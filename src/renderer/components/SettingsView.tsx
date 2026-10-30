@@ -1,23 +1,21 @@
-import { ArrowUpRight, ChevronLeft, Cpu, Eye, EyeOff, KeyRound, LoaderCircle, Shield, Sun, X, type LucideIcon } from 'lucide-react'
+import { ArrowUpRight, ChevronLeft, Cpu, Plug, Plus, Shield, Sun, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
-import { DEFAULT_SETTINGS, EFFORTS, MAX_STEPS_OPTIONS, MODELS, PERMISSION_MODES, type ConnectionResult, type Effort, type Locale, type PermissionMode, type ReplyStyle, type ThemePref } from '../../shared/types'
+import { DEFAULT_SETTINGS, EFFORTS, MAX_STEPS_OPTIONS, OPENCODE_PLANS, PERMISSION_MODES, type Effort, type Locale, type OpenCodePlan, type PermissionMode, type Provider, type ReplyStyle, type ThemePref } from '../../shared/types'
 import { api } from '../api'
+import { attemptStatus, keyActions, keyStatus, maskKey, type KeyCheck } from '../connection'
 import { LOCALE_NAMES, t, type MessageKey } from '../i18n'
-import { actions, lastSettingsSection, useApp, type SettingsSection } from '../store'
-import { modelDesc, modelName } from '../models'
+import { actions, getState, lastSettingsSection, useApp, type SettingsSection } from '../store'
+import { modelGroups, modelOptions } from '../models'
 import { Icon } from './Icon'
-import { Reserve } from './Reserve'
 import { Segmented } from './Segmented'
 import { Select } from './Select'
 
 const SECTIONS: { id: SettingsSection; icon: LucideIcon; label: MessageKey }[] = [
-  { id: 'connection', icon: KeyRound, label: 'settings.nav.connection' },
+  { id: 'connection', icon: Plug, label: 'settings.nav.connection' },
   { id: 'model', icon: Cpu, label: 'settings.nav.model' },
   { id: 'permissions', icon: Shield, label: 'settings.nav.permissions' },
   { id: 'appearance', icon: Sun, label: 'settings.nav.appearance' },
 ]
-
-const KEYS_URL = 'https://platform.deepseek.com/api_keys'
 
 const update = (patch: Parameters<typeof api.settings.update>[0]) => void api.settings.update(patch)
 
@@ -126,245 +124,308 @@ function Row({ title, desc, children }: { title: string; desc?: string; children
   )
 }
 
+const KEY_URLS: Record<Provider, string> = { deepseek: 'https://platform.deepseek.com/api_keys', opencode: 'https://opencode.ai/auth' }
+
 function Connection({ focusKey }: { focusKey: boolean }) {
-  const settings = useApp((s) => s.settings)
-  const hasApiKey = useApp((s) => s.hasApiKey)
-  const encrypted = useApp((s) => s.app.keyEncryption)
-  const keyRef = useRef<HTMLInputElement>(null)
-  const [key, setKey] = useState('')
-  const [savedKey, setSavedKey] = useState('')
-  const [revealed, setRevealed] = useState(false)
-  const [justSaved, setJustSaved] = useState(false)
-  const [baseUrl, setBaseUrl] = useState(settings.baseUrl)
-  const [urlInvalid, setUrlInvalid] = useState(false)
-  const [testing, setTesting] = useState(false)
-  const [result, setResult] = useState<ConnectionResult | null>(null)
-  const [round, setRound] = useState(0)
-
-  useEffect(() => {
-    if (focusKey) keyRef.current?.focus({ preventScroll: true })
-  }, [focusKey])
-  useEffect(() => setBaseUrl(settings.baseUrl), [settings.baseUrl])
-  useEffect(() => {
-    if (!justSaved) return
-    const timer = window.setTimeout(() => setJustSaved(false), 1600)
-    return () => window.clearTimeout(timer)
-  }, [justSaved])
-
-  const dirty = key.trim().length > 0 && key.trim() !== savedKey
-  const save = async () => {
-    if (!dirty) return
-    const value = key.trim()
-    await api.settings.setApiKey(value)
-    setSavedKey(value)
-    setJustSaved(true)
-    setResult(null)
-  }
-  const toggleReveal = async () => {
-    if (revealed) {
-      setRevealed(false)
-      return
-    }
-    if (!key && hasApiKey) {
-      const stored = (await api.settings.revealApiKey()) ?? ''
-      setKey(stored)
-      setSavedKey(stored)
-    }
-    setRevealed(true)
-  }
-  const remove = () => {
-    void api.settings.clearApiKey()
-    setKey('')
-    setSavedKey('')
-    setRevealed(false)
-    setResult(null)
-  }
-  const commitBaseUrl = (value = baseUrl) => {
-    const next = value.trim().replace(/\/+$/, '')
-    if (!/^https?:\/\/\S+$/.test(next)) {
-      setUrlInvalid(next.length > 0)
-      if (!next) setBaseUrl(settings.baseUrl)
-      return
-    }
-    setUrlInvalid(false)
-    setBaseUrl(next)
-    if (next !== settings.baseUrl) {
-      update({ baseUrl: next })
-      setResult(null)
-    }
-  }
-  const test = async () => {
-    setTesting(true)
-    const started = performance.now()
-    const outcome = await api.settings.testConnection()
-    // Keep "testing" visible long enough to read, so the line does not flicker.
-    const wait = 400 - (performance.now() - started)
-    if (wait > 0) await new Promise((r) => setTimeout(r, wait))
-    setTesting(false)
-    setResult(outcome)
-    setRound((n) => n + 1)
-  }
-
-  const keyState = !hasApiKey ? t('settings.keyMissing') : encrypted ? t('settings.keyStored') : t('settings.keyPlain')
-  const isDefaultUrl = settings.baseUrl === DEFAULT_SETTINGS.baseUrl
-
   return (
     <>
       <p className="hx-page-intro">{t('settings.connectionIntro')}</p>
-      <div className="hx-form">
-        <div className="hx-form-field">
-          <div className="hx-form-label">
-            <label className="oy-field-label" htmlFor="api-key">
-              {t('settings.apiKey')}
-            </label>
-            <button type="button" className="hx-link" onClick={() => void api.openExternal(KEYS_URL)}>
-              {t('settings.getKey')}
-              <Icon icon={ArrowUpRight} size={14} />
-            </button>
-          </div>
-          <div className="hx-form-line">
-            <div className="hx-underline">
-              <input
-                ref={keyRef}
-                id="api-key"
-                type={revealed ? 'text' : 'password'}
-                value={key}
-                spellCheck={false}
-                autoComplete="off"
-                placeholder={hasApiKey ? t('settings.apiKeySet') : t('settings.apiKeyPlaceholder')}
-                onChange={(event) => setKey(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') void save()
-                }}
-              />
-              <button
-                type="button"
-                className="btn-ghost hx-icon-btn"
-                disabled={!hasApiKey && !key}
-                aria-label={revealed ? t('settings.hide') : t('settings.show')}
-                title={revealed ? t('settings.hide') : t('settings.show')}
-                onClick={() => void toggleReveal()}
-              >
-                <Icon icon={revealed ? EyeOff : Eye} size={18} />
-              </button>
-            </div>
-            <button type="button" className="btn-primary" disabled={!dirty} onClick={() => void save()}>
-              <Reserve shown={justSaved && !dirty ? 1 : 0} forms={[t('settings.save'), t('settings.saved')]} />
-            </button>
-          </div>
-          <div className="hx-form-hint">
-            <p className="oy-field-hint">{keyState}</p>
-            {hasApiKey && (
-              <button type="button" className="hx-link is-danger" onClick={remove}>
-                {t('settings.remove')}
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="hx-form-field">
-          <div className="hx-form-label">
-            <label className="oy-field-label" htmlFor="base-url">
-              {t('settings.baseUrl')}
-            </label>
-          </div>
-          <div className="hx-underline">
-            <input
-              id="base-url"
-              type="url"
-              value={baseUrl}
-              spellCheck={false}
-              aria-invalid={urlInvalid || undefined}
-              onChange={(event) => {
-                setBaseUrl(event.target.value)
-                setUrlInvalid(false)
-              }}
-              onBlur={() => commitBaseUrl()}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') commitBaseUrl()
-              }}
-            />
-          </div>
-          <div className="hx-form-hint">
-            <p className={`oy-field-hint ${urlInvalid ? 'hx-danger' : ''}`}>
-              {urlInvalid ? t('settings.baseUrlInvalid') : t('settings.baseUrlHint')}
-            </p>
-            {!isDefaultUrl && (
-              <button type="button" className="hx-link" onClick={() => commitBaseUrl(DEFAULT_SETTINGS.baseUrl)}>
-                {t('settings.baseUrlReset')}
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
       <div className="oy-section is-plain hx-settings-rows">
-        <div className="oy-row">
-          <div className="text">
-            <p className="title">{t('settings.test')}</p>
-            <p className="desc" aria-live="polite">
-              {result ? (
-                <span key={round} className={`hx-test-result ${testing ? 'is-stale' : ''}`}>
-                  <span className={result.ok ? 'hx-positive' : 'hx-danger'}>
-                    {result.ok ? t('settings.ok') : t(`error.${result.error ?? 'unknown'}.title` as MessageKey)}
-                  </span>
-                  {result.ok && result.latencyMs !== undefined && (
-                    <span className="st">
-                      <span>{t('settings.latency')}</span>
-                      <span className="hx-tabular">
-                        <CountUp value={result.latencyMs} /> ms
-                      </span>
-                    </span>
-                  )}
-                </span>
-              ) : (
-                t('settings.testDesc')
-              )}
-            </p>
-          </div>
-          <button type="button" className="btn-secondary" disabled={testing || !hasApiKey} onClick={() => void test()}>
-            <Reserve
-              shown={testing ? 1 : 0}
-              forms={[
-                t('settings.testShort'),
-                <>
-                  <Icon icon={LoaderCircle} size={16} className="hx-spin" />
-                  {t('settings.testing')}
-                </>,
-              ]}
-            />
-          </button>
-        </div>
+        <ProviderRow provider="deepseek" focus={focusKey} />
+        <BaseUrlRow />
+      </div>
+      <div className="oy-section is-plain hx-settings-rows">
+        <ProviderRow provider="opencode" />
+        <PlanRow />
       </div>
     </>
   )
 }
 
-/** Counts up to a number once, the way a reading settles; the width is held from the start. */
-function CountUp({ value }: { value: number }) {
-  const [shown, setShown] = useState(0)
+/** True once `on` has held for `ms`, so a quick check never flashes its waiting words. */
+function useLate(on: boolean, ms: number) {
+  const [late, setLate] = useState(false)
   useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setShown(value)
+    if (!on) {
+      setLate(false)
       return
     }
-    const start = performance.now()
-    let frame = requestAnimationFrame(function tick(now) {
-      const p = Math.min(1, (now - start) / 480)
-      setShown(Math.round(value * (1 - (1 - p) ** 3)))
-      if (p < 1) frame = requestAnimationFrame(tick)
+    const timer = window.setTimeout(() => setLate(true), ms)
+    return () => window.clearTimeout(timer)
+  }, [on, ms])
+  return late
+}
+
+/**
+ * A provider as one row: its name, one sentence on how its key stands, and what can be done with it.
+ * The key line appears in place only while a key is being added or replaced; pasting one checks it with
+ * the provider and saves it. A saved key is checked whenever the page opens, so there is nothing to test by hand.
+ */
+function ProviderRow({ provider, focus = false }: { provider: Provider; focus?: boolean }) {
+  const hasKey = useApp((s) => s.keys[provider])
+  const encrypted = useApp((s) => s.app.keyEncryption)
+  // What the key is checked against: a new plan or address means checking again.
+  const target = useApp((s) => (provider === 'opencode' ? s.settings.opencodePlan : s.settings.baseUrl))
+  const [mode, setMode] = useState<'view' | 'edit' | 'confirm'>(() => (focus && !getState().keys[provider] ? 'edit' : 'view'))
+  const [draft, setDraft] = useState('')
+  const [masked, setMasked] = useState<string | null>(null)
+  // The saved key's last check, and the check of a key being pasted, kept apart so a turned-down key never hides a working one.
+  const [check, setCheck] = useState<KeyCheck>({ state: 'idle' })
+  const [attempt, setAttempt] = useState<KeyCheck>({ state: 'idle' })
+  // Only the latest check may speak; one that comes back after another started is dropped.
+  const round = useRef(0)
+  const slow = useLate(check.state === 'checking', 300)
+  const attemptSlow = useLate(attempt.state === 'checking', 300)
+  const name = t(`provider.${provider}`)
+
+  useEffect(() => {
+    if (!hasKey) {
+      setMasked(null)
+      return
+    }
+    let live = true
+    void api.settings.revealApiKey(provider).then((key) => {
+      if (live) setMasked(key ? maskKey(key) : null)
     })
-    return () => cancelAnimationFrame(frame)
-  }, [value])
+    return () => {
+      live = false
+    }
+  }, [hasKey, provider])
+
+  const recheck = async () => {
+    const mine = ++round.current
+    setCheck({ state: 'checking' })
+    const result = await api.settings.testConnection(provider)
+    if (mine === round.current) setCheck({ state: 'done', result, rejected: false })
+  }
+
+  useEffect(() => {
+    if (getState().keys[provider]) void recheck()
+    // Checked on opening and when the plan or address changes, not when a save has just answered.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target])
+
+  const edit = () => {
+    setDraft('')
+    setAttempt({ state: 'idle' })
+    setMode('edit')
+  }
+
+  const save = async (value = draft) => {
+    const key = value.trim()
+    if (!key || attempt.state === 'checking') return
+    const mine = ++round.current
+    setAttempt({ state: 'checking' })
+    const result = await api.settings.setApiKey(key, provider)
+    if (mine !== round.current) return
+    if (!result.saved) {
+      setAttempt({ state: 'done', result, rejected: true })
+      return
+    }
+    setMasked(maskKey(key))
+    setCheck({ state: 'done', result, rejected: false })
+    setAttempt({ state: 'idle' })
+    setDraft('')
+    setMode('view')
+  }
+
+  const remove = () => {
+    round.current++
+    setCheck({ state: 'idle' })
+    setMode('view')
+    void api.settings.clearApiKey(provider)
+  }
+
+  const status = keyStatus(provider, hasKey, check, { slow, encrypted, key: masked })
+  const pasting = attemptStatus(provider, attempt, { slow: attemptSlow })
+
   return (
-    <span className="hx-count" style={{ minWidth: `${String(value).length}ch` }}>
-      {shown}
-    </span>
+    <div className="oy-row">
+      <div className="text">
+        <p className="title">{name}</p>
+        {mode === 'edit' ? (
+          <>
+            <div className="hx-underline hx-row-field">
+              <input
+                type="password"
+                value={draft}
+                spellCheck={false}
+                autoComplete="off"
+                autoFocus
+                aria-label={t('settings.keyPlaceholder', { provider: name })}
+                placeholder={t('settings.keyPlaceholder', { provider: name })}
+                aria-invalid={pasting?.problem || undefined}
+                onChange={(event) => setDraft(event.target.value)}
+                onPaste={(event) => {
+                  // A whole key pasted into an empty line is checked and saved at once.
+                  const pasted = event.clipboardData.getData('text').trim()
+                  if (!pasted || draft) return
+                  event.preventDefault()
+                  setDraft(pasted)
+                  void save(pasted)
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') void save()
+                  else if (event.key === 'Escape') {
+                    // Leaves the line, not Settings.
+                    event.preventDefault()
+                    setMode('view')
+                  }
+                }}
+              />
+              {draft.trim() && attempt.state !== 'checking' && (
+                <button type="button" className="hx-link" onClick={() => void save()}>
+                  {t('settings.save')}
+                </button>
+              )}
+            </div>
+            <p className={`desc ${pasting?.problem ? 'hx-danger' : ''}`} aria-live="polite">
+              {pasting ? (
+                pasting.text
+              ) : (
+                <button type="button" className="hx-link" onClick={() => void api.openExternal(KEY_URLS[provider])}>
+                  {t('settings.getKey')}
+                  <Icon icon={ArrowUpRight} size={14} />
+                </button>
+              )}
+            </p>
+          </>
+        ) : (
+          <p className={`desc ${status.problem && mode === 'view' ? 'hx-danger' : ''}`} aria-live="polite">
+            {mode === 'confirm' ? t('settings.removeAsk', { provider: name }) : status.text}
+          </p>
+        )}
+      </div>
+      <span className="trail hx-row-acts">
+        {mode === 'edit' ? (
+          <button type="button" className="hx-link" onClick={() => setMode('view')}>
+            {t('common.cancel')}
+          </button>
+        ) : mode === 'confirm' ? (
+          <>
+            <button type="button" className="hx-link" onClick={() => setMode('view')}>
+              {t('settings.keep')}
+            </button>
+            <button type="button" className="hx-link is-danger" onClick={remove}>
+              {t('settings.remove')}
+            </button>
+          </>
+        ) : (
+          keyActions(hasKey, check).map((action) => (
+            <button
+              key={action}
+              type="button"
+              className="hx-link"
+              onClick={action === 'retry' ? () => void recheck() : action === 'remove' ? () => setMode('confirm') : edit}
+            >
+              {action === 'add' && <Icon icon={Plus} size={14} />}
+              {t(`settings.${action === 'add' ? 'addKey' : action}`)}
+            </button>
+          ))
+        )}
+      </span>
+    </div>
+  )
+}
+
+/** DeepSeek's address, changed in place on the rare day it needs to be. */
+function BaseUrlRow() {
+  const baseUrl = useApp((s) => s.settings.baseUrl)
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(baseUrl)
+  const [invalid, setInvalid] = useState(false)
+  // Esc leaves the line without saving, even though leaving it also blurs it.
+  const cancelled = useRef(false)
+  const isDefault = baseUrl === DEFAULT_SETTINGS.baseUrl
+
+  const start = () => {
+    cancelled.current = false
+    setValue(baseUrl)
+    setInvalid(false)
+    setEditing(true)
+  }
+  const commit = () => {
+    if (cancelled.current) return
+    const next = value.trim().replace(/\/+$/, '')
+    if (next && !/^https?:\/\/\S+$/.test(next)) {
+      setInvalid(true)
+      return
+    }
+    setEditing(false)
+    if (next && next !== baseUrl) update({ baseUrl: next })
+  }
+  const cancel = () => {
+    cancelled.current = true
+    setInvalid(false)
+    setEditing(false)
+  }
+
+  return (
+    <div className="oy-row">
+      <div className="text">
+        <p className="title">{t('settings.baseUrl')}</p>
+        {editing ? (
+          <div className="hx-underline hx-row-field">
+            <input
+              type="url"
+              value={value}
+              spellCheck={false}
+              autoFocus
+              aria-label={t('settings.baseUrl')}
+              aria-invalid={invalid || undefined}
+              onChange={(event) => {
+                setValue(event.target.value)
+                setInvalid(false)
+              }}
+              onBlur={commit}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') commit()
+                else if (event.key === 'Escape') {
+                  event.preventDefault()
+                  cancel()
+                }
+              }}
+            />
+          </div>
+        ) : (
+          <p className="desc">{isDefault ? t('settings.baseUrlHint') : baseUrl}</p>
+        )}
+        {invalid && <p className="desc hx-danger">{t('settings.baseUrlInvalid')}</p>}
+      </div>
+      {!editing && (
+        <span className="trail hx-row-acts">
+          {!isDefault && (
+            <button type="button" className="hx-link" onClick={() => update({ baseUrl: DEFAULT_SETTINGS.baseUrl })}>
+              {t('settings.baseUrlReset')}
+            </button>
+          )}
+          <button type="button" className="hx-link" onClick={start}>
+            {t('settings.baseUrlEdit')}
+          </button>
+        </span>
+      )}
+    </div>
+  )
+}
+
+/** OpenCode's plan, which decides its address and its models. */
+function PlanRow() {
+  const plan = useApp((s) => s.settings.opencodePlan)
+  return (
+    <Row title={t('settings.opencodePlan')} desc={t(`settings.opencodePlan.${plan}.desc`)}>
+      <Segmented<OpenCodePlan>
+        label={t('settings.opencodePlan')}
+        value={plan}
+        options={OPENCODE_PLANS.map((p) => ({ value: p, label: t(`settings.opencodePlan.${p}`) }))}
+        onChange={(opencodePlan) => update({ opencodePlan })}
+      />
+    </Row>
   )
 }
 
 function ModelGroup() {
   const settings = useApp((s) => s.settings)
+  const keys = useApp((s) => s.keys)
   return (
     <>
       <div className="oy-section is-plain hx-settings-rows">
@@ -373,7 +434,7 @@ function ModelGroup() {
             className="hx-row-control"
             label={t('settings.defaultModel')}
             value={settings.model}
-            options={MODELS.map((m) => ({ value: m, label: modelName(m), desc: modelDesc(m) }))}
+            options={modelOptions(modelGroups(settings, keys, settings.model), true)}
             onChange={(model) => update({ model })}
           />
         </Row>

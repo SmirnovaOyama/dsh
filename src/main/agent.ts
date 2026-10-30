@@ -1,4 +1,4 @@
-// The agent loop: ask DeepSeek, run the tools it calls (asking first where needed), repeat until it answers.
+// The agent loop: ask the model, run the tools it calls (asking first where needed), repeat until it answers.
 
 import { randomUUID } from 'node:crypto'
 import type {
@@ -8,15 +8,17 @@ import type {
   ErrorCode,
   FileRef,
   PermissionDecision,
+  Provider,
   QueuedMessage,
   SessionData,
   SessionStatus,
   Settings,
   TranscriptItem,
 } from '../shared/types'
+import { apiModel, OPENCODE_BASE_URLS, providerOf } from '../shared/types'
 import type { ChangeTracker } from './changes'
 import { compactAt, compactedMessages, isContextOverflow, splitForCompact, summaryRequest } from './compact'
-import { DeepSeekError, streamChat, type ApiUsage, type ChatMessage, type ChatResult, type ToolCall } from './deepseek'
+import { DeepSeekError, streamChat, type ApiUsage, type ChatMessage, type ChatRequest, type ChatResult, type ToolCall } from './deepseek'
 import { needsApproval, planModeRefusal } from './permissions'
 import { withRefs } from './refs'
 import { ToolError, prepareToolCall, toolSpecs, type PermissionNeed, type PreparedCall } from './tools'
@@ -49,7 +51,7 @@ export interface SessionState {
 
 export interface AgentHost {
   settings(): Settings
-  apiKey(): string | null
+  apiKey(provider: Provider): string | null
   emit(event: AgentEvent): void
   persist(state: SessionState): void
   systemPrompt(state: SessionState): Promise<string>
@@ -68,6 +70,27 @@ export function temperatureFor(style: Settings['replyStyle']): number {
 
 export function thinks(effort: Effort): boolean {
   return effort !== 'none'
+}
+
+/** How OpenCode tells this app's requests from other clients'. */
+const USER_AGENT = 'DeepSeek-Harness'
+
+type Connection = Pick<ChatRequest, 'baseUrl' | 'apiKey' | 'model' | 'effort' | 'headers'> & { thinking: boolean }
+
+/** Where a conversation's requests go and how, or null when its model's provider has no key yet. */
+export function connectionFor(data: Pick<SessionData, 'id' | 'model' | 'effort'>, settings: Settings, apiKey: (provider: Provider) => string | null): Connection | null {
+  const provider = providerOf(data.model)
+  const key = apiKey(provider)
+  if (!key) return null
+  if (provider === 'deepseek') return { baseUrl: settings.baseUrl, apiKey: key, model: data.model, effort: data.effort, thinking: thinks(data.effort) }
+  // The thinking switches are DeepSeek's own; a model on OpenCode thinks the way it does by default.
+  return {
+    baseUrl: OPENCODE_BASE_URLS[settings.opencodePlan],
+    apiKey: key,
+    model: apiModel(data.model),
+    headers: { 'User-Agent': USER_AGENT, 'x-opencode-session': data.id },
+    thinking: true,
+  }
 }
 
 /**
@@ -144,6 +167,10 @@ export class Agent {
   constructor(private readonly host: AgentHost) {
     this.now = host.now ?? Date.now
     this.chat = host.chat ?? streamChat
+  }
+
+  private connection(state: SessionState, settings: Settings): Connection | null {
+    return connectionFor(state.data, settings, (provider) => this.host.apiKey(provider))
   }
 
   isRunning(state: SessionState): boolean {
@@ -234,7 +261,7 @@ export class Agent {
     if (this.isRunning(state)) return
     if (!state.messages.some((m) => m.role === 'assistant')) return
     await this.work(state, async (signal) => {
-      if (!this.host.apiKey()) {
+      if (!this.connection(state, this.host.settings())) {
         this.add(state, { kind: 'error', id: randomUUID(), code: 'no-key', retryable: false })
         return
       }
@@ -267,7 +294,7 @@ export class Agent {
           this.add(state, { kind: 'notice', id: randomUUID(), code: 'max-steps' })
           break
         }
-        if (!autoCompactFailed && state.data.usage.contextTokens >= compactAt(state.data.model) && this.host.apiKey()) {
+        if (!autoCompactFailed && state.data.usage.contextTokens >= compactAt(state.data.model) && this.connection(state, settings)) {
           // A failed compaction leaves the history as it was, and the request may still fit.
           autoCompactFailed = !(await this.summarize(state, signal, true))
           if (signal.aborted) {
@@ -306,9 +333,9 @@ export class Agent {
 
   /** Replaces the history the model sees with a summary. Returns whether it worked. */
   private async summarize(state: SessionState, signal: AbortSignal, auto: boolean, focus?: string): Promise<boolean> {
-    const apiKey = this.host.apiKey()
+    const connection = this.connection(state, this.host.settings())
     const { history, held } = splitForCompact(state.messages)
-    if (!apiKey || !history.some((m) => m.role === 'assistant')) return false
+    if (!connection || !history.some((m) => m.role === 'assistant')) return false
     const item = this.add<CompactItem>(state, {
       kind: 'compact',
       id: randomUUID(),
@@ -318,15 +345,11 @@ export class Agent {
       before: state.data.usage.contextTokens,
     })
     try {
-      const settings = this.host.settings()
-      const { model, effort } = state.data
+      const { thinking, ...target } = connection
       const result = await this.chat({
-        baseUrl: settings.baseUrl,
-        apiKey,
-        model,
-        effort,
+        ...target,
         messages: summaryRequest(history, focus),
-        temperature: thinks(effort) ? undefined : 0,
+        temperature: thinking ? undefined : 0,
         signal,
       })
       const summary = result.content.trim()
@@ -361,12 +384,12 @@ export class Agent {
     const usage = state.data.usage
     usage.promptTokens += reported.prompt_tokens
     usage.completionTokens += reported.completion_tokens
-    usage.cacheHitTokens += reported.prompt_cache_hit_tokens ?? 0
+    usage.cacheHitTokens += reported.prompt_cache_hit_tokens ?? reported.prompt_tokens_details?.cached_tokens ?? 0
     usage.contextTokens = contextTokens
     this.host.emit({ type: 'usage', sessionId: state.data.id, usage: { ...usage } })
   }
 
-  /** One request to DeepSeek. Returns null when the turn should end. */
+  /** One request to the model. Returns null when the turn should end. */
   private async request(
     state: SessionState,
     settings: Settings,
@@ -374,12 +397,12 @@ export class Agent {
     overflowable: boolean,
     drafts: Map<string, ToolItem>,
   ): Promise<ChatResult | typeof OVERFLOW | null> {
-    const apiKey = this.host.apiKey()
-    if (!apiKey) {
+    const connection = this.connection(state, settings)
+    if (!connection) {
       this.add(state, { kind: 'error', id: randomUUID(), code: 'no-key', retryable: true })
       return null
     }
-    const { model, effort } = state.data
+    const { thinking, ...target } = connection
     let reasoning: ReasoningItem | null = null
     let text: TextItem | null = null
     // Artifacts show up while the model is still writing them, keyed by the call's place in the reply.
@@ -435,13 +458,10 @@ export class Agent {
       const system = await this.host.systemPrompt(state)
       result = await this.chat(
         {
-          baseUrl: settings.baseUrl,
-          apiKey,
-          model,
-          effort,
-          messages: [{ role: 'system', content: system }, ...apiHistory(state.messages, thinks(effort))],
+          ...target,
+          messages: [{ role: 'system', content: system }, ...apiHistory(state.messages, thinking)],
           tools: toolSpecs(state.data.permissionMode === 'plan'),
-          temperature: thinks(effort) ? undefined : temperatureFor(settings.replyStyle),
+          temperature: thinking ? undefined : temperatureFor(settings.replyStyle),
           signal,
         },
         {

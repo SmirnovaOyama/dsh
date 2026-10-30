@@ -2,7 +2,7 @@
 
 import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { currentModel, DEFAULT_SETTINGS, type SessionData, type SessionMeta, type Settings } from '../shared/types'
+import { currentModel, DEFAULT_SETTINGS, PROVIDERS, type KeyState, type Provider, type SessionData, type SessionMeta, type Settings } from '../shared/types'
 import type { Checkpoint, Snapshots } from './changes'
 import type { ChatMessage } from './deepseek'
 
@@ -22,10 +22,20 @@ async function readJson<T>(file: string): Promise<T | null> {
   }
 }
 
-export interface StoredSettings extends Settings {
-  /** The API key, encrypted with the system keychain when available (base64). */
-  apiKey?: { value: string; encrypted: boolean }
+interface StoredKey {
+  value: string
+  encrypted: boolean
 }
+
+export interface StoredSettings extends Settings {
+  /** The DeepSeek API key, encrypted with the system keychain when available (base64). */
+  apiKey?: StoredKey
+  /** The OpenCode API key, kept the same way. */
+  opencodeKey?: StoredKey
+}
+
+/** Where each provider's key is kept; DeepSeek's keeps the name it had before there were others. */
+const KEY_FIELDS = { deepseek: 'apiKey', opencode: 'opencodeKey' } as const satisfies Record<Provider, keyof StoredSettings>
 
 export interface KeyCipher {
   available(): boolean
@@ -54,23 +64,27 @@ export class SettingsStore {
   }
 
   get(): Settings {
-    const { apiKey: _key, ...settings } = this.data
+    const { apiKey: _key, opencodeKey: _opencode, ...settings } = this.data
     return settings
   }
 
   async update(patch: Partial<Settings>): Promise<Settings> {
-    const { apiKey: _ignored, ...safe } = patch as Partial<StoredSettings>
+    const { apiKey: _ignored, opencodeKey: _alsoIgnored, ...safe } = patch as Partial<StoredSettings>
     this.data = { ...this.data, ...safe }
     await this.save()
     return this.get()
   }
 
-  hasApiKey(): boolean {
-    return Boolean(this.data.apiKey?.value)
+  hasApiKey(provider: Provider = 'deepseek'): boolean {
+    return Boolean(this.data[KEY_FIELDS[provider]]?.value)
   }
 
-  apiKey(): string | null {
-    const stored = this.data.apiKey
+  keys(): KeyState {
+    return Object.fromEntries(PROVIDERS.map((p) => [p, this.hasApiKey(p)])) as KeyState
+  }
+
+  apiKey(provider: Provider = 'deepseek'): string | null {
+    const stored = this.data[KEY_FIELDS[provider]]
     if (!stored?.value) return null
     try {
       return stored.encrypted ? this.cipher.decrypt(stored.value) : stored.value
@@ -79,17 +93,17 @@ export class SettingsStore {
     }
   }
 
-  async setApiKey(key: string): Promise<void> {
+  async setApiKey(key: string, provider: Provider = 'deepseek'): Promise<void> {
     const trimmed = key.trim()
-    if (!trimmed) return this.clearApiKey()
-    this.data.apiKey = this.cipher.available()
+    if (!trimmed) return this.clearApiKey(provider)
+    this.data[KEY_FIELDS[provider]] = this.cipher.available()
       ? { value: this.cipher.encrypt(trimmed), encrypted: true }
       : { value: trimmed, encrypted: false }
     await this.save()
   }
 
-  async clearApiKey(): Promise<void> {
-    delete this.data.apiKey
+  async clearApiKey(provider: Provider = 'deepseek'): Promise<void> {
+    delete this.data[KEY_FIELDS[provider]]
     await this.save()
   }
 

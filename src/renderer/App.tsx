@@ -7,7 +7,7 @@ import { LibraryView } from './components/LibraryView'
 import { SettingsView } from './components/SettingsView'
 import { Sidebar } from './components/Sidebar'
 import { setLocale, t } from './i18n'
-import { actions, getState, useApp } from './store'
+import { actions, getState, hasAnyKey, useApp } from './store'
 
 function useTheme() {
   const pref = useApp((s) => s.settings.theme)
@@ -87,7 +87,7 @@ export function App() {
   const locale = useApp((s) => s.settings.locale)
   const platform = useApp((s) => s.app.platform)
   const title = useApp((s) => s.chat?.session.title)
-  const panel = useApp((s) => s.showChanges && (s.chatId !== null || (s.hasApiKey && s.workspace !== null)))
+  const panel = useApp((s) => s.showChanges && (s.chatId !== null || (hasAnyKey(s) && s.workspace !== null)))
   const chat = useApp((s) => s.chat)
   const panelMotion = usePresence(panel, 220)
   const panelPane = useApp((s) => (s.panelTab === 'artifacts' ? 'artifacts' : 'changes'))

@@ -82,7 +82,7 @@ export class Controller {
     this.now = options.now ?? Date.now
     const host: AgentHost = {
       settings: () => options.settings.get(),
-      apiKey: () => options.settings.apiKey(),
+      apiKey: (provider) => options.settings.apiKey(provider),
       emit: (event) => options.emit(event),
       persist: (state) => this.persist(state),
       systemPrompt: (state) => this.systemPrompt(state),
@@ -369,7 +369,7 @@ export class Controller {
     const settings = this.options.settings.get()
     if (settings.allowedCommands.includes(prefix)) return
     const next = await this.options.settings.update({ allowedCommands: [...settings.allowedCommands, prefix] })
-    this.options.emit({ type: 'settings', settings: next, hasApiKey: this.options.settings.hasApiKey() })
+    this.options.emit({ type: 'settings', settings: next, keys: this.options.settings.keys() })
   }
 
   private async emitChanges(state: SessionState): Promise<void> {

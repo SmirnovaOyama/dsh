@@ -3,7 +3,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { tildify } from '../format'
 import { t } from '../i18n'
 import { HoldScroll } from '../scroll'
-import { actions, useApp } from '../store'
+import { actions, hasAnyKey, useApp } from '../store'
 import { Composer } from './Composer'
 import { DiffStatsText } from './DiffView'
 import { Icon } from './Icon'
@@ -146,7 +146,7 @@ function NewChat() {
 
 export function ChatView() {
   const hasChat = useApp((s) => s.chat !== null || s.chatId !== null)
-  const hasApiKey = useApp((s) => s.hasApiKey)
+  const hasApiKey = useApp(hasAnyKey)
   const hasWorkspace = useApp((s) => s.workspace !== null)
   const covered = useApp((s) => s.view === 'artifacts')
   return (

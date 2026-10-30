@@ -1,7 +1,7 @@
 import { ChevronRight, CircleAlert, ClipboardList, FileText, Undo2 } from 'lucide-react'
 import { memo, useContext, useMemo, useState } from 'react'
 import { artifactIcon, isArtifact, typeLabel, type ArtifactItem } from '../artifacts'
-import type { FileChange, SessionData, TranscriptItem } from '../../shared/types'
+import { providerOf, type FileChange, type SessionData, type TranscriptItem } from '../../shared/types'
 import { clockTime } from '../format'
 import { t, type MessageKey } from '../i18n'
 import { HoldScroll } from '../scroll'
@@ -138,14 +138,15 @@ const ArtifactCard = memo(function ArtifactCard({ item }: { item: ArtifactItem }
 
 const SETTINGS_ERRORS = new Set(['no-key', 'auth', 'bad-request'])
 
-function ErrorBlock({ item, active }: { item: Extract<TranscriptItem, { kind: 'error' }>; active: boolean }) {
+/** `provider` names who answered, so a conversation on OpenCode never blames DeepSeek. */
+function ErrorBlock({ item, active, provider }: { item: Extract<TranscriptItem, { kind: 'error' }>; active: boolean; provider: string }) {
   const code = item.code
   return (
     <div className="hx-error" role="alert">
       <Icon icon={CircleAlert} />
       <div className="text">
-        <p className="title">{t(`error.${code}.title` as MessageKey)}</p>
-        <p className="body">{t(`error.${code}.body` as MessageKey)}</p>
+        <p className="title">{t(`error.${code}.title` as MessageKey, { provider })}</p>
+        <p className="body">{t(`error.${code}.body` as MessageKey, { provider })}</p>
         {item.detail && code !== 'no-key' && <p className="detail">{item.detail}</p>}
         {active && (
           <div className="acts">
@@ -349,7 +350,7 @@ function ItemView({ item, isLast, session }: { item: TranscriptItem; isLast: boo
     case 'text':
       return item.text ? <Markdown text={item.text} streaming={item.streaming && !idle} /> : null
     case 'error':
-      return <ErrorBlock item={item} active={isLast && idle} />
+      return <ErrorBlock item={item} active={isLast && idle} provider={t(`provider.${providerOf(session.model)}`)} />
     case 'notice':
       return <Notice item={item} active={isLast && idle} />
     default:

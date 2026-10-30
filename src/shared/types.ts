@@ -35,9 +35,53 @@ export function modelInfo(model: string): ModelInfo | null {
   return (MODEL_INFO as Record<string, ModelInfo | undefined>)[model] ?? null
 }
 
-/** A model id someone typed in by hand still gets a window, the smallest DeepSeek has offered lately. */
+/**
+ * Who answers a model's requests. DeepSeek's own models keep their bare ids; a model from OpenCode
+ * is `opencode/<id>`, the way OpenCode itself names them.
+ */
+export type Provider = 'deepseek' | 'opencode'
+export const PROVIDERS: Provider[] = ['deepseek', 'opencode']
+const OPENCODE_PREFIX = 'opencode/'
+
+export function providerOf(model: string): Provider {
+  return model.startsWith(OPENCODE_PREFIX) ? 'opencode' : 'deepseek'
+}
+
+/** The id the provider's API takes: `opencode/glm-5.3` is `glm-5.3` to OpenCode. */
+export function apiModel(model: string): string {
+  return providerOf(model) === 'opencode' ? model.slice(OPENCODE_PREFIX.length) : model
+}
+
+export function opencodeModel(id: string): string {
+  return OPENCODE_PREFIX + id
+}
+
+/** OpenCode's two ways to pay, each at an address of its own: the Go subscription, or credits used as you go. */
+export type OpenCodePlan = 'go' | 'paygo'
+export const OPENCODE_PLANS: OpenCodePlan[] = ['go', 'paygo']
+export const OPENCODE_BASE_URLS: Record<OpenCodePlan, string> = {
+  go: 'https://opencode.ai/inference/go/v1',
+  paygo: 'https://opencode.ai/inference/v1',
+}
+
+/** OpenCode's free models answer only OpenCode itself, so the menus leave them out. */
+export function usableOpenCodeModel(id: string): boolean {
+  return !id.endsWith('-free') && id !== 'big-pickle'
+}
+
+/** The model a new conversation starts on when OpenCode is the only key: DeepSeek's own default, when the plan has it. */
+export function defaultOpenCodeModel(ids: string[]): string | null {
+  const id = ids.includes('deepseek-v4.1-flash') ? 'deepseek-v4.1-flash' : ids[0]
+  return id ? opencodeModel(id) : null
+}
+
+/** OpenCode's names for DeepSeek's models, which have the same window there. */
+const OPENCODE_DEEPSEEK: Record<string, ModelId> = { 'deepseek-v4.1-flash': 'deepseek-flash', 'deepseek-v4-pro': 'deepseek-v4-pro' }
+
+/** A model id someone typed in by hand, or another company's model on OpenCode, still gets a window, the smallest DeepSeek has offered lately. */
 export function contextWindow(model: string): number {
-  return modelInfo(model)?.contextWindow ?? 128_000
+  const info = modelInfo(model) ?? (providerOf(model) === 'opencode' ? modelInfo(OPENCODE_DEEPSEEK[apiModel(model)] ?? '') : null)
+  return info?.contextWindow ?? 128_000
 }
 
 /**
@@ -62,6 +106,10 @@ export const MAX_STEPS_OPTIONS = [20, 50, 100, 200] as const
 
 export interface Settings {
   baseUrl: string
+  /** Which OpenCode plan the OpenCode key is for. */
+  opencodePlan: OpenCodePlan
+  /** The models OpenCode offered the key when last asked, as OpenCode names them. */
+  opencodeModels: string[]
   model: string
   effort: Effort
   replyStyle: ReplyStyle
@@ -92,9 +140,12 @@ export interface WorkspaceInfo {
   isGitRepo: boolean
 }
 
+/** Which providers have a key saved. */
+export type KeyState = Record<Provider, boolean>
+
 export interface InitialState {
   settings: Settings
-  hasApiKey: boolean
+  keys: KeyState
   app: AppInfo
   workspace: WorkspaceInfo | null
 }
@@ -298,7 +349,7 @@ export type AgentEvent =
   | { type: 'permission'; sessionId: string; request: PermissionRequest | null }
   | { type: 'changes'; sessionId: string; changes: FileChange[] }
   | { type: 'usage'; sessionId: string; usage: Usage }
-  | { type: 'settings'; settings: Settings; hasApiKey: boolean }
+  | { type: 'settings'; settings: Settings; keys: KeyState }
   | { type: 'workspace'; workspace: WorkspaceInfo | null }
   | { type: 'todos'; sessionId: string; todos: Todo[] }
   | { type: 'queue'; sessionId: string; queue: QueuedMessage[] }
@@ -307,7 +358,14 @@ export type AgentEvent =
 export interface ConnectionResult {
   ok: boolean
   latencyMs?: number
+  /** How many models the key can use, when the provider's list says. */
+  models?: number
   error?: ErrorCode
+}
+
+/** Saving a key checks it first; a key the provider turns down is not kept. */
+export interface KeyResult extends ConnectionResult {
+  saved: boolean
 }
 
 export type SaveResult = { ok: true; path: string } | { ok: false; error: string }
@@ -378,10 +436,11 @@ export interface DshApi {
   getInitialState(): Promise<InitialState>
   settings: {
     update(patch: Partial<Settings>): Promise<Settings>
-    setApiKey(key: string): Promise<void>
-    clearApiKey(): Promise<void>
-    revealApiKey(): Promise<string | null>
-    testConnection(): Promise<ConnectionResult>
+    setApiKey(key: string, provider: Provider): Promise<KeyResult>
+    clearApiKey(provider: Provider): Promise<void>
+    revealApiKey(provider: Provider): Promise<string | null>
+    /** For OpenCode this also refreshes the list of models the key can use. */
+    testConnection(provider: Provider): Promise<ConnectionResult>
   }
   workspace: {
     pick(): Promise<WorkspaceInfo | null>
@@ -442,6 +501,8 @@ export interface DshApi {
 
 export const DEFAULT_SETTINGS: Settings = {
   baseUrl: 'https://api.deepseek.com',
+  opencodePlan: 'go',
+  opencodeModels: [],
   model: 'deepseek-flash',
   effort: DEFAULT_EFFORT,
   replyStyle: 'precise',

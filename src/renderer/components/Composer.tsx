@@ -1,9 +1,9 @@
 import { ArrowDown, ArrowUp, ChevronDown, ClipboardList, FileText, Shield, Square, X } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { contextWindow, EFFORTS, MODELS, PERMISSION_MODES, type FileRef } from '../../shared/types'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { contextWindow, EFFORTS, PERMISSION_MODES, type FileRef } from '../../shared/types'
 import { formatTokens } from '../format'
 import { t, type MessageKey } from '../i18n'
-import { effortShort, modelDesc, modelName, modelShort } from '../models'
+import { effortShort, modelDesc, modelGroups, modelName, modelShort, usesEffort } from '../models'
 import { actions, useApp, type ChatState } from '../store'
 import { filterCommands, filterFiles, findTrigger, type CommandEntry, type Trigger } from '../suggest'
 import { Icon } from './Icon'
@@ -77,6 +77,8 @@ export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
   const fill = useApp((s) => s.fill)
   const custom = useApp((s) => s.commands)
   const files = useApp((s) => s.files)
+  const settings = useApp((s) => s.settings)
+  const keys = useApp((s) => s.keys)
   const key = chat?.session.id ?? 'new'
   const [text, setText] = useState(() => drafts.get(key) ?? '')
   const textRef = useRef(text)
@@ -123,6 +125,7 @@ export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
   const busy = status === 'running' && !permission
   const model = chat?.session.model ?? draft.model
   const effort = chat?.session.effort ?? draft.effort
+  const groups = modelGroups(settings, keys, model)
   const mode = chat?.session.permissionMode ?? draft.permissionMode
   const usage = chat?.session.usage
   const hasText = text.trim().length > 0
@@ -407,11 +410,11 @@ export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
               className="btn-ghost"
               aria-haspopup="menu"
               aria-expanded={menu === 'model'}
-              aria-label={t('composer.model', { model: `${modelName(model)}, ${effortShort(effort)}` })}
+              aria-label={t('composer.model', { model: usesEffort(model) ? `${modelName(model)}, ${effortShort(effort)}` : modelName(model) })}
               onClick={() => setMenu(menu === 'model' ? null : 'model')}
             >
               <span className="label">{modelShort(model)}</span>
-              <span className="label hx-quiet">{effortShort(effort)}</span>
+              {usesEffort(model) && <span className="label hx-quiet">{effortShort(effort)}</span>}
               <Icon icon={ChevronDown} size={14} />
             </button>
             {chat && <UsageRing used={usage?.contextTokens ?? 0} total={contextWindow(model)} spent={(usage?.promptTokens ?? 0) + (usage?.completionTokens ?? 0)} />}
@@ -430,34 +433,45 @@ export function Composer({ chat, showJump, onJump, onSent }: ComposerProps) {
       </div>
 
       <Menu anchor={modelRef.current} open={menu === 'model'} onClose={() => setMenu(null)} label={t('settings.model')} side="top" minWidth={280}>
-        {MODELS.map((m) => (
-          <MenuItem
-            key={m}
-            checked={m === model}
-            desc={modelDesc(m)}
-            onSelect={() => {
-              setMenu(null)
-              void actions.configure({ model: m })
-              areaRef.current?.focus()
-            }}
-          >
-            {modelName(m)}
-          </MenuItem>
-        ))}
-        <MenuSeparator />
-        <MenuLabel>{t('effort.label')}</MenuLabel>
-        {EFFORTS.map((e) => (
-          <MenuItem
-            key={e}
-            checked={e === effort}
-            onSelect={() => {
-              setMenu(null)
-              void actions.configure({ effort: e })
-              areaRef.current?.focus()
-            }}
-          >
-            {t(`effort.${e}`)}
-          </MenuItem>
+        {groups.map((group, index) => (
+          <Fragment key={group.provider}>
+            {index > 0 && <MenuSeparator />}
+            {groups.length > 1 && <MenuLabel>{group.label}</MenuLabel>}
+            {group.models.map((m) => (
+              <MenuItem
+                key={m}
+                checked={m === model}
+                desc={modelDesc(m)}
+                onSelect={() => {
+                  setMenu(null)
+                  void actions.configure({ model: m })
+                  areaRef.current?.focus()
+                }}
+              >
+                {modelName(m)}
+              </MenuItem>
+            ))}
+            {/* Thinking sits under DeepSeek's models, the only ones it changes. */}
+            {group.provider === 'deepseek' && usesEffort(model) && (
+              <>
+                <MenuSeparator />
+                <MenuLabel>{t('effort.label')}</MenuLabel>
+                {EFFORTS.map((e) => (
+                  <MenuItem
+                    key={e}
+                    checked={e === effort}
+                    onSelect={() => {
+                      setMenu(null)
+                      void actions.configure({ effort: e })
+                      areaRef.current?.focus()
+                    }}
+                  >
+                    {t(`effort.${e}`)}
+                  </MenuItem>
+                ))}
+              </>
+            )}
+          </Fragment>
         ))}
       </Menu>
       <Menu anchor={modeRef.current} open={menu === 'mode'} onClose={() => setMenu(null)} label={t('settings.permissions')} side="top" minWidth={280}>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DeepSeekError, createSseParser, errorFromStatus, streamChat } from '../src/main/deepseek'
+import { DeepSeekError, checkConnection, createSseParser, errorFromStatus, keepsKey, streamChat } from '../src/main/deepseek'
 
 function sseResponse(chunks: string[], status = 200): Response {
   const encoder = new TextEncoder()
@@ -99,5 +99,46 @@ describe('errorFromStatus', () => {
     expect(errorFromStatus(429, '').code).toBe('rate')
     expect(errorFromStatus(422, '').code).toBe('bad-request')
     expect(errorFromStatus(503, '').code).toBe('server')
+  })
+})
+
+describe('OpenAI-compatible APIs', () => {
+  it('sends extra headers and reads reasoning under its other name', async () => {
+    let headers: Record<string, string> = {}
+    const fetchImpl = (async (_url: string, init: RequestInit) => {
+      headers = init.headers as Record<string, string>
+      return sseResponse([event({ choices: [{ delta: { reasoning: '想一下' } }] }), event({ choices: [{ delta: { content: '好' } }] }), 'data: [DONE]\n\n'])
+    }) as unknown as typeof fetch
+    const result = await streamChat({ baseUrl: 'https://x', apiKey: 'k', model: 'glm-5.3', messages: [], headers: { 'x-opencode-session': 's1' }, fetchImpl })
+    expect(headers).toMatchObject({ Authorization: 'Bearer k', 'x-opencode-session': 's1' })
+    expect(result.reasoning).toBe('想一下')
+    expect(result.content).toBe('好')
+  })
+
+  it('lists the models a key can use when testing the connection', async () => {
+    let url = ''
+    const fetchImpl = (async (input: string) => {
+      url = input
+      return new Response(JSON.stringify({ object: 'list', data: [{ id: 'glm-5.3' }, { id: 'kimi-k3' }, { nope: 1 }] }))
+    }) as unknown as typeof fetch
+    const { models } = await checkConnection('https://opencode.ai/inference/go/v1/', 'k', fetchImpl)
+    expect(url).toBe('https://opencode.ai/inference/go/v1/models')
+    expect(models).toEqual(['glm-5.3', 'kimi-k3'])
+  })
+
+  it('treats a refused key as an auth error', async () => {
+    const fetchImpl = (async () => new Response(JSON.stringify({ type: 'error', error: { type: 'AuthError', message: 'Invalid API key.' } }), { status: 401 })) as unknown as typeof fetch
+    const error = await checkConnection('https://x', 'bad', fetchImpl).catch((e) => e)
+    expect(error).toBeInstanceOf(DeepSeekError)
+    expect(error).toMatchObject({ code: 'auth', message: 'Invalid API key.' })
+  })
+})
+
+describe('keepsKey', () => {
+  it('keeps a key that works or could not be checked, and drops one the provider turned down', () => {
+    expect(keepsKey({ ok: true, latencyMs: 90 })).toBe(true)
+    expect(keepsKey({ ok: false, error: 'network' })).toBe(true)
+    expect(keepsKey({ ok: false, error: 'balance' })).toBe(true)
+    expect(keepsKey({ ok: false, error: 'auth' })).toBe(false)
   })
 })

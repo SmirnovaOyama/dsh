@@ -1,4 +1,4 @@
-import { FolderOpen, KeyRound } from 'lucide-react'
+import { FolderOpen, Plus } from 'lucide-react'
 import { t } from '../i18n'
 import { actions } from '../store'
 import { Icon } from './Icon'
@@ -9,7 +9,7 @@ export function NoKey() {
       <h2>{t('error.no-key.title')}</h2>
       <p>{t('error.no-key.body')}</p>
       <button type="button" className="btn-primary" onClick={() => actions.openSettings('connection')}>
-        <Icon icon={KeyRound} size={16} />
+        <Icon icon={Plus} size={16} />
         {t('welcome.keyAction')}
       </button>
     </div>

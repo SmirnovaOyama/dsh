@@ -1,9 +1,9 @@
 import { CirclePause, Clock, Ellipsis, Pencil, Play, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { MODELS, PERMISSION_MODES, SCHEDULE_KINDS, type Locale, type Schedule, type ScheduledTask, type ScheduledTaskInput } from '../../shared/types'
+import { PERMISSION_MODES, SCHEDULE_KINDS, type Locale, type Schedule, type ScheduledTask, type ScheduledTaskInput } from '../../shared/types'
 import { clockTime } from '../format'
 import { t, type MessageKey } from '../i18n'
-import { modelName } from '../models'
+import { modelGroups, modelOptions } from '../models'
 import { actions, projectPaths, useApp } from '../store'
 import { Icon } from './Icon'
 import { Menu, MenuItem } from './Menu'
@@ -175,6 +175,7 @@ const HOURS = Array.from({ length: 24 }, (_, i) => i)
 
 function TaskEditor({ task, onClose }: { task: ScheduledTask | null; onClose(): void }) {
   const settings = useApp((s) => s.settings)
+  const keys = useApp((s) => s.keys)
   const workspace = useApp((s) => s.workspace)
   const locale = settings.locale
   const projects = projectPaths(settings.projects, workspace)
@@ -311,7 +312,7 @@ function TaskEditor({ task, onClose }: { task: ScheduledTask | null; onClose(): 
             <Select
               label={t('scheduled.model')}
               value={draft.model}
-              options={MODELS.map((m) => ({ value: m as string, label: modelName(m) }))}
+              options={modelOptions(modelGroups(settings, keys, draft.model), false)}
               onChange={(value) => patch({ model: value })}
             />
           </div>
