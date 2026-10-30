@@ -7,6 +7,7 @@ import {
   EMPTY_USAGE,
   type AgentEvent,
   type ArtifactVersion,
+  type ConnectionResult,
   type DiffLine,
   type DshApi,
   type FileChange,
@@ -52,7 +53,7 @@ let settings: Settings = {
 /** `?nokey` starts with no key at all, `?opencode` adds an OpenCode key, `?opencodeonly` has only that one. */
 const apiKeys: Record<Provider, string | null> = {
   deepseek: params.has('nokey') || params.has('opencodeonly') ? null : 'sk-3f9c1a7e2b4d6c8e0a1b',
-  opencode: params.has('opencode') || params.has('opencodeonly') ? 'sk-oc-7d2e9b4a1c6f8e3d' : null,
+  opencode: params.has('opencode') || params.has('opencodeonly') ? 'oc_7d2e9b4a1c6f8e3dJ7Tam' : null,
 }
 const OPENCODE_MOCK_MODELS: Record<OpenCodePlan, string[]> = {
   go: ['claude-haiku-5-5', 'deepseek-v4-pro', 'deepseek-v4.1-flash', 'glm-5.3', 'glm-5.3-flash', 'kimi-k3', 'minimax-m3', 'qwen3.8-max'],
@@ -61,6 +62,17 @@ const OPENCODE_MOCK_MODELS: Record<OpenCodePlan, string[]> = {
 if (apiKeys.opencode) settings.opencodeModels = OPENCODE_MOCK_MODELS[settings.opencodePlan]
 if (!apiKeys.deepseek && apiKeys.opencode) settings.model = 'opencode/deepseek-v4.1-flash'
 const keyState = (): KeyState => ({ deepseek: apiKeys.deepseek !== null, opencode: apiKeys.opencode !== null })
+
+/** How the demo answers a key: `?offline` cannot reach anyone, and a key with "bad" in it is turned down. */
+const mockCheck = (provider: Provider, key: string): Promise<ConnectionResult> =>
+  later(
+    params.has('offline')
+      ? { ok: false, error: 'network' as const }
+      : key.includes('bad')
+        ? { ok: false, error: 'auth' as const }
+        : { ok: true, latencyMs: 182, ...(provider === 'opencode' ? { models: OPENCODE_MOCK_MODELS[settings.opencodePlan].length } : {}) },
+    700,
+  )
 let workspace: WorkspaceInfo | null = settings.lastWorkspace ? workspaces[settings.lastWorkspace] : null
 
 const listeners = new Set<(event: AgentEvent) => void>()
@@ -747,24 +759,23 @@ export function createMockApi(): DshApi {
         return settings
       },
       async setApiKey(key, provider) {
+        // A key with "bad" in it is turned down, so the demo can show that line too.
+        const result = await mockCheck(provider, key)
+        if (result.error === 'auth') return { ...result, saved: false }
         apiKeys[provider] = key
         if (provider === 'opencode') settings = { ...settings, opencodeModels: OPENCODE_MOCK_MODELS[settings.opencodePlan] }
         emit({ type: 'settings', settings, keys: keyState() })
+        return { ...result, saved: true }
       },
       async clearApiKey(provider) {
         apiKeys[provider] = null
         emit({ type: 'settings', settings, keys: keyState() })
       },
       revealApiKey: async (provider) => apiKeys[provider],
-      testConnection: (provider) =>
-        later(
-          !apiKeys[provider]
-            ? { ok: false, error: 'no-key' as const }
-            : provider === 'opencode'
-              ? { ok: true, latencyMs: 236, models: settings.opencodeModels.length }
-              : { ok: true, latencyMs: 182 },
-          700,
-        ),
+      testConnection: async (provider) => {
+        const key = apiKeys[provider]
+        return key ? mockCheck(provider, key) : { ok: false, error: 'no-key' as const }
+      },
     },
     workspace: {
       async pick() {

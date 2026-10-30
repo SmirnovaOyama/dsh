@@ -1,6 +1,6 @@
 // A streaming client for DeepSeek's OpenAI-compatible chat completions endpoint, which OpenCode speaks too.
 
-import type { Effort, ErrorCode } from '../shared/types'
+import type { ConnectionResult, Effort, ErrorCode } from '../shared/types'
 
 export interface ToolCall {
   id: string
@@ -250,6 +250,11 @@ function toNetworkError(error: unknown, signal?: AbortSignal): DeepSeekError {
   }
   if (error instanceof DeepSeekError) return error
   return new DeepSeekError('network', error instanceof Error ? error.message : String(error))
+}
+
+/** A key the provider turned down is not worth keeping; one that could not be checked just now still is. */
+export function keepsKey(result: ConnectionResult): boolean {
+  return result.ok || result.error !== 'auth'
 }
 
 /** A cheap authenticated request, used by "Test connection" in Settings. It also lists the models the key can use. */

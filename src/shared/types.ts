@@ -363,6 +363,11 @@ export interface ConnectionResult {
   error?: ErrorCode
 }
 
+/** Saving a key checks it first; a key the provider turns down is not kept. */
+export interface KeyResult extends ConnectionResult {
+  saved: boolean
+}
+
 export type SaveResult = { ok: true; path: string } | { ok: false; error: string }
 
 export interface CommitResult {
@@ -431,7 +436,7 @@ export interface DshApi {
   getInitialState(): Promise<InitialState>
   settings: {
     update(patch: Partial<Settings>): Promise<Settings>
-    setApiKey(key: string, provider: Provider): Promise<void>
+    setApiKey(key: string, provider: Provider): Promise<KeyResult>
     clearApiKey(provider: Provider): Promise<void>
     revealApiKey(provider: Provider): Promise<string | null>
     /** For OpenCode this also refreshes the list of models the key can use. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DeepSeekError, checkConnection, createSseParser, errorFromStatus, streamChat } from '../src/main/deepseek'
+import { DeepSeekError, checkConnection, createSseParser, errorFromStatus, keepsKey, streamChat } from '../src/main/deepseek'
 
 function sseResponse(chunks: string[], status = 200): Response {
   const encoder = new TextEncoder()
@@ -134,3 +134,11 @@ describe('OpenAI-compatible APIs', () => {
   })
 })
 
+describe('keepsKey', () => {
+  it('keeps a key that works or could not be checked, and drops one the provider turned down', () => {
+    expect(keepsKey({ ok: true, latencyMs: 90 })).toBe(true)
+    expect(keepsKey({ ok: false, error: 'network' })).toBe(true)
+    expect(keepsKey({ ok: false, error: 'balance' })).toBe(true)
+    expect(keepsKey({ ok: false, error: 'auth' })).toBe(false)
+  })
+})

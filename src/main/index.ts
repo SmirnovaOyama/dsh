@@ -5,13 +5,13 @@ import { randomUUID } from 'node:crypto'
 import { stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { Channels, EVENT_CHANNEL } from '../shared/ipc'
-import type { AgentEvent, ConfigureOptions, ConnectionResult, FileRead, InitialState, PermissionDecision, Provider, SaveResult, ScheduledTaskInput, Settings, StartOptions } from '../shared/types'
+import type { AgentEvent, ConfigureOptions, ConnectionResult, FileRead, InitialState, KeyResult, PermissionDecision, Provider, SaveResult, ScheduledTaskInput, Settings, StartOptions } from '../shared/types'
 import { defaultOpenCodeModel, OPENCODE_BASE_URLS, providerOf, usableOpenCodeModel } from '../shared/types'
 import { saveToFolder, safeFileName, writeTempPage } from './artifactFiles'
 import { PREVIEW_SCHEME, PreviewPages, withPolicy } from './artifactPreview'
 import { PreviewGate, gateProxy } from './previewNetwork'
 import { Controller, readWorkspace } from './controller'
-import { DeepSeekError, checkConnection } from './deepseek'
+import { DeepSeekError, checkConnection, keepsKey } from './deepseek'
 import { listCommands } from './commands'
 import { cleanRefs } from './refs'
 import { listWorkspaceFiles, readTextFile } from './tools/files'
@@ -54,6 +54,18 @@ async function keepOpenCodeModels(plan: Settings['opencodePlan'], ids: string[])
   if (!settingsStore.hasApiKey('deepseek') && providerOf(settings.model) === 'deepseek' && fallback) patch.model = fallback
   await settingsStore.update(patch)
   emitSettings()
+}
+
+/** Asks the provider whether it takes the key, and which models it offers it. */
+async function checkKey(provider: Provider, key: string): Promise<{ result: ConnectionResult; models: string[] }> {
+  try {
+    const { latencyMs, models } = await checkConnection(baseUrlFor(provider), key)
+    const count = provider === 'opencode' ? { models: models.filter(usableOpenCodeModel).length } : {}
+    return { result: { ok: true, latencyMs, ...count }, models }
+  } catch (error) {
+    const code = error instanceof DeepSeekError && error.code !== 'aborted' ? error.code : 'unknown'
+    return { result: { ok: false, error: code }, models: [] }
+  }
 }
 
 /** Asks OpenCode again which models the key can use. A failure keeps the list from last time. */
@@ -202,17 +214,22 @@ function registerIpc() {
 
   handle('settingsUpdate', async (patch: Partial<Settings>) => {
     const planChanged = patch.opencodePlan !== undefined && patch.opencodePlan !== settingsStore.get().opencodePlan
-    // The other plan has models of its own; the old list goes until OpenCode gives the new one.
+    // The other plan has models of its own; the old list goes until Settings checks the key on the new plan.
     const next = await settingsStore.update(planChanged ? { ...patch, opencodeModels: [] } : patch)
     if (window && patch.theme) window.setBackgroundColor(backgroundFor(next.theme))
     emitSettings()
-    if (planChanged) void refreshOpenCodeModels()
     return next
   })
-  handle('settingsSetKey', async (key: string, provider: Provider) => {
-    await settingsStore.setApiKey(key, provider)
+  handle('settingsSetKey', async (key: string, provider: Provider): Promise<KeyResult> => {
+    const trimmed = key.trim()
+    if (!trimmed) return { ok: false, error: 'no-key', saved: false }
+    const plan = settingsStore.get().opencodePlan
+    const { result, models } = await checkKey(provider, trimmed)
+    if (!keepsKey(result)) return { ...result, saved: false }
+    await settingsStore.setApiKey(trimmed, provider)
     emitSettings()
-    if (provider === 'opencode') void refreshOpenCodeModels()
+    if (provider === 'opencode' && result.ok) await keepOpenCodeModels(plan, models)
+    return { ...result, saved: true }
   })
   handle('settingsClearKey', async (provider: Provider) => {
     await settingsStore.clearApiKey(provider)
@@ -223,15 +240,9 @@ function registerIpc() {
     const key = settingsStore.apiKey(provider)
     if (!key) return { ok: false, error: 'no-key' }
     const plan = settingsStore.get().opencodePlan
-    try {
-      const { latencyMs, models } = await checkConnection(baseUrlFor(provider), key)
-      if (provider !== 'opencode') return { ok: true, latencyMs }
-      await keepOpenCodeModels(plan, models)
-      return { ok: true, latencyMs, models: models.filter(usableOpenCodeModel).length }
-    } catch (error) {
-      const code = error instanceof DeepSeekError && error.code !== 'aborted' ? error.code : 'unknown'
-      return { ok: false, error: code }
-    }
+    const { result, models } = await checkKey(provider, key)
+    if (provider === 'opencode' && result.ok) await keepOpenCodeModels(plan, models)
+    return result
   })
 
   handle('workspacePick', async () => {
