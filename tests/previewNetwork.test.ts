@@ -8,7 +8,7 @@ describe('gateProxy', () => {
   })
 
   it('goes nowhere if the gate did not start, and lets only the dev server around it', () => {
-    expect(gateProxy(null, 'localhost')).toEqual({ mode: 'fixed_servers', proxyRules: '127.0.0.1:9', proxyBypassRules: 'localhost,<-loopback>' })
+    expect(gateProxy(null, 'localhost')).toEqual({ mode: 'fixed_servers', proxyRules: '127.0.0.1:9', proxyBypassRules: '<-loopback>,localhost' })
   })
 })
 
