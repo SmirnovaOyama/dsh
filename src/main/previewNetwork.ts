@@ -30,7 +30,8 @@ export function gateProxy(port: number | null, devHost?: string) {
   return {
     mode: 'fixed_servers' as const,
     proxyRules: `127.0.0.1:${port ?? NOWHERE}`,
-    proxyBypassRules: [...(devHost ? [devHost] : []), '<-loopback>'].join(','),
+    // Chromium reads later rules first, so the dev server comes after <-loopback>, which would otherwise send it to the gate.
+    proxyBypassRules: ['<-loopback>', ...(devHost ? [devHost] : [])].join(','),
   }
 }
 
