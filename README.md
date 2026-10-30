@@ -16,13 +16,14 @@
 - 規劃模式：Agent 只讀不改，寫好計畫給你確認後才開始動手
 - 回到之前的某則訊息：對話、Agent 改過的檔案，或兩者一起回到送出那則訊息之前
 - 支援 DeepSeek V4.1 Flash（`deepseek-flash`）和 V4 Pro（`deepseek-v4-pro`），思考可以關掉或選低、高、最高；舊的 `deepseek-chat`、`deepseek-reasoner` 設定會自動換成 V4.1 Flash
+- 也能用 OpenCode 的 API Key，選 GLM、Kimi、Qwen、Claude 這些 OpenCode 提供的模型，Go 訂閱和儲值兩種方案都可以
 - 淺色、深色和跟隨系統，介面有繁體中文和英文
 
 ## 需要的東西
 
 - Node.js 20 以上（建議 22）
 - git（變更面板的提交功能會用到）
-- 一把 DeepSeek API Key，到 <https://platform.deepseek.com/api_keys> 申請
+- 一把 DeepSeek API Key，到 <https://platform.deepseek.com/api_keys> 申請，或一把 OpenCode API Key，到 <https://opencode.ai/auth> 申請
 
 ## 開始使用
 
@@ -37,11 +38,20 @@ npm run dev
 
 第一次打開時：
 
-1. 到「設定 › 連線」貼上 API Key，按「儲存」，可以按「測試連線」確認
+1. 到「設定 › 連線」貼上 DeepSeek 或 OpenCode 的 API Key，按「儲存」，可以按「測試連線」確認
 2. 點左上角選一個專案資料夾
 3. 在下方輸入框告訴 Agent 要做什麼，Enter 送出，Shift+Enter 換行
 
 API Key 只存在這台電腦。系統有鑰匙圈時（macOS 鑰匙圈、Windows DPAPI、Linux 的 Secret Service）會加密保存，沒有的話設定頁會告訴你它以一般文字保存。
+
+## OpenCode
+
+在「設定 › 連線」的 OpenCode 底下選方案（Go 訂閱或儲值），貼上 OpenCode 的 API Key。dsh 會向 OpenCode 要一份這把金鑰能用的模型清單，模型選單裡就會多一組 OpenCode 的模型，對話中隨時可以換。DeepSeek 和 OpenCode 的金鑰可以同時設定
+
+- 只有 OpenCode 的金鑰時，新對話預設用 OpenCode 上的 DeepSeek V4.1 Flash，方案裡沒有的話用清單第一個
+- 思考程度只對 DeepSeek 自己的模型有用，OpenCode 的模型照它們預設的方式思考
+- OpenCode 的免費模型只能在 OpenCode 裡用，所以不會列出來
+- 除了 DeepSeek 的模型，dsh 不知道 OpenCode 上其他模型的上下文多長，一律當成 128K，用到八成就會整理對話
 
 ## 權限
 

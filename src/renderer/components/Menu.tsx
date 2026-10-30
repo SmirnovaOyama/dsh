@@ -95,6 +95,9 @@ export function Menu({ anchor, open, onClose, label, side = 'bottom', align = 's
   }
   if (side === 'bottom') style.top = rect.bottom + 4
   else style.bottom = window.innerHeight - rect.top + 4
+  // A long list scrolls inside the room on its side rather than running past the window's edge.
+  const room = (side === 'bottom' ? window.innerHeight - rect.bottom : rect.top) - 12
+  style.maxHeight = `min(480px, ${Math.max(room, 160)}px)`
   if (align === 'start') style.left = rect.left
   else style.right = window.innerWidth - rect.right
 

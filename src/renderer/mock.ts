@@ -11,7 +11,10 @@ import {
   type DshApi,
   type FileChange,
   type FileRef,
+  type KeyState,
+  type OpenCodePlan,
   type PermissionDecision,
+  type Provider,
   type PermissionRequest,
   type QueuedMessage,
   type SessionData,
@@ -46,7 +49,18 @@ let settings: Settings = {
   projects: Object.keys(workspaces),
   lastWorkspace: params.has('nofolder') ? null : DSH,
 }
-let apiKey: string | null = params.has('nokey') ? null : 'sk-3f9c1a7e2b4d6c8e0a1b'
+/** `?nokey` starts with no key at all, `?opencode` adds an OpenCode key, `?opencodeonly` has only that one. */
+const apiKeys: Record<Provider, string | null> = {
+  deepseek: params.has('nokey') || params.has('opencodeonly') ? null : 'sk-3f9c1a7e2b4d6c8e0a1b',
+  opencode: params.has('opencode') || params.has('opencodeonly') ? 'sk-oc-7d2e9b4a1c6f8e3d' : null,
+}
+const OPENCODE_MOCK_MODELS: Record<OpenCodePlan, string[]> = {
+  go: ['claude-haiku-5-5', 'deepseek-v4-pro', 'deepseek-v4.1-flash', 'glm-5.3', 'glm-5.3-flash', 'kimi-k3', 'minimax-m3', 'qwen3.8-max'],
+  paygo: ['claude-opus-5-5', 'claude-sonnet-5-5', 'deepseek-v4-pro', 'deepseek-v4.1-flash', 'gemini-4-argon', 'glm-5.3', 'gpt-6.1-sol', 'kimi-k3', 'qwen3.8-max'],
+}
+if (apiKeys.opencode) settings.opencodeModels = OPENCODE_MOCK_MODELS[settings.opencodePlan]
+if (!apiKeys.deepseek && apiKeys.opencode) settings.model = 'opencode/deepseek-v4.1-flash'
+const keyState = (): KeyState => ({ deepseek: apiKeys.deepseek !== null, opencode: apiKeys.opencode !== null })
 let workspace: WorkspaceInfo | null = settings.lastWorkspace ? workspaces[settings.lastWorkspace] : null
 
 const listeners = new Set<(event: AgentEvent) => void>()
@@ -721,26 +735,36 @@ export function createMockApi(): DshApi {
     getInitialState: () =>
       later({
         settings,
-        hasApiKey: apiKey !== null,
+        keys: keyState(),
         app: { platform: params.get('platform') ?? 'darwin', version: '0.1.0', keyEncryption: true, home: HOME },
         workspace,
       }),
     settings: {
       async update(patch) {
         settings = { ...settings, ...patch }
-        emit({ type: 'settings', settings, hasApiKey: apiKey !== null })
+        if (patch.opencodePlan && apiKeys.opencode) settings.opencodeModels = OPENCODE_MOCK_MODELS[patch.opencodePlan]
+        emit({ type: 'settings', settings, keys: keyState() })
         return settings
       },
-      async setApiKey(key) {
-        apiKey = key
-        emit({ type: 'settings', settings, hasApiKey: true })
+      async setApiKey(key, provider) {
+        apiKeys[provider] = key
+        if (provider === 'opencode') settings = { ...settings, opencodeModels: OPENCODE_MOCK_MODELS[settings.opencodePlan] }
+        emit({ type: 'settings', settings, keys: keyState() })
       },
-      async clearApiKey() {
-        apiKey = null
-        emit({ type: 'settings', settings, hasApiKey: false })
+      async clearApiKey(provider) {
+        apiKeys[provider] = null
+        emit({ type: 'settings', settings, keys: keyState() })
       },
-      revealApiKey: async () => apiKey,
-      testConnection: () => later(apiKey ? { ok: true, latencyMs: 182 } : { ok: false, error: 'no-key' as const }, 700),
+      revealApiKey: async (provider) => apiKeys[provider],
+      testConnection: (provider) =>
+        later(
+          !apiKeys[provider]
+            ? { ok: false, error: 'no-key' as const }
+            : provider === 'opencode'
+              ? { ok: true, latencyMs: 236, models: settings.opencodeModels.length }
+              : { ok: true, latencyMs: 182 },
+          700,
+        ),
     },
     workspace: {
       async pick() {
@@ -756,7 +780,7 @@ export function createMockApi(): DshApi {
           recentWorkspaces: [path, ...settings.recentWorkspaces.filter((p) => p !== path)],
           projects: settings.projects.includes(path) ? settings.projects : [path, ...settings.projects],
         }
-        emit({ type: 'settings', settings, hasApiKey: apiKey !== null })
+        emit({ type: 'settings', settings, keys: keyState() })
         emit({ type: 'workspace', workspace: info })
         return info
       },

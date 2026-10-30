@@ -10,6 +10,7 @@ import {
   type AppInfo,
   type FileChange,
   type FileRef,
+  type KeyState,
   type LibraryArtifact,
   type PermissionDecision,
   type PermissionMode,
@@ -41,7 +42,7 @@ export type SettingsSection = 'connection' | 'model' | 'permissions' | 'appearan
 export interface AppState {
   ready: boolean
   settings: Settings
-  hasApiKey: boolean
+  keys: KeyState
   app: AppInfo
   workspace: WorkspaceInfo | null
   /** Conversations in every project, most recently used first. */
@@ -115,7 +116,7 @@ export function lastSettingsSection(): SettingsSection {
 let state: AppState = {
   ready: false,
   settings: DEFAULT_SETTINGS,
-  hasApiKey: false,
+  keys: { deepseek: false, opencode: false },
   app: { platform: 'darwin', version: '0.0.0', keyEncryption: true, home: '' },
   workspace: null,
   sessions: [],
@@ -161,6 +162,9 @@ function subscribe(listener: () => void) {
 }
 
 /** Selectors must return something already in the state (or a primitive), never a fresh object. */
+/** Whether any provider has a key, so the agent can run at all. */
+export const hasAnyKey = (s: AppState) => s.keys.deepseek || s.keys.opencode
+
 export function useApp<T>(selector: (s: AppState) => T): T {
   return useSyncExternalStore(subscribe, () => selector(state))
 }
@@ -265,7 +269,9 @@ function handleEvent(event: AgentEvent) {
       break
     case 'settings': {
       const projectsChanged = event.settings.projects.join('\n') !== state.settings.projects.join('\n')
-      set({ settings: event.settings, hasApiKey: event.hasApiKey })
+      // A new conversation not yet started follows the default model when it was on the old one.
+      const draft = !state.chat && state.draft.model === state.settings.model ? { ...state.draft, model: event.settings.model } : state.draft
+      set({ settings: event.settings, keys: event.keys, draft })
       if (projectsChanged) void loadSessions()
       break
     }
@@ -329,7 +335,7 @@ export const actions = {
     set({
       ready: true,
       settings: initial.settings,
-      hasApiKey: initial.hasApiKey,
+      keys: initial.keys,
       app: initial.app,
       workspace: initial.workspace,
       draft: { model: initial.settings.model, effort: initial.settings.effort, permissionMode: initial.settings.permissionMode },

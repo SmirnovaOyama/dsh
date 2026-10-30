@@ -5,7 +5,8 @@ import { randomUUID } from 'node:crypto'
 import { stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { Channels, EVENT_CHANNEL } from '../shared/ipc'
-import type { AgentEvent, ConfigureOptions, FileRead, InitialState, PermissionDecision, SaveResult, ScheduledTaskInput, Settings, StartOptions } from '../shared/types'
+import type { AgentEvent, ConfigureOptions, ConnectionResult, FileRead, InitialState, PermissionDecision, Provider, SaveResult, ScheduledTaskInput, Settings, StartOptions } from '../shared/types'
+import { defaultOpenCodeModel, OPENCODE_BASE_URLS, providerOf, usableOpenCodeModel } from '../shared/types'
 import { saveToFolder, safeFileName, writeTempPage } from './artifactFiles'
 import { PREVIEW_SCHEME, PreviewPages, withPolicy } from './artifactPreview'
 import { PreviewGate, gateProxy } from './previewNetwork'
@@ -35,6 +36,39 @@ function emit(event: AgentEvent) {
   if (window && !window.isDestroyed()) window.webContents.send(EVENT_CHANNEL, event)
 }
 
+function emitSettings() {
+  emit({ type: 'settings', settings: settingsStore.get(), keys: settingsStore.keys() })
+}
+
+const baseUrlFor = (provider: Provider) =>
+  provider === 'opencode' ? OPENCODE_BASE_URLS[settingsStore.get().opencodePlan] : settingsStore.get().baseUrl
+
+/** Keeps the models OpenCode offers the key, for the model menus, unless the plan changed while it asked. */
+async function keepOpenCodeModels(plan: Settings['opencodePlan'], ids: string[]) {
+  const settings = settingsStore.get()
+  if (settings.opencodePlan !== plan) return
+  const opencodeModels = ids.filter(usableOpenCodeModel).sort()
+  const patch: Partial<Settings> = { opencodeModels }
+  // With only an OpenCode key, new conversations start on one of its models instead of failing for want of a DeepSeek key.
+  const fallback = defaultOpenCodeModel(opencodeModels)
+  if (!settingsStore.hasApiKey('deepseek') && providerOf(settings.model) === 'deepseek' && fallback) patch.model = fallback
+  await settingsStore.update(patch)
+  emitSettings()
+}
+
+/** Asks OpenCode again which models the key can use. A failure keeps the list from last time. */
+async function refreshOpenCodeModels() {
+  const key = settingsStore.apiKey('opencode')
+  if (!key) return
+  const plan = settingsStore.get().opencodePlan
+  try {
+    const { models } = await checkConnection(OPENCODE_BASE_URLS[plan], key)
+    await keepOpenCodeModels(plan, models)
+  } catch {
+    // Test connection says what went wrong.
+  }
+}
+
 const controller = new Controller({ settings: settingsStore, sessions: sessionStore, emit })
 const previews = new PreviewPages()
 // The way out for preview pages (see previewNetwork); previews run only once the session goes through it.
@@ -51,7 +85,7 @@ const scheduler = new Scheduler(app.getPath('userData'), {
   emit: (tasks) => emit({ type: 'schedules', tasks }),
   async run(task) {
     // Short codes the renderer turns into words.
-    if (!settingsStore.hasApiKey()) throw new Error('no-key')
+    if (!settingsStore.hasApiKey(providerOf(task.model))) throw new Error('no-key')
     const folder = await stat(task.workspace).catch(() => null)
     if (!folder?.isDirectory()) throw new Error('no-folder')
     const meta = await controller.start(task.workspace, task.prompt, {
@@ -132,7 +166,7 @@ async function openWorkspace(dir: string) {
   // A folder opened for the first time becomes a project at the top of the sidebar.
   const projects = settings.projects.includes(dir) ? settings.projects : [dir, ...settings.projects]
   const next = await settingsStore.update({ lastWorkspace: dir, recentWorkspaces: recent, projects })
-  emit({ type: 'settings', settings: next, hasApiKey: settingsStore.hasApiKey() })
+  emit({ type: 'settings', settings: next, keys: settingsStore.keys() })
   emit({ type: 'workspace', workspace: info })
   return info
 }
@@ -155,7 +189,7 @@ function registerIpc() {
     }
     return {
       settings,
-      hasApiKey: settingsStore.hasApiKey(),
+      keys: settingsStore.keys(),
       app: {
         platform: process.platform,
         version: app.getVersion(),
@@ -167,26 +201,33 @@ function registerIpc() {
   })
 
   handle('settingsUpdate', async (patch: Partial<Settings>) => {
-    const next = await settingsStore.update(patch)
+    const planChanged = patch.opencodePlan !== undefined && patch.opencodePlan !== settingsStore.get().opencodePlan
+    // The other plan has models of its own; the old list goes until OpenCode gives the new one.
+    const next = await settingsStore.update(planChanged ? { ...patch, opencodeModels: [] } : patch)
     if (window && patch.theme) window.setBackgroundColor(backgroundFor(next.theme))
-    emit({ type: 'settings', settings: next, hasApiKey: settingsStore.hasApiKey() })
+    emitSettings()
+    if (planChanged) void refreshOpenCodeModels()
     return next
   })
-  handle('settingsSetKey', async (key: string) => {
-    await settingsStore.setApiKey(key)
-    emit({ type: 'settings', settings: settingsStore.get(), hasApiKey: settingsStore.hasApiKey() })
+  handle('settingsSetKey', async (key: string, provider: Provider) => {
+    await settingsStore.setApiKey(key, provider)
+    emitSettings()
+    if (provider === 'opencode') void refreshOpenCodeModels()
   })
-  handle('settingsClearKey', async () => {
-    await settingsStore.clearApiKey()
-    emit({ type: 'settings', settings: settingsStore.get(), hasApiKey: false })
+  handle('settingsClearKey', async (provider: Provider) => {
+    await settingsStore.clearApiKey(provider)
+    emitSettings()
   })
-  handle('settingsRevealKey', () => settingsStore.apiKey())
-  handle('settingsTest', async () => {
-    const key = settingsStore.apiKey()
+  handle('settingsRevealKey', (provider: Provider) => settingsStore.apiKey(provider))
+  handle('settingsTest', async (provider: Provider): Promise<ConnectionResult> => {
+    const key = settingsStore.apiKey(provider)
     if (!key) return { ok: false, error: 'no-key' }
+    const plan = settingsStore.get().opencodePlan
     try {
-      const latencyMs = await checkConnection(settingsStore.get().baseUrl, key)
-      return { ok: true, latencyMs }
+      const { latencyMs, models } = await checkConnection(baseUrlFor(provider), key)
+      if (provider !== 'opencode') return { ok: true, latencyMs }
+      await keepOpenCodeModels(plan, models)
+      return { ok: true, latencyMs, models: models.filter(usableOpenCodeModel).length }
     } catch (error) {
       const code = error instanceof DeepSeekError && error.code !== 'aborted' ? error.code : 'unknown'
       return { ok: false, error: code }
@@ -314,6 +355,8 @@ app.whenReady().then(async () => {
   registerIpc()
   scheduler.start()
   createWindow()
+  // OpenCode adds and retires models often; the menus get today's list.
+  void refreshOpenCodeModels()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

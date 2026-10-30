@@ -1,4 +1,4 @@
-// A streaming client for DeepSeek's OpenAI-compatible chat completions endpoint.
+// A streaming client for DeepSeek's OpenAI-compatible chat completions endpoint, which OpenCode speaks too.
 
 import type { Effort, ErrorCode } from '../shared/types'
 
@@ -25,6 +25,8 @@ export interface ApiUsage {
   total_tokens: number
   prompt_cache_hit_tokens?: number
   prompt_cache_miss_tokens?: number
+  /** Where OpenAI-style APIs, OpenCode among them, report cache hits. */
+  prompt_tokens_details?: { cached_tokens?: number } | null
 }
 
 export interface ChatRequest {
@@ -36,6 +38,8 @@ export interface ChatRequest {
   messages: ChatMessage[]
   tools?: ToolSpec[]
   temperature?: number
+  /** Sent on top of the usual headers; OpenCode keeps a conversation's requests together by one. */
+  headers?: Record<string, string>
   signal?: AbortSignal
   fetchImpl?: typeof fetch
 }
@@ -129,6 +133,8 @@ interface StreamChunk {
     delta?: {
       content?: string | null
       reasoning_content?: string | null
+      /** The name some OpenAI-compatible APIs give the reasoning instead. */
+      reasoning?: string | null
       tool_calls?: Array<{ index: number; id?: string; type?: string; function?: { name?: string; arguments?: string } }>
     }
     finish_reason?: string | null
@@ -160,6 +166,7 @@ export async function streamChat(request: ChatRequest, handlers: StreamHandlers 
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
         Authorization: `Bearer ${request.apiKey}`,
+        ...request.headers,
       },
       body: JSON.stringify(body),
       signal: request.signal,
@@ -189,9 +196,10 @@ export async function streamChat(request: ChatRequest, handlers: StreamHandlers 
     const choice = chunk.choices?.[0]
     if (!choice) return
     const delta = choice.delta ?? {}
-    if (delta.reasoning_content) {
-      result.reasoning += delta.reasoning_content
-      handlers.onReasoning?.(delta.reasoning_content)
+    const reasoning = delta.reasoning_content || delta.reasoning
+    if (reasoning) {
+      result.reasoning += reasoning
+      handlers.onReasoning?.(reasoning)
     }
     if (delta.content) {
       result.content += delta.content
@@ -244,8 +252,8 @@ function toNetworkError(error: unknown, signal?: AbortSignal): DeepSeekError {
   return new DeepSeekError('network', error instanceof Error ? error.message : String(error))
 }
 
-/** A cheap authenticated request, used by "Test connection" in Settings. */
-export async function checkConnection(baseUrl: string, apiKey: string, fetchImpl: typeof fetch = fetch) {
+/** A cheap authenticated request, used by "Test connection" in Settings. It also lists the models the key can use. */
+export async function checkConnection(baseUrl: string, apiKey: string, fetchImpl: typeof fetch = fetch): Promise<{ latencyMs: number; models: string[] }> {
   const started = Date.now()
   let response: Response
   try {
@@ -257,5 +265,8 @@ export async function checkConnection(baseUrl: string, apiKey: string, fetchImpl
     throw toNetworkError(error)
   }
   if (!response.ok) throw errorFromStatus(response.status, await response.text().catch(() => ''))
-  return Date.now() - started
+  const latencyMs = Date.now() - started
+  const list = (await response.json().catch(() => null)) as { data?: Array<{ id?: unknown }> } | null
+  const models = (Array.isArray(list?.data) ? list.data : []).flatMap((m) => (typeof m?.id === 'string' ? [m.id] : []))
+  return { latencyMs, models }
 }

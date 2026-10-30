@@ -187,6 +187,70 @@ describe('agent loop', () => {
   })
 })
 
+describe('OpenCode', () => {
+  const onOpenCode = (model: string) => ({ ...opts('ask'), model, effort: 'max' as const })
+
+  it("sends an OpenCode model to the plan's address with its own key and the conversation's id", async () => {
+    const seen: ChatRequest[] = []
+    const { controller, settings } = await setup([{ content: 'hi' }], seen)
+    await settings.setApiKey('sk-opencode', 'opencode')
+    const options = onOpenCode('opencode/glm-5.3')
+    await controller.start(ws, 'hello', options)
+    await idle(controller, options.id)
+
+    expect(seen[0]).toMatchObject({
+      baseUrl: 'https://opencode.ai/inference/go/v1',
+      apiKey: 'sk-opencode',
+      model: 'glm-5.3',
+      headers: { 'x-opencode-session': options.id },
+    })
+    // DeepSeek's thinking switches and the reply style's temperature stay out of it.
+    expect(seen[0].effort).toBeUndefined()
+    expect(seen[0].temperature).toBeUndefined()
+  })
+
+  it('follows the plan, and keeps DeepSeek models on DeepSeek', async () => {
+    const seen: ChatRequest[] = []
+    const { controller, settings } = await setup([{ content: 'a' }, { content: 'b' }], seen)
+    await settings.setApiKey('sk-opencode', 'opencode')
+    await settings.update({ opencodePlan: 'paygo' })
+    const first = onOpenCode('opencode/claude-sonnet-5-5')
+    await controller.start(ws, 'one', first)
+    await idle(controller, first.id)
+    const second = opts('ask')
+    await controller.start(ws, 'two', second)
+    await idle(controller, second.id)
+
+    expect(seen[0]).toMatchObject({ baseUrl: 'https://opencode.ai/inference/v1', model: 'claude-sonnet-5-5' })
+    expect(seen[1]).toMatchObject({ baseUrl: 'https://api.deepseek.com', apiKey: 'sk-test', model: 'deepseek-flash', effort: 'none' })
+    expect(seen[1].headers).toBeUndefined()
+  })
+
+  it('asks for an OpenCode key even when there is a DeepSeek one', async () => {
+    const { controller } = await setup([])
+    const options = onOpenCode('opencode/glm-5.3')
+    await controller.start(ws, 'hi', options)
+    const snap = await idle(controller, options.id)
+    expect(snap.session.items.at(-1)).toMatchObject({ kind: 'error', code: 'no-key' })
+  })
+
+  it('keeps each key apart and out of the settings it hands out', async () => {
+    const settings = new SettingsStore(root, plainCipher)
+    await settings.load()
+    await settings.setApiKey('sk-opencode', 'opencode')
+    expect(settings.keys()).toEqual({ deepseek: false, opencode: true })
+    expect(settings.apiKey('opencode')).toBe('sk-opencode')
+    expect(settings.apiKey('deepseek')).toBeNull()
+    expect(JSON.stringify(settings.get())).not.toContain('sk-opencode')
+
+    const reloaded = new SettingsStore(root, plainCipher)
+    await reloaded.load()
+    expect(reloaded.apiKey('opencode')).toBe('sk-opencode')
+    await reloaded.clearApiKey('opencode')
+    expect(reloaded.keys()).toEqual({ deepseek: false, opencode: false })
+  })
+})
+
 describe('apiHistory', () => {
   const history: ChatMessage[] = [
     { role: 'user', content: 'one' },

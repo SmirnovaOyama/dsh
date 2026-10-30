@@ -1,10 +1,10 @@
 import { ArrowUpRight, ChevronLeft, Cpu, Eye, EyeOff, KeyRound, LoaderCircle, Shield, Sun, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
-import { DEFAULT_SETTINGS, EFFORTS, MAX_STEPS_OPTIONS, MODELS, PERMISSION_MODES, type ConnectionResult, type Effort, type Locale, type PermissionMode, type ReplyStyle, type ThemePref } from '../../shared/types'
+import { DEFAULT_SETTINGS, EFFORTS, MAX_STEPS_OPTIONS, OPENCODE_PLANS, PERMISSION_MODES, type ConnectionResult, type Effort, type Locale, type OpenCodePlan, type PermissionMode, type Provider, type ReplyStyle, type ThemePref } from '../../shared/types'
 import { api } from '../api'
 import { LOCALE_NAMES, t, type MessageKey } from '../i18n'
 import { actions, lastSettingsSection, useApp, type SettingsSection } from '../store'
-import { modelDesc, modelName } from '../models'
+import { modelGroups, modelOptions } from '../models'
 import { Icon } from './Icon'
 import { Reserve } from './Reserve'
 import { Segmented } from './Segmented'
@@ -16,8 +16,6 @@ const SECTIONS: { id: SettingsSection; icon: LucideIcon; label: MessageKey }[] =
   { id: 'permissions', icon: Shield, label: 'settings.nav.permissions' },
   { id: 'appearance', icon: Sun, label: 'settings.nav.appearance' },
 ]
-
-const KEYS_URL = 'https://platform.deepseek.com/api_keys'
 
 const update = (patch: Parameters<typeof api.settings.update>[0]) => void api.settings.update(patch)
 
@@ -126,59 +124,18 @@ function Row({ title, desc, children }: { title: string; desc?: string; children
   )
 }
 
+const KEY_URLS: Record<Provider, string> = { deepseek: 'https://platform.deepseek.com/api_keys', opencode: 'https://opencode.ai/auth' }
+
 function Connection({ focusKey }: { focusKey: boolean }) {
   const settings = useApp((s) => s.settings)
-  const hasApiKey = useApp((s) => s.hasApiKey)
-  const encrypted = useApp((s) => s.app.keyEncryption)
-  const keyRef = useRef<HTMLInputElement>(null)
-  const [key, setKey] = useState('')
-  const [savedKey, setSavedKey] = useState('')
-  const [revealed, setRevealed] = useState(false)
-  const [justSaved, setJustSaved] = useState(false)
   const [baseUrl, setBaseUrl] = useState(settings.baseUrl)
   const [urlInvalid, setUrlInvalid] = useState(false)
-  const [testing, setTesting] = useState(false)
-  const [result, setResult] = useState<ConnectionResult | null>(null)
-  const [round, setRound] = useState(0)
+  // A changed address or plan makes the last test stale.
+  const [deepseekTested, setDeepseekTested] = useState(0)
+  const [opencodeTested, setOpencodeTested] = useState(0)
 
-  useEffect(() => {
-    if (focusKey) keyRef.current?.focus({ preventScroll: true })
-  }, [focusKey])
   useEffect(() => setBaseUrl(settings.baseUrl), [settings.baseUrl])
-  useEffect(() => {
-    if (!justSaved) return
-    const timer = window.setTimeout(() => setJustSaved(false), 1600)
-    return () => window.clearTimeout(timer)
-  }, [justSaved])
 
-  const dirty = key.trim().length > 0 && key.trim() !== savedKey
-  const save = async () => {
-    if (!dirty) return
-    const value = key.trim()
-    await api.settings.setApiKey(value)
-    setSavedKey(value)
-    setJustSaved(true)
-    setResult(null)
-  }
-  const toggleReveal = async () => {
-    if (revealed) {
-      setRevealed(false)
-      return
-    }
-    if (!key && hasApiKey) {
-      const stored = (await api.settings.revealApiKey()) ?? ''
-      setKey(stored)
-      setSavedKey(stored)
-    }
-    setRevealed(true)
-  }
-  const remove = () => {
-    void api.settings.clearApiKey()
-    setKey('')
-    setSavedKey('')
-    setRevealed(false)
-    setResult(null)
-  }
   const commitBaseUrl = (value = baseUrl) => {
     const next = value.trim().replace(/\/+$/, '')
     if (!/^https?:\/\/\S+$/.test(next)) {
@@ -190,77 +147,18 @@ function Connection({ focusKey }: { focusKey: boolean }) {
     setBaseUrl(next)
     if (next !== settings.baseUrl) {
       update({ baseUrl: next })
-      setResult(null)
+      setDeepseekTested((n) => n + 1)
     }
   }
-  const test = async () => {
-    setTesting(true)
-    const started = performance.now()
-    const outcome = await api.settings.testConnection()
-    // Keep "testing" visible long enough to read, so the line does not flicker.
-    const wait = 400 - (performance.now() - started)
-    if (wait > 0) await new Promise((r) => setTimeout(r, wait))
-    setTesting(false)
-    setResult(outcome)
-    setRound((n) => n + 1)
-  }
 
-  const keyState = !hasApiKey ? t('settings.keyMissing') : encrypted ? t('settings.keyStored') : t('settings.keyPlain')
   const isDefaultUrl = settings.baseUrl === DEFAULT_SETTINGS.baseUrl
 
   return (
     <>
       <p className="hx-page-intro">{t('settings.connectionIntro')}</p>
+      <h2 className="hx-settings-head">{t('provider.deepseek')}</h2>
       <div className="hx-form">
-        <div className="hx-form-field">
-          <div className="hx-form-label">
-            <label className="oy-field-label" htmlFor="api-key">
-              {t('settings.apiKey')}
-            </label>
-            <button type="button" className="hx-link" onClick={() => void api.openExternal(KEYS_URL)}>
-              {t('settings.getKey')}
-              <Icon icon={ArrowUpRight} size={14} />
-            </button>
-          </div>
-          <div className="hx-form-line">
-            <div className="hx-underline">
-              <input
-                ref={keyRef}
-                id="api-key"
-                type={revealed ? 'text' : 'password'}
-                value={key}
-                spellCheck={false}
-                autoComplete="off"
-                placeholder={hasApiKey ? t('settings.apiKeySet') : t('settings.apiKeyPlaceholder')}
-                onChange={(event) => setKey(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') void save()
-                }}
-              />
-              <button
-                type="button"
-                className="btn-ghost hx-icon-btn"
-                disabled={!hasApiKey && !key}
-                aria-label={revealed ? t('settings.hide') : t('settings.show')}
-                title={revealed ? t('settings.hide') : t('settings.show')}
-                onClick={() => void toggleReveal()}
-              >
-                <Icon icon={revealed ? EyeOff : Eye} size={18} />
-              </button>
-            </div>
-            <button type="button" className="btn-primary" disabled={!dirty} onClick={() => void save()}>
-              <Reserve shown={justSaved && !dirty ? 1 : 0} forms={[t('settings.save'), t('settings.saved')]} />
-            </button>
-          </div>
-          <div className="hx-form-hint">
-            <p className="oy-field-hint">{keyState}</p>
-            {hasApiKey && (
-              <button type="button" className="hx-link is-danger" onClick={remove}>
-                {t('settings.remove')}
-              </button>
-            )}
-          </div>
-        </div>
+        <KeyField provider="deepseek" focus={focusKey} onSaved={() => setDeepseekTested((n) => n + 1)} />
 
         <div className="hx-form-field">
           <div className="hx-form-label">
@@ -297,46 +195,199 @@ function Connection({ focusKey }: { focusKey: boolean }) {
           </div>
         </div>
       </div>
+      <TestRow provider="deepseek" stale={deepseekTested} />
 
+      <h2 className="hx-settings-head">{t('provider.opencode')}</h2>
+      <p className="hx-settings-desc">{t('settings.opencodeIntro')}</p>
       <div className="oy-section is-plain hx-settings-rows">
-        <div className="oy-row">
-          <div className="text">
-            <p className="title">{t('settings.test')}</p>
-            <p className="desc" aria-live="polite">
-              {result ? (
-                <span key={round} className={`hx-test-result ${testing ? 'is-stale' : ''}`}>
-                  <span className={result.ok ? 'hx-positive' : 'hx-danger'}>
-                    {result.ok ? t('settings.ok') : t(`error.${result.error ?? 'unknown'}.title` as MessageKey)}
-                  </span>
-                  {result.ok && result.latencyMs !== undefined && (
-                    <span className="st">
-                      <span>{t('settings.latency')}</span>
-                      <span className="hx-tabular">
-                        <CountUp value={result.latencyMs} /> ms
-                      </span>
-                    </span>
-                  )}
-                </span>
-              ) : (
-                t('settings.testDesc')
-              )}
-            </p>
-          </div>
-          <button type="button" className="btn-secondary" disabled={testing || !hasApiKey} onClick={() => void test()}>
-            <Reserve
-              shown={testing ? 1 : 0}
-              forms={[
-                t('settings.testShort'),
-                <>
-                  <Icon icon={LoaderCircle} size={16} className="hx-spin" />
-                  {t('settings.testing')}
-                </>,
-              ]}
-            />
+        <Row title={t('settings.opencodePlan')} desc={t(`settings.opencodePlan.${settings.opencodePlan}.desc`)}>
+          <Segmented<OpenCodePlan>
+            label={t('settings.opencodePlan')}
+            value={settings.opencodePlan}
+            options={OPENCODE_PLANS.map((p) => ({ value: p, label: t(`settings.opencodePlan.${p}`) }))}
+            onChange={(opencodePlan) => {
+              update({ opencodePlan })
+              setOpencodeTested((n) => n + 1)
+            }}
+          />
+        </Row>
+      </div>
+      <div className="hx-form">
+        <KeyField provider="opencode" focus={false} onSaved={() => setOpencodeTested((n) => n + 1)} />
+      </div>
+      <TestRow provider="opencode" stale={opencodeTested} />
+    </>
+  )
+}
+
+function KeyField({ provider, focus, onSaved }: { provider: Provider; focus: boolean; onSaved(): void }) {
+  const hasApiKey = useApp((s) => s.keys[provider])
+  const encrypted = useApp((s) => s.app.keyEncryption)
+  const keyRef = useRef<HTMLInputElement>(null)
+  const [key, setKey] = useState('')
+  const [savedKey, setSavedKey] = useState('')
+  const [revealed, setRevealed] = useState(false)
+  const [justSaved, setJustSaved] = useState(false)
+  const id = `api-key-${provider}`
+
+  useEffect(() => {
+    if (focus) keyRef.current?.focus({ preventScroll: true })
+  }, [focus])
+  useEffect(() => {
+    if (!justSaved) return
+    const timer = window.setTimeout(() => setJustSaved(false), 1600)
+    return () => window.clearTimeout(timer)
+  }, [justSaved])
+
+  const dirty = key.trim().length > 0 && key.trim() !== savedKey
+  const save = async () => {
+    if (!dirty) return
+    const value = key.trim()
+    await api.settings.setApiKey(value, provider)
+    setSavedKey(value)
+    setJustSaved(true)
+    onSaved()
+  }
+  const toggleReveal = async () => {
+    if (revealed) {
+      setRevealed(false)
+      return
+    }
+    if (!key && hasApiKey) {
+      const stored = (await api.settings.revealApiKey(provider)) ?? ''
+      setKey(stored)
+      setSavedKey(stored)
+    }
+    setRevealed(true)
+  }
+  const remove = () => {
+    void api.settings.clearApiKey(provider)
+    setKey('')
+    setSavedKey('')
+    setRevealed(false)
+    onSaved()
+  }
+
+  const keyState = !hasApiKey ? t(`settings.keyMissing.${provider}`) : encrypted ? t('settings.keyStored') : t('settings.keyPlain')
+
+  return (
+    <div className="hx-form-field">
+      <div className="hx-form-label">
+        <label className="oy-field-label" htmlFor={id}>
+          {t('settings.apiKey')}
+        </label>
+        <button type="button" className="hx-link" onClick={() => void api.openExternal(KEY_URLS[provider])}>
+          {t('settings.getKey')}
+          <Icon icon={ArrowUpRight} size={14} />
+        </button>
+      </div>
+      <div className="hx-form-line">
+        <div className="hx-underline">
+          <input
+            ref={keyRef}
+            id={id}
+            type={revealed ? 'text' : 'password'}
+            value={key}
+            spellCheck={false}
+            autoComplete="off"
+            placeholder={hasApiKey ? t('settings.apiKeySet') : t('settings.apiKeyPlaceholder')}
+            onChange={(event) => setKey(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') void save()
+            }}
+          />
+          <button
+            type="button"
+            className="btn-ghost hx-icon-btn"
+            disabled={!hasApiKey && !key}
+            aria-label={revealed ? t('settings.hide') : t('settings.show')}
+            title={revealed ? t('settings.hide') : t('settings.show')}
+            onClick={() => void toggleReveal()}
+          >
+            <Icon icon={revealed ? EyeOff : Eye} size={18} />
           </button>
         </div>
+        <button type="button" className="btn-primary" disabled={!dirty} onClick={() => void save()}>
+          <Reserve shown={justSaved && !dirty ? 1 : 0} forms={[t('settings.save'), t('settings.saved')]} />
+        </button>
       </div>
-    </>
+      <div className="hx-form-hint">
+        <p className="oy-field-hint">{keyState}</p>
+        {hasApiKey && (
+          <button type="button" className="hx-link is-danger" onClick={remove}>
+            {t('settings.remove')}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** "Test connection" for one provider. `stale` changes whenever what was tested changed, and the result goes. */
+function TestRow({ provider, stale }: { provider: Provider; stale: number }) {
+  const hasApiKey = useApp((s) => s.keys[provider])
+  const [testing, setTesting] = useState(false)
+  const [result, setResult] = useState<ConnectionResult | null>(null)
+  const [round, setRound] = useState(0)
+
+  useEffect(() => setResult(null), [stale])
+
+  const test = async () => {
+    setTesting(true)
+    const started = performance.now()
+    const outcome = await api.settings.testConnection(provider)
+    // Keep "testing" visible long enough to read, so the line does not flicker.
+    const wait = 400 - (performance.now() - started)
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait))
+    setTesting(false)
+    setResult(outcome)
+    setRound((n) => n + 1)
+  }
+
+  return (
+    <div className="oy-section is-plain hx-settings-rows">
+      <div className="oy-row">
+        <div className="text">
+          <p className="title">{t('settings.test')}</p>
+          <p className="desc" aria-live="polite">
+            {result ? (
+              <span key={round} className={`hx-test-result ${testing ? 'is-stale' : ''}`}>
+                <span className={result.ok ? 'hx-positive' : 'hx-danger'}>
+                  {result.ok ? t('settings.ok') : t(`error.${result.error ?? 'unknown'}.title` as MessageKey)}
+                </span>
+                {result.ok && result.latencyMs !== undefined && (
+                  <span className="st">
+                    <span>{t('settings.latency')}</span>
+                    <span className="hx-tabular">
+                      <CountUp value={result.latencyMs} /> ms
+                    </span>
+                  </span>
+                )}
+                {result.ok && result.models !== undefined && (
+                  <span className="st">
+                    <span className="hx-tabular">{t('settings.models', { n: result.models })}</span>
+                  </span>
+                )}
+              </span>
+            ) : (
+              t(`settings.testDesc.${provider}`)
+            )}
+          </p>
+        </div>
+        <button type="button" className="btn-secondary" disabled={testing || !hasApiKey} onClick={() => void test()}>
+          <Reserve
+            shown={testing ? 1 : 0}
+            forms={[
+              t('settings.testShort'),
+              <>
+                <Icon icon={LoaderCircle} size={16} className="hx-spin" />
+                {t('settings.testing')}
+              </>,
+            ]}
+          />
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -365,6 +416,7 @@ function CountUp({ value }: { value: number }) {
 
 function ModelGroup() {
   const settings = useApp((s) => s.settings)
+  const keys = useApp((s) => s.keys)
   return (
     <>
       <div className="oy-section is-plain hx-settings-rows">
@@ -373,7 +425,7 @@ function ModelGroup() {
             className="hx-row-control"
             label={t('settings.defaultModel')}
             value={settings.model}
-            options={MODELS.map((m) => ({ value: m, label: modelName(m), desc: modelDesc(m) }))}
+            options={modelOptions(modelGroups(settings, keys, settings.model), true)}
             onChange={(model) => update({ model })}
           />
         </Row>
